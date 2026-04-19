@@ -1,0 +1,59 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: doc-organizer
+    ports:
+      - "8000:8000"
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - DATABASE_URL=postgresql://docuser:docpass@db:5432/documents
+      - REDIS_URL=redis://redis:6379/0
+      - STORAGE_PATH=/app/data
+      - LOG_LEVEL=INFO
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    depends_on:
+      - db
+      - redis
+    restart: unless-stopped
+    networks:
+      - doc-network
+
+  db:
+    image: postgres:15-alpine
+    container_name: doc-db
+    environment:
+      - POSTGRES_USER=docuser
+      - POSTGRES_PASSWORD=docpass
+      - POSTGRES_DB=documents
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+    networks:
+      - doc-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: doc-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    networks:
+      - doc-network
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  doc-network:
+    driver: bridge
