@@ -1,0 +1,64 @@
+from datetime import datetime
+from typing import Any, Dict, List, Optional
+from uuid import UUID
+
+from pydantic import BaseModel
+
+
+class CategoryInfo(BaseModel):
+    id: UUID
+    name: str
+    color: str
+    icon: Optional[str] = None
+
+    model_config = {"from_attributes": True}
+
+
+class DocumentCreate(BaseModel):
+    filename: str
+    original_path: str
+    file_type: str
+    file_size: int
+    mime_type: Optional[str] = None
+    source: str = "upload"
+
+
+class DocumentUpdate(BaseModel):
+    user_category_id: Optional[UUID] = None
+    user_tags: Optional[List[str]] = None
+    user_notes: Optional[str] = None
+    is_favorite: Optional[bool] = None
+    is_archived: Optional[bool] = None
+
+
+class DocumentResponse(BaseModel):
+    id: UUID
+    filename: str
+    file_type: str
+    file_size: int
+    source: str
+    upload_date: datetime
+    processing_status: str
+    processing_error: Optional[str] = None
+    summary: Optional[str] = None
+    key_points: Optional[List[str]] = None
+    entities: Optional[Dict[str, Any]] = None
+    action_items: Optional[List[str]] = None
+    ai_tags: List[str] = []
+    user_tags: List[str] = []
+    ai_confidence: Optional[float] = None
+    is_favorite: bool = False
+    is_archived: bool = False
+    user_notes: Optional[str] = None
+    page_count: Optional[int] = None
+    word_count: Optional[int] = None
+    ai_category: Optional[CategoryInfo] = None
+    user_category: Optional[CategoryInfo] = None
+
+    model_config = {"from_attributes": True}
+
+
+class DocumentSearchResponse(BaseModel):
+    documents: List[DocumentResponse]
+    total: int
+    query: str
