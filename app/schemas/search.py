@@ -26,6 +26,7 @@ class SearchRequest(BaseModel):
 class SearchResultItem(BaseModel):
     document: DocumentResponse
     relevance: float
+    score_breakdown: Optional[Dict[str, Any]] = None
     highlights: List[str]
 
 
@@ -33,6 +34,7 @@ class SearchResponse(BaseModel):
     results: List[SearchResultItem]
     total: int
     query: str
+    parsed_query: Optional[Dict[str, Any]] = None
     filters: Optional[Dict[str, Any]] = None
     page: int
     pages: int
@@ -48,3 +50,14 @@ class SemanticSearchResponse(BaseModel):
     query: str
     results: List[SemanticSearchResult]
     total: int
+
+
+class HybridSearchResponse(BaseModel):
+    query: str
+    results: List[SearchResultItem]
+    total: int
+    filters: Optional[Dict[str, Any]] = None
+    page: int
+    pages: int
+    degraded: bool
+    debug: Dict[str, Any]

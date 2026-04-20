@@ -45,6 +45,7 @@ def process_document_task(self, document_id: str):
         if document.processing_status == "completed":
             _update_queue_entry(db, queue_entry, status="completed", completed_at=True)
             embed_document_task.delay(document_id)
+            detect_relationships_task.delay(document_id)
             _notify(document_id, "completed", progress=100)
         else:
             _update_queue_entry(
@@ -105,6 +106,31 @@ def reprocess_document_task(document_id: str):
 
     return process_document_task.apply_async(args=[document_id])
 
+
+
+
+@celery_app.task(name="app.workers.tasks.detect_relationships_task")
+def detect_relationships_task(document_id: str):
+    from app.db.base import SessionLocal
+    from app.services.relationship_detection import relationship_detection_service
+
+    db = SessionLocal()
+    try:
+        return relationship_detection_service.detect_for_document(db=db, document_id=document_id)
+    finally:
+        db.close()
+
+
+@celery_app.task(name="app.workers.tasks.backfill_relationships_task")
+def backfill_relationships_task(limit: int | None = None):
+    from app.db.base import SessionLocal
+    from app.services.relationship_detection import relationship_detection_service
+
+    db = SessionLocal()
+    try:
+        return relationship_detection_service.backfill_relationships(db=db, limit=limit)
+    finally:
+        db.close()
 
 @celery_app.task(name="app.workers.tasks.cleanup_old_tasks")
 def cleanup_old_tasks():

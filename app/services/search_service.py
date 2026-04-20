@@ -1,17 +1,21 @@
 import logging
-from typing import Dict, List, Optional
+import re
+from collections import defaultdict
+from typing import Any, Dict, List, Optional
 
-from sqlalchemy import func, or_
+from sqlalchemy import case, func, or_
 from sqlalchemy.orm import Session
 
 from app.models.category import Category
 from app.models.document import Document
+from app.services.embedding_service import embedding_service
+from app.services.query_parser import ParsedQuery, query_parser
 
 logger = logging.getLogger(__name__)
 
 
 class SearchService:
-    """Advanced full-text search with filters and ranking."""
+    """Advanced full-text, semantic, and hybrid search services."""
 
     def search_documents(
         self,
@@ -20,21 +24,24 @@ class SearchService:
         filters: Optional[Dict] = None,
         skip: int = 0,
         limit: int = 50,
-    ) -> Dict:
+    ) -> Dict[str, Any]:
+        parsed = query_parser.parse(query)
         search_query = db.query(Document).filter(Document.is_archived.is_(False))
 
-        if query:
-            ts_query = func.plainto_tsquery("english", query)
-            search_query = search_query.filter(Document.search_vector.op("@@")(ts_query))
+        if parsed.normalized:
+            ts_query = self._build_ts_query(parsed)
+            if ts_query:
+                search_query = search_query.filter(Document.search_vector.op("@@")(ts_query))
 
         if filters:
             search_query = self._apply_filters(search_query, filters)
 
         total = search_query.count()
 
-        if query:
+        if parsed.normalized:
+            ts_query = self._build_ts_query(parsed)
             search_query = search_query.order_by(
-                func.ts_rank(Document.search_vector, func.plainto_tsquery("english", query)).desc(),
+                func.ts_rank_cd(Document.search_vector, ts_query).desc(),
                 Document.upload_date.desc(),
             )
         else:
@@ -42,24 +49,115 @@ class SearchService:
 
         results = search_query.offset(skip).limit(limit).all()
 
-        results_with_scores = []
+        items = []
         for document in results:
-            results_with_scores.append(
+            relevance, breakdown = self._calculate_relevance(document, parsed)
+            items.append(
                 {
                     "document": document,
-                    "relevance": self._calculate_relevance(document, query),
-                    "highlights": self._generate_highlights(document, query),
+                    "relevance": relevance,
+                    "score_breakdown": breakdown,
+                    "highlights": self._generate_highlights(document, parsed),
                 }
             )
 
         return {
-            "results": results_with_scores,
+            "results": items,
             "total": total,
             "query": query,
+            "parsed_query": parsed.as_debug(),
             "filters": filters,
             "page": (skip // limit) + 1,
             "pages": (total + limit - 1) // limit if total else 0,
         }
+
+    def hybrid_search_documents(
+        self,
+        db: Session,
+        query: str,
+        filters: Optional[Dict] = None,
+        skip: int = 0,
+        limit: int = 20,
+        lexical_weight: float = 0.6,
+        semantic_weight: float = 0.4,
+        semantic_threshold: float = 0.35,
+    ) -> Dict[str, Any]:
+        lexical = self.search_documents(db=db, query=query, filters=filters, skip=0, limit=max(limit * 3, 20))
+        lexical_docs = lexical["results"]
+
+        semantic_available = embedding_service.enabled
+        semantic_matches: List[Dict[str, Any]] = []
+        if semantic_available:
+            semantic_matches = embedding_service.semantic_search(
+                query=query,
+                limit=max(limit * 3, 20),
+                score_threshold=semantic_threshold,
+            )
+
+        semantic_scores = {item["document_id"]: item for item in semantic_matches}
+
+        all_ids = list({str(i["document"].id) for i in lexical_docs} | set(semantic_scores.keys()))
+        docs = db.query(Document).filter(Document.id.in_(all_ids)).all() if all_ids else []
+        by_id = {str(doc.id): doc for doc in docs}
+
+        merged: List[Dict[str, Any]] = []
+        lexical_ranked = {str(item["document"].id): item for item in lexical_docs}
+
+        max_lex = max((item["relevance"] for item in lexical_docs), default=1.0)
+        max_sem = max((item["score"] for item in semantic_matches), default=1.0)
+
+        for doc_id in all_ids:
+            doc = by_id.get(doc_id)
+            if not doc:
+                continue
+
+            lex_item = lexical_ranked.get(doc_id)
+            sem_item = semantic_scores.get(doc_id)
+
+            lex_score = (lex_item["relevance"] / max_lex) if lex_item else 0.0
+            sem_score = (sem_item["score"] / max_sem) if sem_item else 0.0
+            combined = (lex_score * lexical_weight) + (sem_score * semantic_weight)
+
+            merged.append(
+                {
+                    "document": doc,
+                    "relevance": combined,
+                    "score_breakdown": {
+                        "combined": round(combined, 5),
+                        "lexical": round(lex_score, 5),
+                        "semantic": round(sem_score, 5),
+                        "weights": {"lexical": lexical_weight, "semantic": semantic_weight},
+                        "semantic_available": semantic_available,
+                    },
+                    "highlights": lex_item["highlights"] if lex_item else self._generate_highlights(doc, query_parser.parse(query)),
+                }
+            )
+
+        merged.sort(key=lambda x: (x["relevance"], x["document"].upload_date), reverse=True)
+        paged = merged[skip : skip + limit]
+
+        return {
+            "results": paged,
+            "total": len(merged),
+            "query": query,
+            "filters": filters,
+            "page": (skip // limit) + 1,
+            "pages": (len(merged) + limit - 1) // limit if merged else 0,
+            "degraded": not semantic_available,
+            "debug": {
+                "lexical_hits": len(lexical_docs),
+                "semantic_hits": len(semantic_matches),
+                "semantic_threshold": semantic_threshold,
+            },
+        }
+
+    def _build_ts_query(self, parsed: ParsedQuery):
+        if parsed.phrases:
+            raw_query = " & ".join([f"({p.replace(' ', ' <-> ')})" for p in parsed.phrases + parsed.terms])
+            return func.to_tsquery("english", raw_query)
+        if parsed.terms:
+            return func.plainto_tsquery("english", " ".join(parsed.terms))
+        return None
 
     def _apply_filters(self, query, filters: Dict):
         if filters.get("categories"):
@@ -81,12 +179,7 @@ class SearchService:
 
         if filters.get("tags"):
             for tag in filters["tags"]:
-                query = query.filter(
-                    or_(
-                        Document.ai_tags.contains([tag]),
-                        Document.user_tags.contains([tag]),
-                    )
-                )
+                query = query.filter(or_(Document.ai_tags.contains([tag]), Document.user_tags.contains([tag])))
 
         if filters.get("is_favorite") is not None:
             query = query.filter(Document.is_favorite == filters["is_favorite"])
@@ -96,73 +189,86 @@ class SearchService:
 
         return query
 
-    def _calculate_relevance(self, document: Document, query: str) -> float:
-        if not query:
-            return 1.0
+    def _calculate_relevance(self, document: Document, parsed: ParsedQuery) -> tuple[float, Dict[str, float]]:
+        if not parsed.normalized:
+            return 1.0, {"base": 1.0}
 
-        query_lower = query.lower()
-        score = 0.0
+        haystacks = {
+            "filename": (document.filename or "").lower(),
+            "summary": (document.summary or "").lower(),
+            "tags": " ".join((document.ai_tags or []) + (document.user_tags or [])).lower(),
+            "category": " ".join(
+                [
+                    document.ai_category.name if document.ai_category else "",
+                    document.user_category.name if document.user_category else "",
+                ]
+            ).lower(),
+            "entities": str(document.entities or {}).lower(),
+        }
 
-        if query_lower in (document.filename or "").lower():
-            score += 0.3
-        if document.summary and query_lower in document.summary.lower():
-            score += 0.25
+        weights = {"filename": 0.35, "summary": 0.25, "tags": 0.2, "category": 0.1, "entities": 0.1}
+        breakdown: Dict[str, float] = defaultdict(float)
 
-        all_tags = (document.ai_tags or []) + (document.user_tags or [])
-        if any(query_lower in tag.lower() for tag in all_tags):
-            score += 0.2
+        for term in parsed.terms + parsed.phrases:
+            for field, weight in weights.items():
+                if term in haystacks[field]:
+                    breakdown[field] += weight / max(len(parsed.terms + parsed.phrases), 1)
 
-        if document.ai_category and query_lower in document.ai_category.name.lower():
-            score += 0.15
+        penalty = 0.0
+        for excluded in parsed.excluded_terms:
+            if any(excluded in text for text in haystacks.values()):
+                penalty += 0.15
 
-        if document.entities:
-            for _, entities in document.entities.items():
-                if any(query_lower in str(entity).lower() for entity in entities):
-                    score += 0.1
-                    break
+        score = max(0.0, min(1.0, sum(breakdown.values()) - penalty))
+        breakdown["penalty"] = round(penalty, 5)
+        return round(score, 5), {k: round(v, 5) for k, v in breakdown.items()}
 
-        return min(score, 1.0)
-
-    def _generate_highlights(self, document: Document, query: str) -> List[str]:
-        if not query:
+    def _generate_highlights(self, document: Document, parsed: ParsedQuery) -> List[str]:
+        if not parsed.normalized:
             return []
 
-        highlights: List[str] = []
-        query_lower = query.lower()
+        targets = parsed.phrases + parsed.terms
+        if not targets:
+            return []
 
-        if document.summary and query_lower in document.summary.lower():
-            idx = document.summary.lower().find(query_lower)
-            start = max(0, idx - 50)
-            end = min(len(document.summary), idx + len(query) + 50)
-            snippet = document.summary[start:end]
+        source_text = (document.summary or "") + "\n" + (document.raw_text or "")
+        if not source_text.strip():
+            return []
+
+        snippets: List[str] = []
+        lowered = source_text.lower()
+
+        for token in targets[:3]:
+            idx = lowered.find(token)
+            if idx < 0:
+                continue
+            start = max(0, idx - 70)
+            end = min(len(source_text), idx + len(token) + 70)
+            snippet = source_text[start:end].strip()
             if start > 0:
                 snippet = "..." + snippet
-            if end < len(document.summary):
-                snippet += "..."
-            highlights.append(snippet)
+            if end < len(source_text):
+                snippet = snippet + "..."
+            snippets.append(self._emphasize(snippet, token))
 
-        if document.raw_text and query_lower in document.raw_text.lower():
-            idx = document.raw_text.lower().find(query_lower)
-            start = max(0, idx - 100)
-            end = min(len(document.raw_text), idx + len(query) + 100)
-            snippet = document.raw_text[start:end]
-            if start > 0:
-                snippet = "..." + snippet
-            if end < len(document.raw_text):
-                snippet += "..."
-            highlights.append(snippet)
+        return snippets[:3]
 
-        return highlights[:3]
+    @staticmethod
+    def _emphasize(text: str, token: str) -> str:
+        try:
+            return re.sub(
+                re.escape(token),
+                lambda m: f"**{m.group(0)}**",
+                text,
+                flags=re.IGNORECASE,
+            )
+        except Exception:
+            return text
 
     def get_search_suggestions(self, db: Session, partial_query: str, limit: int = 5) -> List[str]:
         suggestions = set()
 
-        categories = (
-            db.query(Category)
-            .filter(Category.name.ilike(f"%{partial_query}%"))
-            .limit(limit)
-            .all()
-        )
+        categories = db.query(Category).filter(Category.name.ilike(f"%{partial_query}%")).limit(limit).all()
         for category in categories:
             suggestions.add(category.name)
 
@@ -182,6 +288,16 @@ class SearchService:
             for tag in (ai_tags or []) + (user_tags or []):
                 if partial_query.lower() in tag.lower():
                     suggestions.add(tag)
+
+        filename_hits = (
+            db.query(Document.filename)
+            .filter(Document.filename.ilike(f"%{partial_query}%"))
+            .order_by(case((Document.is_favorite.is_(True), 0), else_=1), Document.upload_date.desc())
+            .limit(limit)
+            .all()
+        )
+        for (filename,) in filename_hits:
+            suggestions.add(filename)
 
         return sorted(suggestions)[:limit]
 
