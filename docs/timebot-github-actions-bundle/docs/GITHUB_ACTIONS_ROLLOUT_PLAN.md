@@ -1,50 +1,95 @@
 # GitHub Actions Rollout Plan
 
 ## Objective
-Implement reliable CI/CD for this repository without overcomplicating the initial rollout.
+Provide branch-protected CI checks for backend, frontend, and integrated smoke validation while keeping deployment safe and explicit.
 
-## Phase 1 — PR Safety
-Add:
-- backend CI
-- frontend CI
+## Workflows implemented
 
-Make both required checks on pull requests to `main`.
+1. **Backend CI** (`.github/workflows/ci-backend.yml`)
+   - Workflow name: `Backend CI`
+   - Required job/check: `backend-tests`
+   - Triggers: PR, push to `main`, manual dispatch
+   - Path filtered for backend files (`app/**`, `tests/**`, `requirements.txt`, Docker files)
 
-### Success criteria
-- Python tests run on every relevant PR
-- frontend install, type-check, lint, test, and build run on every frontend PR
-- failures block merge
+2. **Frontend CI** (`.github/workflows/ci-frontend.yml`)
+   - Workflow name: `Frontend CI`
+   - Required job/check: `frontend-ci`
+   - Triggers: PR, push to `main`, manual dispatch
+   - Path filtered for frontend files (`frontend/**`)
 
-## Phase 2 — Integration Confidence
-Add:
-- integrated backend + frontend smoke workflow
+3. **Integrated Smoke** (`.github/workflows/ci-integrated.yml`)
+   - Workflow name: `Integrated Smoke`
+   - Required job/check: `integrated-smoke`
+   - Triggers: PR, push to `main`, manual dispatch
+   - Path filtered for backend/frontend-relevant files
+   - Starts backend (`uvicorn app.main:app --host 127.0.0.1 --port 8000`) and frontend (`npm run dev -- --host 127.0.0.1 --port 3000`), waits for readiness, then executes `frontend/tests/e2e/smoke.sh`
 
-### Success criteria
-- PRs verify the app boots end to end
-- smoke flow catches broken API/base URL/runtime issues
+4. **Docker Validate** (`.github/workflows/docker-validate.yml`)
+   - Workflow name: `Docker Validate`
+   - Informational check name: `docker-validate`
+   - Triggers on Docker/deployment-relevant file changes
+   - Runs `docker compose config` and `docker build`
 
-## Phase 3 — Deployment Validation
-Add:
-- Docker validation workflow
+5. **Deploy** (`.github/workflows/deploy.yml`)
+   - Workflow name: `Deploy`
+   - Supports manual deploy dispatch and `v*` tags
+   - Uses GitHub Environments (`staging` and `production`)
+   - Uses per-environment concurrency (`deploy-staging`, `deploy-production`)
+   - Currently a safe placeholder with explicit TODO markers
 
-### Success criteria
-- Docker config is syntactically valid
-- images can build
-- startup assumptions are checked
+6. **Nightly Validation** (`.github/workflows/nightly.yml`)
+   - Workflow name: `Nightly Validation`
+   - Runs on schedule (`0 6 * * *`) and manual dispatch
+   - Re-runs backend tests and frontend CI suite
 
-## Phase 4 — Controlled Deployments
-Add:
-- deployment workflow with staging and production environments
+## Rollout order
 
-### Success criteria
-- deploys are environment-gated
-- production requires approval
-- only one deploy per environment runs at a time
+### Phase 1: Required PR checks
+Enable these checks as required on `main`:
+- `backend-tests`
+- `frontend-ci`
+- `integrated-smoke`
 
-## Phase 5 — Ongoing Confidence
-Add:
-- nightly workflow
+### Phase 2: Non-blocking confidence checks
+Enable but do not require:
+- `docker-validate`
+- `nightly-backend-tests`
+- `nightly-frontend-ci`
 
-### Success criteria
-- scheduled builds continue to validate repo health
-- slower checks do not block every PR but still run regularly
+### Phase 3: Deploy safety
+- Create `staging` and `production` environments
+- Require approvals for `production`
+- Add environment secrets
+- Replace the deploy placeholder with real deploy logic
+
+## Local equivalents for troubleshooting
+
+Backend:
+```bash
+python -m pip install -r requirements.txt
+pytest tests -q
+```
+
+Frontend:
+```bash
+cd frontend
+npm install
+npm run type-check
+npm run lint
+npm run test
+npm run build
+```
+
+Integrated smoke:
+```bash
+# Terminal 1
+uvicorn app.main:app --host 127.0.0.1 --port 8000
+
+# Terminal 2
+cd frontend
+npm install
+npm run dev -- --host 127.0.0.1 --port 3000
+
+# Terminal 3 (repo root)
+bash frontend/tests/e2e/smoke.sh
+```
