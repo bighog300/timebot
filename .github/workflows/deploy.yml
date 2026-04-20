@@ -1,0 +1,64 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment target environment'
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+      image_tag:
+        description: 'Container image tag to deploy (default: latest)'
+        required: false
+        default: latest
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  deploy:
+    name: deploy-${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'production' }}
+    runs-on: ubuntu-latest
+    environment: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'production' }}
+    concurrency:
+      group: deploy-${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'production' }}
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      packages: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve deployment inputs
+        id: deploy-inputs
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "target_env=${{ inputs.environment }}" >> "$GITHUB_OUTPUT"
+            echo "image_tag=${{ inputs.image_tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "target_env=production" >> "$GITHUB_OUTPUT"
+            echo "image_tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Deployment placeholder
+        env:
+          TARGET_ENV: ${{ steps.deploy-inputs.outputs.target_env }}
+          IMAGE_TAG: ${{ steps.deploy-inputs.outputs.image_tag }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          echo "Preparing deployment to $TARGET_ENV with image tag $IMAGE_TAG"
+          if [ -z "$DEPLOY_HOST" ] || [ -z "$DEPLOY_USER" ] || [ -z "$DEPLOY_SSH_KEY" ]; then
+            echo "::warning::Missing DEPLOY_HOST/DEPLOY_USER/DEPLOY_SSH_KEY in '$TARGET_ENV' environment; deployment is a no-op placeholder."
+            exit 0
+          fi
+
+          echo "Placeholder deploy step detected credentials for $TARGET_ENV."
+          echo "TODO: replace this step with real deployment commands (SSH/kubectl/terraform/etc)."
+          echo "No infrastructure changes were made by this placeholder workflow."
