@@ -33,6 +33,16 @@ class FakeDB:
         return None
 
 
+class CountingDB(FakeDB):
+    def __init__(self, docs=None, rels=None, categories=None):
+        super().__init__(docs=docs, rels=rels, categories=categories)
+        self.query_calls = 0
+
+    def query(self, model):
+        self.query_calls += 1
+        return super().query(model)
+
+
 class FakeQuery:
     def __init__(self, items):
         self.items = list(items)
@@ -151,8 +161,29 @@ def test_hybrid_search_degrades_when_semantic_unavailable(monkeypatch):
             return FakeQueryForHybrid([fake_doc])
 
     db = HybridDB(docs=[fake_doc])
-    monkeypatch.setattr("app.services.search_service.embedding_service.enabled", False)
+    monkeypatch.setattr("app.services.search_service.embedding_service._enabled", False)
 
     result = search_service.hybrid_search_documents(db=db, query="invoice", limit=5)
     assert result["degraded"] is True
     assert result["total"] >= 1
+
+
+def test_search_documents_normalizes_invalid_paging_values():
+    doc = _doc("invoice.pdf")
+    db = FakeDB(docs=[doc])
+
+    result = search_service.search_documents(db=db, query="invoice", skip=-5, limit=0)
+
+    assert result["page"] == 1
+    assert result["total"] >= 1
+
+
+def test_hybrid_search_avoids_requery_when_semantic_disabled(monkeypatch):
+    doc = _doc("invoice.pdf")
+    db = CountingDB(docs=[doc])
+    monkeypatch.setattr("app.services.search_service.embedding_service._enabled", False)
+
+    result = search_service.hybrid_search_documents(db=db, query="invoice", limit=5)
+
+    assert result["degraded"] is True
+    assert db.query_calls == 1
