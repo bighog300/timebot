@@ -1,0 +1,33 @@
+{
+  "bundle_name": "timebot_planning_bundle",
+  "files": [
+    "00_master_plan.md",
+    "01_phase_stabilization.md",
+    "02_phase_search_retrieval.md",
+    "03_phase_ingestion_integrations.md",
+    "04_phase_ai_workflow.md",
+    "05_phase_insights_actions.md",
+    "06_phase_multi_user_productization.md",
+    "07_delivery_sequence.md",
+    "README.md",
+    "codex_execution_prompt.md",
+    "sprints/phase1_sprint1_core_stability.md",
+    "sprints/phase1_sprint2_lifecycle_integrity.md",
+    "sprints/phase1_sprint3_search_regression_suite.md",
+    "sprints/phase2_sprint1_hybrid_search_refactor.md",
+    "sprints/phase2_sprint2_search_experience.md",
+    "sprints/phase2_sprint3_related_documents_performance.md",
+    "sprints/phase3_sprint1_connector_framework.md",
+    "sprints/phase3_sprint2_google_drive_ingestion.md",
+    "sprints/phase3_sprint3_gmail_ingestion_sync.md",
+    "sprints/phase4_sprint1_confidence_review_model.md",
+    "sprints/phase4_sprint2_review_queue_actions.md",
+    "sprints/phase4_sprint3_editable_ai_outputs.md",
+    "sprints/phase5_sprint1_actionable_dashboard.md",
+    "sprints/phase5_sprint2_duplicate_resolution_flow.md",
+    "sprints/phase5_sprint3_activity_timeline_ops.md",
+    "sprints/phase6_sprint1_auth_workspace_foundation.md",
+    "sprints/phase6_sprint2_roles_permissions.md",
+    "sprints/phase6_sprint3_audit_release_readiness.md"
+  ]
+}
