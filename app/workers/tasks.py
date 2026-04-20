@@ -2,8 +2,8 @@ import logging
 
 from celery.exceptions import MaxRetriesExceededError
 
-from app.workers.celery_app import celery_app
 from app.config import settings
+from app.workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
 
@@ -12,34 +12,76 @@ logger = logging.getLogger(__name__)
     bind=True,
     name="app.workers.tasks.process_document_task",
     max_retries=settings.CELERY_TASK_MAX_RETRIES,
-    default_retry_delay=60,
+    default_retry_delay=settings.CELERY_TASK_DEFAULT_RETRY_DELAY,
 )
 def process_document_task(self, document_id: str):
     from app.db.base import SessionLocal
     from app.models.document import Document
+    from app.models.relationships import ProcessingQueue
     from app.services.document_processor import document_processor
 
     db = SessionLocal()
+    queue_entry = _ensure_queue_entry(db, document_id)
+
     try:
         document = db.query(Document).filter(Document.id == document_id).first()
         if not document:
             logger.error("Document %s not found", document_id)
+            _update_queue_entry(db, queue_entry, status="failed", error_message="Document not found")
             return {"status": "error", "message": "Document not found"}
+
+        _update_queue_entry(
+            db,
+            queue_entry,
+            status="processing",
+            attempts=queue_entry.attempts + 1,
+            started_at=True,
+            error_message=None,
+        )
+        _notify(document_id, "processing", progress=5)
 
         document_processor.process_document(db, document)
 
         if document.processing_status == "completed":
+            _update_queue_entry(db, queue_entry, status="completed", completed_at=True)
             embed_document_task.delay(document_id)
+            _notify(document_id, "completed", progress=100)
+        else:
+            _update_queue_entry(
+                db,
+                queue_entry,
+                status="failed",
+                completed_at=True,
+                error_message=document.processing_error,
+            )
+            _notify(document_id, "failed", progress=100, error=document.processing_error)
 
-        _notify(document_id, document.processing_status)
         return {"status": "success", "document_id": document_id}
 
     except Exception as exc:
         logger.error("Task failed for document %s: %s", document_id, exc)
         try:
-            raise self.retry(exc=exc, countdown=60 * (self.request.retries + 1))
+            _update_queue_entry(
+                db,
+                queue_entry,
+                status="queued",
+                error_message=str(exc),
+            )
+            _notify(document_id, "queued", error=str(exc))
+            raise self.retry(
+                exc=exc,
+                countdown=settings.CELERY_TASK_DEFAULT_RETRY_DELAY * (self.request.retries + 1),
+            )
         except MaxRetriesExceededError:
             _mark_failed(db, document_id, str(exc))
+            _update_queue_entry(
+                db,
+                queue_entry,
+                status="failed",
+                completed_at=True,
+                error_message=str(exc),
+            )
+            _notify(document_id, "failed", progress=100, error=str(exc))
             return {"status": "failed", "error": str(exc)}
     finally:
         db.close()
@@ -92,33 +134,6 @@ def cleanup_old_tasks():
         db.close()
 
 
-def _notify(document_id: str, status: str):
-    try:
-        import asyncio
-
-        from app.services.notification import manager
-
-        asyncio.run(
-            manager.send(
-                document_id,
-                {"type": "processing_update", "document_id": document_id, "status": status},
-            )
-        )
-    except Exception:
-        pass  # Notifications are best-effort
-
-
-def _mark_failed(db, document_id: str, error: str):
-    from app.models.document import Document
-
-    doc = db.query(Document).filter(Document.id == document_id).first()
-    if doc:
-        doc.processing_status = "failed"
-        doc.processing_error = error
-        db.add(doc)
-        db.commit()
-
-
 @celery_app.task(name="app.workers.tasks.embed_document_task")
 def embed_document_task(document_id: str):
     from app.db.base import SessionLocal
@@ -147,3 +162,83 @@ def embed_document_task(document_id: str):
         )
     finally:
         db.close()
+
+
+def _notify(document_id: str, status: str, progress: int | None = None, error: str | None = None):
+    try:
+        import asyncio
+
+        from app.services.notification import manager
+
+        payload = {"type": "processing_update", "document_id": document_id, "status": status}
+        if progress is not None:
+            payload["progress"] = progress
+        if error:
+            payload["error"] = error
+
+        asyncio.run(manager.send(document_id, payload))
+        asyncio.run(manager.send("__all__", payload))
+    except Exception:
+        pass  # Notifications are best-effort
+
+
+def _mark_failed(db, document_id: str, error: str):
+    from app.models.document import Document
+
+    doc = db.query(Document).filter(Document.id == document_id).first()
+    if doc:
+        doc.processing_status = "failed"
+        doc.processing_error = error
+        db.add(doc)
+        db.commit()
+
+
+def _ensure_queue_entry(db, document_id: str):
+    from app.models.relationships import ProcessingQueue
+
+    queue_entry = (
+        db.query(ProcessingQueue)
+        .filter(
+            ProcessingQueue.document_id == document_id,
+            ProcessingQueue.task_type == "extract_text",
+        )
+        .first()
+    )
+    if queue_entry:
+        return queue_entry
+
+    queue_entry = ProcessingQueue(
+        document_id=document_id,
+        task_type="extract_text",
+        status="queued",
+        priority=5,
+    )
+    db.add(queue_entry)
+    db.commit()
+    db.refresh(queue_entry)
+    return queue_entry
+
+
+def _update_queue_entry(
+    db,
+    queue_entry,
+    *,
+    status: str,
+    attempts: int | None = None,
+    started_at: bool = False,
+    completed_at: bool = False,
+    error_message: str | None = None,
+):
+    from datetime import datetime, timezone
+
+    queue_entry.status = status
+    if attempts is not None:
+        queue_entry.attempts = attempts
+    if started_at:
+        queue_entry.started_at = datetime.now(timezone.utc)
+    if completed_at:
+        queue_entry.completed_at = datetime.now(timezone.utc)
+    queue_entry.error_message = error_message
+
+    db.add(queue_entry)
+    db.commit()

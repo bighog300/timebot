@@ -3,9 +3,22 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
-from app.schemas.queue import QueueStatsResponse
+from app.schemas.queue import QueueItemResponse, QueueStatsResponse
+from app.workers.monitoring import inspect_workers
 
 router = APIRouter(prefix="/queue", tags=["queue"])
+
+
+@router.get("/items", response_model=list[QueueItemResponse])
+def list_queue_items(db: Session = Depends(get_db)):
+    from app.models.relationships import ProcessingQueue
+
+    return (
+        db.query(ProcessingQueue)
+        .order_by(ProcessingQueue.priority.asc(), ProcessingQueue.created_at.asc())
+        .limit(200)
+        .all()
+    )
 
 
 @router.get("/stats", response_model=QueueStatsResponse)
@@ -26,19 +39,23 @@ def queue_stats(db: Session = Depends(get_db)):
         total=sum(status_counts.values()),
     )
 
-    # Celery inspect (best-effort, 2-second timeout)
     try:
-        from app.workers.celery_app import celery_app
-
-        inspect = celery_app.control.inspect(timeout=2)
-        active = inspect.active() or {}
-        reserved = inspect.reserved() or {}
-        stats.celery_active = sum(len(v) for v in active.values())
-        stats.celery_reserved = sum(len(v) for v in reserved.values())
+        worker_stats = inspect_workers(timeout=2)
+        stats.celery_active = worker_stats["active_tasks"]
+        stats.celery_reserved = worker_stats["reserved_tasks"]
     except Exception:
         pass
 
     return stats
+
+
+@router.get("/health")
+def queue_health():
+    try:
+        worker_stats = inspect_workers(timeout=2)
+        return {"status": "healthy", **worker_stats}
+    except Exception as exc:
+        return {"status": "degraded", "error": str(exc)}
 
 
 @router.post("/retry-failed")
