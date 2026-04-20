@@ -3,11 +3,13 @@ import { useParams } from 'react-router-dom';
 import { api } from '@/services/api';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
-import { ErrorState, LoadingState } from '@/components/ui/States';
+import { ErrorState, LoadingState, EmptyState } from '@/components/ui/States';
+import { useUIStore } from '@/store/uiStore';
 
 export function DocumentDetailPage() {
   const { id = '' } = useParams();
   const qc = useQueryClient();
+  const pushToast = useUIStore((s) => s.pushToast);
   const documentQuery = useQuery({ queryKey: ['document', id], queryFn: () => api.getDocument(id), enabled: !!id });
   const similarQuery = useQuery({ queryKey: ['similar', id], queryFn: () => api.findSimilar(id), enabled: !!id });
 
@@ -18,10 +20,28 @@ export function DocumentDetailPage() {
 
   const updateMutation = useMutation({
     mutationFn: (patch: Record<string, unknown>) => api.updateDocument(id, patch),
-    onSuccess: refresh,
+    onSuccess: () => {
+      refresh();
+      pushToast('Document updated');
+    },
+    onError: () => pushToast('Failed to update document'),
   });
-  const reprocessMutation = useMutation({ mutationFn: () => api.reprocessDocument(id), onSuccess: refresh });
-  const deleteMutation = useMutation({ mutationFn: () => api.deleteDocument(id), onSuccess: () => (window.location.href = '/documents') });
+  const reprocessMutation = useMutation({
+    mutationFn: () => api.reprocessDocument(id),
+    onSuccess: () => {
+      refresh();
+      pushToast('Reprocessing queued');
+    },
+    onError: () => pushToast('Failed to queue reprocessing'),
+  });
+  const deleteMutation = useMutation({
+    mutationFn: () => api.deleteDocument(id),
+    onSuccess: () => {
+      pushToast('Document deleted');
+      window.location.href = '/documents';
+    },
+    onError: () => pushToast('Failed to delete document'),
+  });
 
   if (documentQuery.isLoading) return <LoadingState />;
   if (documentQuery.isError || !documentQuery.data) return <ErrorState message="Document not found" />;
@@ -34,7 +54,16 @@ export function DocumentDetailPage() {
         <Button onClick={() => updateMutation.mutate({ is_favorite: !doc.is_favorite })}>{doc.is_favorite ? 'Unfavorite' : 'Favorite'}</Button>
         <Button onClick={() => updateMutation.mutate({ is_archived: !doc.is_archived })}>{doc.is_archived ? 'Unarchive' : 'Archive'}</Button>
         <Button onClick={() => reprocessMutation.mutate()}>Reprocess</Button>
-        <Button className="bg-red-700 hover:bg-red-600" onClick={() => deleteMutation.mutate()}>Delete</Button>
+        <Button
+          className="bg-red-700 hover:bg-red-600"
+          onClick={() => {
+            if (window.confirm('Delete this document permanently?')) {
+              deleteMutation.mutate();
+            }
+          }}
+        >
+          Delete
+        </Button>
       </div>
       <Card>
         <h2 className="mb-2 text-lg">Summary</h2>
@@ -60,6 +89,9 @@ export function DocumentDetailPage() {
       </Card>
       <Card>
         <h3 className="mb-2">Similar documents</h3>
+        {similarQuery.isLoading && <LoadingState label="Loading similar documents..." />}
+        {similarQuery.isError && <ErrorState message="Failed to load similar documents" />}
+        {similarQuery.isSuccess && (similarQuery.data?.results.length ?? 0) === 0 && <EmptyState label="No similar documents found." />}
         <ul className="space-y-1 text-sm text-slate-300">
           {similarQuery.data?.results.map((row) => <li key={row.document.id}>{row.document.filename} ({row.similarity_score.toFixed(2)})</li>)}
         </ul>

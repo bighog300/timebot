@@ -208,6 +208,28 @@ npm run dev
 
 By default it proxies API calls to `http://localhost:8000` and expects websocket events at `/api/v1/ws/all`.
 
+If your environment enforces an outbound HTTP(S) proxy, verify the proxy can reach npm registry hosts before installing:
+
+```bash
+curl -I https://registry.npmjs.org/react
+```
+
+If you receive `403 Forbidden` from the proxy tunnel, npm install will fail until proxy/network policy allows npm registry access.
+
+### Frontend environment variables
+
+`frontend/.env` supports:
+
+- `VITE_API_BASE_URL` (default: `/api/v1`)
+- `VITE_WS_BASE_URL` (default: `ws://localhost:8000/api/v1/ws`)
+
+Example for local backend:
+
+```bash
+VITE_API_BASE_URL=http://localhost:8000/api/v1
+VITE_WS_BASE_URL=ws://localhost:8000/api/v1/ws
+```
+
 ### Frontend checks
 
 ```bash
@@ -216,3 +238,24 @@ npm run lint
 npm run test
 npm run build
 ```
+
+### Backend local run (without Docker)
+
+```bash
+python -m pip install -r requirements.txt
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
+
+### End-to-end local smoke sequence
+
+1. Start backend (`uvicorn`) on port `8000`.
+2. Start frontend (`npm run dev`) on port `5173`.
+3. Open:
+   - `/documents`
+   - `/documents/:id`
+   - `/search`
+   - `/queue`
+   - `/categories`
+   - `/insights`
+   - `/connections`
+4. Trigger a document upload/reprocess and verify queue + connection pages refresh from websocket events.

@@ -1,11 +1,15 @@
 import { useCategories } from '@/hooks/useApi';
 import { Card } from '@/components/ui/Card';
+import { EmptyState, ErrorState, LoadingState } from '@/components/ui/States';
 
 export function CategoriesPage() {
-  const { data } = useCategories();
+  const { data, isLoading, isError } = useCategories();
   return (
     <div className="space-y-4">
       <h1 className="text-xl font-semibold">Categories</h1>
+      {isLoading && <LoadingState />}
+      {isError && <ErrorState message="Failed to load categories" />}
+      {!isLoading && !isError && (data?.length ?? 0) === 0 && <EmptyState label="No categories available." />}
       <div className="grid gap-3 md:grid-cols-2">
         {data?.map((cat) => (
           <Card key={cat.id}>
