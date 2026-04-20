@@ -12,8 +12,12 @@ export function DocumentsPage() {
 
   const onFile = async (file?: File) => {
     if (!file) return;
-    await upload.mutateAsync(file);
-    pushToast('Upload queued');
+    try {
+      await upload.mutateAsync(file);
+      pushToast('Upload queued');
+    } catch {
+      pushToast('Upload failed');
+    }
   };
 
   return (

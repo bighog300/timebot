@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '@/services/api';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { EmptyState, ErrorState, LoadingState } from '@/components/ui/States';
 
 export function SearchPage() {
   const [query, setQuery] = useState('');
@@ -26,13 +27,20 @@ export function SearchPage() {
       </div>
       <Card>
         <h3 className="mb-2 text-sm">Suggestions</h3>
+        {suggestions.isLoading && <LoadingState label="Loading suggestions..." />}
+        {suggestions.isError && <ErrorState message="Failed to load suggestions" />}
         <div className="flex flex-wrap gap-2">{suggestions.data?.map((s) => <button key={s} className="rounded bg-slate-800 px-2 py-1 text-xs" onClick={() => setQuery(s)}>{s}</button>)}</div>
       </Card>
       <Card>
         <h3 className="mb-2 text-sm">Facets</h3>
+        {facets.isLoading && <LoadingState label="Loading facets..." />}
+        {facets.isError && <ErrorState message="Failed to load facets" />}
         <pre className="overflow-auto text-xs text-slate-300">{JSON.stringify(facets.data ?? {}, null, 2)}</pre>
       </Card>
       <div className="space-y-2">
+        {search.isLoading && <LoadingState label="Searching..." />}
+        {search.isError && <ErrorState message="Search failed" />}
+        {search.isSuccess && 'results' in (search.data ?? {}) && (search.data?.results?.length ?? 0) === 0 && <EmptyState label="No matching documents found." />}
         {'results' in (search.data ?? {})
           ? (search.data?.results ?? []).map((item) => (
               <Card key={item.document.id}>
