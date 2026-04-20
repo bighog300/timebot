@@ -21,6 +21,9 @@ class Settings(BaseSettings):
 
     ANTHROPIC_API_KEY: str = ""
     AI_MODEL: str = "claude-sonnet-4-6"
+
+    QDRANT_HOST: str = "localhost"
+    QDRANT_PORT: int = 6333
     AI_MAX_TOKENS: int = 4096
 
     STORAGE_PATH: str = "/app/data"

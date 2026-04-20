@@ -28,6 +28,9 @@ def process_document_task(self, document_id: str):
 
         document_processor.process_document(db, document)
 
+        if document.processing_status == "completed":
+            embed_document_task.delay(document_id)
+
         _notify(document_id, document.processing_status)
         return {"status": "success", "document_id": document_id}
 
@@ -114,3 +117,33 @@ def _mark_failed(db, document_id: str, error: str):
         doc.processing_error = error
         db.add(doc)
         db.commit()
+
+
+@celery_app.task(name="app.workers.tasks.embed_document_task")
+def embed_document_task(document_id: str):
+    from app.db.base import SessionLocal
+    from app.models.document import Document
+    from app.services.embedding_service import embedding_service
+
+    db = SessionLocal()
+    try:
+        document = db.query(Document).filter(Document.id == document_id).first()
+        if not document:
+            logger.error("Document %s not found for embedding", document_id)
+            return
+
+        text_to_embed = f"{document.filename} {document.summary or ''} {document.raw_text or ''}"
+        metadata = {
+            "filename": document.filename,
+            "category": document.ai_category.name if document.ai_category else None,
+            "tags": (document.ai_tags or []) + (document.user_tags or []),
+            "upload_date": document.upload_date.isoformat() if document.upload_date else None,
+        }
+
+        embedding_service.store_document_embedding(
+            document_id=str(document.id),
+            text=text_to_embed,
+            metadata=metadata,
+        )
+    finally:
+        db.close()
