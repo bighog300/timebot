@@ -21,6 +21,7 @@ on:
 jobs:
   docker-validate:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -28,6 +29,9 @@ jobs:
       - name: Validate Docker Compose config
         if: ${{ hashFiles('docker-compose.yml') != '' }}
         run: docker compose -f docker-compose.yml config
+
+      - name: Validate Dockerfile exists
+        run: test -f Dockerfile
 
       - name: Build Docker image
         run: docker build -t timebot-ci:latest .

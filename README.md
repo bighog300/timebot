@@ -259,3 +259,27 @@ python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
    - `/insights`
    - `/connections`
 4. Trigger a document upload/reprocess and verify queue + connection pages refresh from websocket events.
+
+## GitHub Actions rollout (execution bundle)
+
+For the Codex execution bundle used to get workflows green, see:
+
+- `docs/timebot-github-actions-bundle/README.md`
+- `docs/timebot-github-actions-bundle/docs/GITHUB_ACTIONS_ROLLOUT_PLAN.md`
+- `docs/timebot-github-actions-bundle/docs/GITHUB_SECRETS_AND_VARIABLES.md`
+- `docs/timebot-github-actions-bundle/docs/BRANCH_PROTECTION_CHECKLIST.md`
+
+### Required secrets and variables
+
+Use GitHub repository variables for non-sensitive defaults:
+
+- `PYTHON_VERSION` (recommended: `3.11`)
+- `NODE_VERSION` (recommended: `20`)
+
+Use GitHub environment secrets for deploy credentials (set per environment such as `staging` and `production`):
+
+- `DEPLOY_HOST`
+- `DEPLOY_USER`
+- `DEPLOY_SSH_KEY`
+
+The deploy workflow is intentionally a safe placeholder until you replace the deployment command with your infrastructure-specific command path.
