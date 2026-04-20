@@ -1,0 +1,52 @@
+import { NavLink, Outlet } from 'react-router-dom';
+import { useUIStore } from '@/store/uiStore';
+
+const links = [
+  ['/', 'Timeline'],
+  ['/documents', 'Documents'],
+  ['/search', 'Search'],
+  ['/queue', 'Queue'],
+  ['/categories', 'Categories'],
+  ['/insights', 'Insights'],
+  ['/connections', 'Connections'],
+] as const;
+
+export function AppShell() {
+  const { toasts, dismissToast } = useUIStore();
+  return (
+    <div className="min-h-screen bg-slate-950 text-slate-100">
+      <header className="border-b border-slate-800 px-4 py-3 font-semibold">Document Intelligence Platform</header>
+      <div className="grid min-h-[calc(100vh-57px)] grid-cols-1 md:grid-cols-[220px_1fr]">
+        <aside className="border-r border-slate-800 p-3">
+          <nav className="flex flex-col gap-1">
+            {links.map(([to, label]) => (
+              <NavLink
+                key={to}
+                to={to}
+                className={({ isActive }) =>
+                  `rounded px-3 py-2 text-sm ${isActive ? 'bg-slate-700 text-white' : 'text-slate-300 hover:bg-slate-800'}`
+                }
+              >
+                {label}
+              </NavLink>
+            ))}
+          </nav>
+        </aside>
+        <main className="p-4">
+          <Outlet />
+        </main>
+      </div>
+      <div className="fixed bottom-4 right-4 flex flex-col gap-2">
+        {toasts.map((toast) => (
+          <button
+            key={toast.id}
+            onClick={() => dismissToast(toast.id)}
+            className="rounded bg-slate-800 px-3 py-2 text-sm text-slate-100 shadow"
+          >
+            {toast.message}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}

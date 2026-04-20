@@ -192,3 +192,27 @@ MIT License - see LICENSE file for details
 ## Support
 
 For issues and questions, please open a GitHub issue.
+
+## Frontend (Stage 4)
+
+A production-oriented React + TypeScript frontend now lives in `frontend/`.
+
+### Run frontend locally
+
+```bash
+cd frontend
+cp .env.example .env
+npm install
+npm run dev
+```
+
+By default it proxies API calls to `http://localhost:8000` and expects websocket events at `/api/v1/ws/all`.
+
+### Frontend checks
+
+```bash
+npm run type-check
+npm run lint
+npm run test
+npm run build
+```
