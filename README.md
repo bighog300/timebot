@@ -21,6 +21,31 @@ An intelligent document management system with AI-powered organization, tagging,
 
 ### Local Development
 
+### Background Workers (Phase 4 Queue)
+
+Start API + workers with Docker:
+```bash
+docker-compose up --build
+```
+
+Manual local worker commands:
+```bash
+celery -A app.workers.celery_app worker --loglevel=info -Q documents,maintenance
+celery -A app.workers.celery_app beat --loglevel=info
+celery -A app.workers.celery_app flower --port=5555
+```
+
+Queue endpoints:
+- `GET /api/v1/queue/items`
+- `GET /api/v1/queue/stats`
+- `GET /api/v1/queue/health`
+- `POST /api/v1/queue/retry-failed`
+
+WebSocket endpoints:
+- `/api/v1/ws/documents/{document_id}`
+- `/api/v1/ws/all`
+
+
 1. Clone the repository:
 ```bash
 git clone https://github.com/yourusername/your-repo-name.git
