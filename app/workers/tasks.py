@@ -196,7 +196,15 @@ def _notify(document_id: str, status: str, progress: int | None = None, error: s
 
         from app.services.notification import manager
 
-        payload = {"type": "processing_update", "document_id": document_id, "status": status}
+        from datetime import datetime, timezone
+
+        payload = {
+            "type": "processing_update",
+            "event_version": "1.0",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "document_id": document_id,
+            "status": status,
+        }
         if progress is not None:
             payload["progress"] = progress
         if error:
