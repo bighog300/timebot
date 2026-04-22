@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
@@ -5,6 +7,8 @@ from app.api.deps import get_current_user, get_db
 from app.models.user import User
 from app.schemas.document import DocumentResponse
 from app.services.document_processor import document_processor
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/upload", tags=["upload"])
 
@@ -20,5 +24,6 @@ async def upload_document(
         return document
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception:
+        logger.exception("Unhandled error during document upload")
+        raise HTTPException(status_code=500, detail="An unexpected error occurred during upload")
