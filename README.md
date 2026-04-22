@@ -12,7 +12,7 @@ AI-assisted document intelligence platform with upload/search, review workflow, 
 - Node.js 20+
 - PostgreSQL 14+
 - Redis 7+
-- Anthropic API key
+- OpenAI API key
 
 ## Quick start (Docker Compose)
 
@@ -20,7 +20,7 @@ AI-assisted document intelligence platform with upload/search, review workflow, 
    ```bash
    cp .env.example .env
    ```
-2. Set required secrets in `.env` (at minimum `ANTHROPIC_API_KEY`, `AUTH_SECRET_KEY`).
+2. Set required secrets in `.env` (at minimum `OPENAI_API_KEY`, `AUTH_SECRET_KEY`).
 3. Start stack:
    ```bash
    docker compose up --build
@@ -68,8 +68,9 @@ npm run dev
 | `REDIS_URL` | Yes | Redis cache + Celery broker default |
 | `CELERY_BROKER_URL` | Yes | Celery broker URL |
 | `CELERY_RESULT_BACKEND` | Yes | Celery result backend |
-| `ANTHROPIC_API_KEY` | Yes for AI features | Claude API key |
-| `AI_MODEL` | Optional | Claude model id (`claude-sonnet-4-20250514`) |
+| `OPENAI_API_KEY` | Yes for AI features | OpenAI API key for analysis + embeddings |
+| `OPENAI_MODEL` | Optional | Chat model id (default `gpt-4o-mini`) |
+| `OPENAI_EMBEDDING_MODEL` | Optional | Embedding model id (default `text-embedding-3-small`) |
 | `AUTH_SECRET_KEY` | Yes outside local dev | JWT signing secret |
 | `AUTH_ALGORITHM` | Optional | JWT algorithm (default `HS256`) |
 | `AUTH_ACCESS_TOKEN_EXPIRE_MINUTES` | Optional | Access token TTL |
@@ -84,6 +85,13 @@ npm run dev
 | `ALEMBIC_SKIP` | Optional (test-only) | Enables fallback `create_all` for isolated tests |
 
 See `.env.example` for the full list and safe local defaults.
+
+## AI provider model
+
+- The backend is now **OpenAI-only** for document analysis, category discovery, and semantic embeddings.
+- Local transformer embedding runtime paths were removed (no `sentence-transformers`, Torch/CUDA/NVIDIA dependency chain in the app path).
+- Qdrant remains the vector database for semantic search.
+
 
 ### Connector token encryption key
 

@@ -29,8 +29,9 @@ class Settings(BaseSettings):
     CELERY_TASK_MAX_RETRIES: int = 3
     CELERY_TASK_DEFAULT_RETRY_DELAY: int = 60
 
-    ANTHROPIC_API_KEY: str = ""
-    AI_MODEL: str = "claude-sonnet-4-20250514"
+    OPENAI_API_KEY: str = ""
+    OPENAI_MODEL: str = "gpt-4o-mini"
+    OPENAI_EMBEDDING_MODEL: str = "text-embedding-3-small"
 
     QDRANT_HOST: str = "localhost"
     QDRANT_PORT: int = 6333
