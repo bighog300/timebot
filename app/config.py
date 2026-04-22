@@ -1,12 +1,4 @@
-try:
-    from pydantic_settings import BaseSettings
-except ModuleNotFoundError:  # pragma: no cover - local test fallback when deps are unavailable
-    class BaseSettings:  # type: ignore[too-many-ancestors]
-        def __init__(self, **kwargs):
-            for name, value in self.__class__.__dict__.items():
-                if name.startswith("_") or callable(value) or isinstance(value, property):
-                    continue
-                setattr(self, name, kwargs.get(name, value))
+from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
@@ -15,7 +7,7 @@ class Settings(BaseSettings):
     DEBUG: bool = False
     API_HOST: str = "0.0.0.0"
     API_PORT: int = 8000
-    ALLOWED_ORIGINS: str = "*"
+    ALLOWED_ORIGINS: str = "http://localhost:5173,http://localhost:3000"
 
     DATABASE_URL: str = "postgresql://docuser:docpass@localhost:5432/documents"
     SQL_ECHO: bool = False
@@ -60,7 +52,7 @@ class Settings(BaseSettings):
     GOOGLE_OAUTH_REDIRECT_URI: str = ""
     GOOGLE_OAUTH_SCOPES: str = "openid,email,profile,https://www.googleapis.com/auth/drive.metadata.readonly"
 
-    AUTH_SECRET_KEY: str = "change-me-in-production"
+    AUTH_SECRET_KEY: str = "dev-insecure-change-me"
     AUTH_ALGORITHM: str = "HS256"
     AUTH_ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
 

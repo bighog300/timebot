@@ -4,18 +4,28 @@ import { api } from '@/services/api';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui/States';
+import type { SearchResponse, SearchResultItem, SemanticSearchResponse, SemanticSearchResult } from '@/types/api';
+
+type SearchMode = 'keyword' | 'semantic';
+type SearchResult = SearchResponse | SemanticSearchResponse;
+
+const isKeywordResponse = (payload: SearchResult | undefined): payload is SearchResponse => {
+  return Boolean(payload && 'pages' in payload);
+};
 
 export function SearchPage() {
   const [query, setQuery] = useState('');
-  const [mode, setMode] = useState<'keyword' | 'semantic'>('keyword');
+  const [mode, setMode] = useState<SearchMode>('keyword');
 
-  const search = useQuery({
+  const search = useQuery<SearchResult>({
     queryKey: ['search', mode, query],
     queryFn: () => (mode === 'keyword' ? api.searchKeyword(query) : api.searchSemantic(query)),
     enabled: query.length > 1,
   });
   const suggestions = useQuery({ queryKey: ['suggestions', query], queryFn: () => api.listSuggestions(query), enabled: query.length > 0 });
   const facets = useQuery({ queryKey: ['facets', query], queryFn: () => api.listFacets(query) });
+
+  const resultItems: Array<SearchResultItem | SemanticSearchResult> = search.data?.results ?? [];
 
   return (
     <div className="space-y-4">
@@ -40,15 +50,13 @@ export function SearchPage() {
       <div className="space-y-2">
         {search.isLoading && <LoadingState label="Searching..." />}
         {search.isError && <ErrorState message="Search failed" />}
-        {search.isSuccess && 'results' in (search.data ?? {}) && (search.data?.results?.length ?? 0) === 0 && <EmptyState label="No matching documents found." />}
-        {'results' in (search.data ?? {})
-          ? (search.data?.results ?? []).map((item) => (
-              <Card key={item.document.id}>
-                <div className="font-medium">{item.document.filename}</div>
-                <div className="text-xs text-slate-400">{'relevance' in item ? item.relevance : item.similarity_score}</div>
-              </Card>
-            ))
-          : null}
+        {search.isSuccess && resultItems.length === 0 && <EmptyState label="No matching documents found." />}
+        {resultItems.map((item) => (
+          <Card key={item.document.id}>
+            <div className="font-medium">{item.document.filename}</div>
+            <div className="text-xs text-slate-400">{'relevance' in item ? item.relevance : item.similarity_score}</div>
+          </Card>
+        ))}
       </div>
     </div>
   );

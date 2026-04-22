@@ -1,11 +1,15 @@
+import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
 from app.config import settings
 from app.api.v1 import analysis, auth, categories, connections, documents, insights, queue, search, upload, websocket
+
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
@@ -14,6 +18,9 @@ async def lifespan(app: FastAPI):
     from app.db.base import init_db
     # Import models so metadata is available for optional fallback init_db paths
     import app.models  # noqa: F401
+
+    if settings.AUTH_SECRET_KEY == "dev-insecure-change-me":
+        logger.warning("AUTH_SECRET_KEY is using the insecure development default. Set a unique secret for shared/prod environments.")
 
     init_db()
     yield
@@ -34,6 +41,13 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(_request: Request, exc: Exception) -> JSONResponse:
+    logger.error("Unhandled server exception", exc_info=True)
+    return JSONResponse(status_code=500, content={"detail": "An unexpected error occurred"})
+
 
 app.include_router(documents.router, prefix="/api/v1")
 app.include_router(categories.router, prefix="/api/v1")
