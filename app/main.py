@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
 from app.config import settings
-from app.api.v1 import analysis, categories, connections, documents, insights, queue, search, upload, websocket
+from app.api.v1 import analysis, auth, categories, connections, documents, insights, queue, search, upload, websocket
 
 
 @asynccontextmanager
@@ -44,6 +44,7 @@ app.include_router(websocket.router, prefix="/api/v1")
 app.include_router(search.router, prefix="/api/v1")
 app.include_router(insights.router, prefix="/api/v1")
 app.include_router(connections.router, prefix="/api/v1")
+app.include_router(auth.router, prefix="/api/v1")
 
 
 @app.get("/health", tags=["health"])

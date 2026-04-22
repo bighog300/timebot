@@ -60,6 +60,10 @@ class Settings(BaseSettings):
     GOOGLE_OAUTH_REDIRECT_URI: str = ""
     GOOGLE_OAUTH_SCOPES: str = "openid,email,profile,https://www.googleapis.com/auth/drive.metadata.readonly"
 
+    AUTH_SECRET_KEY: str = "change-me-in-production"
+    AUTH_ALGORITHM: str = "HS256"
+    AUTH_ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
+
     model_config = {"env_file": ".env", "extra": "ignore"}
 
     @property

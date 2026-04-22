@@ -1,11 +1,12 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db
+from app.api.deps import get_current_user, get_db
 from app.schemas.intelligence import InsightsResponse
+from app.models.user import User
 from app.services.insights_service import insights_service
 
-router = APIRouter(prefix="/insights", tags=["insights"])
+router = APIRouter(prefix="/insights", tags=["insights"], dependencies=[Depends(get_current_user)])
 
 
 @router.get('/overview', response_model=InsightsResponse)

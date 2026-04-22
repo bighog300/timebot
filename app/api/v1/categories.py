@@ -4,11 +4,12 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db
+from app.api.deps import get_current_user, get_db
 from app.crud import category as crud_category
+from app.models.user import User
 from app.schemas.category import CategoryCreate, CategoryResponse, CategoryUpdate
 
-router = APIRouter(prefix="/categories", tags=["categories"])
+router = APIRouter(prefix="/categories", tags=["categories"], dependencies=[Depends(get_current_user)])
 
 
 @router.get("/", response_model=List[CategoryResponse])
@@ -52,10 +53,10 @@ def delete_category(category_id: UUID, db: Session = Depends(get_db)):
 
 @router.get("/{category_id}/documents")
 def get_category_documents(
-    category_id: UUID, skip: int = 0, limit: int = 50, db: Session = Depends(get_db)
+    category_id: UUID, skip: int = 0, limit: int = 50, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
 ):
     from app.crud.document import get_documents_by_category
     from app.schemas.document import DocumentResponse
 
-    docs = get_documents_by_category(db, category_id=category_id, skip=skip, limit=limit)
+    docs = get_documents_by_category(db, user=current_user, category_id=category_id, skip=skip, limit=limit)
     return [DocumentResponse.model_validate(d) for d in docs]

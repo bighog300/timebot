@@ -3,8 +3,9 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db
+from app.api.deps import get_current_user, get_db
 from app.models.relationships import Connection, SyncLog
+from app.models.user import User
 from app.schemas.connections import (
     ConnectionResponse,
     OAuthStartResponse,
@@ -18,14 +19,14 @@ router = APIRouter(prefix="/connections", tags=["connections"])
 
 
 @router.get('/', response_model=list[ConnectionResponse])
-def list_connections(db: Session = Depends(get_db)):
-    return connector_service.list_connections(db)
+def list_connections(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    return connector_service.list_connections(db, current_user)
 
 
 @router.post('/{provider_type}/connect/start', response_model=OAuthStartResponse)
-def start_connect(provider_type: str, db: Session = Depends(get_db)):
+def start_connect(provider_type: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     try:
-        return connector_service.start_oauth(db, provider_type)
+        return connector_service.start_oauth(db, provider_type, current_user)
     except KeyError:
         raise HTTPException(status_code=404, detail='Unsupported provider')
     except ValueError as exc:
@@ -38,9 +39,10 @@ async def connect_callback(
     code: str = Query(...),
     state: str = Query(...),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     try:
-        conn = connector_service.handle_callback(db, provider_type, code=code, state=state)
+        conn = connector_service.handle_callback(db, provider_type, code=code, state=state, user=current_user)
     except KeyError:
         raise HTTPException(status_code=404, detail='Unsupported provider')
     except ValueError as exc:
@@ -60,9 +62,9 @@ async def connect_callback(
 
 
 @router.post('/{provider_type}/disconnect', response_model=ConnectionResponse)
-async def disconnect_provider(provider_type: str, db: Session = Depends(get_db)):
+async def disconnect_provider(provider_type: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     try:
-        conn = connector_service.disconnect(db, provider_type)
+        conn = connector_service.disconnect(db, provider_type, current_user)
     except KeyError:
         raise HTTPException(status_code=404, detail='Unsupported provider')
 
@@ -78,9 +80,9 @@ async def disconnect_provider(provider_type: str, db: Session = Depends(get_db))
 
 
 @router.post('/{provider_type}/sync', response_model=SyncRunResponse)
-async def sync_provider(provider_type: str, db: Session = Depends(get_db)):
+async def sync_provider(provider_type: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     try:
-        conn, _log, result = connector_service.sync_connection(db, provider_type)
+        conn, _log, result = connector_service.sync_connection(db, provider_type, current_user)
     except KeyError:
         raise HTTPException(status_code=404, detail='Unsupported provider')
     except ValueError as exc:
@@ -109,8 +111,8 @@ async def sync_provider(provider_type: str, db: Session = Depends(get_db)):
 
 
 @router.get('/{provider_type}/sync-logs', response_model=list[SyncLogResponse])
-def sync_logs(provider_type: str, db: Session = Depends(get_db)):
-    conn = db.query(Connection).filter(Connection.type == provider_type).first()
+def sync_logs(provider_type: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    conn = db.query(Connection).filter(Connection.type == provider_type, Connection.user_id == current_user.id).first()
     if not conn:
         raise HTTPException(status_code=404, detail='Connection not found')
 

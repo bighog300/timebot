@@ -52,3 +52,6 @@ sentence-transformers==2.5.1
 # WebSocket
 python-socketio==5.11.1
 python-engineio==4.9.0
+
+PyJWT==2.9.0
+email-validator==2.2.0

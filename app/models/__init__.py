@@ -1,3 +1,4 @@
+from app.models.user import User
 from app.models.category import Category
 from app.models.document import Document
 from app.models.relationships import (
@@ -9,6 +10,7 @@ from app.models.relationships import (
 )
 
 __all__ = [
+    "User",
     "Category",
     "Connection",
     "Document",

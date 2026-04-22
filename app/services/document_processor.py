@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.models.document import Document
+from app.models.user import User
 from app.services.storage import storage
 from app.services.text_extractor import text_extractor
 from app.services.thumbnail_generator import thumbnail_generator
@@ -19,7 +20,7 @@ _MAX_BYTES = settings.MAX_UPLOAD_SIZE_MB * 1024 * 1024
 
 class DocumentProcessor:
     async def process_upload(
-        self, db: Session, file: UploadFile, source: str = "upload"
+        self, db: Session, file: UploadFile, user: User, source: str = "upload"
     ) -> Document:
         self._validate(file)
 
@@ -41,6 +42,7 @@ class DocumentProcessor:
             file_size=file_size,
             mime_type=mime_type,
             source=source,
+            user_id=user.id,
             processing_status="queued",
         )
         db.add(document)
