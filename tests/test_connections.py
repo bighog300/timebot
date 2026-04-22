@@ -2,11 +2,14 @@ from datetime import datetime, timezone
 from types import SimpleNamespace
 from uuid import uuid4
 
+import pytest
 from fastapi.testclient import TestClient
 
+from app.config import settings
 from app.api.deps import get_current_user, get_db
 from app.main import app
 from app.services.connectors.service import ConnectorService
+from app.services.connectors.token_crypto import connector_token_crypto
 
 
 class FakeQuery:
@@ -69,6 +72,11 @@ class FakeDB:
         return None
 
 
+def _set_encryption_key(key: str):
+    settings.CONNECTOR_TOKEN_ENCRYPTION_KEY = key
+    connector_token_crypto._fernet = None
+
+
 def test_connection_list_initializes_google_drive_only():
     db = FakeDB()
     service = ConnectorService()
@@ -81,6 +89,7 @@ def test_connection_list_initializes_google_drive_only():
 
 
 def test_oauth_callback_happy_path(monkeypatch):
+    _set_encryption_key("Q6iMLfJ8sNy0DV1N7s9fM2NnV7Jvn0BLPw6EB0fXxHg=")
     db = FakeDB()
     service = ConnectorService()
 
@@ -105,16 +114,19 @@ def test_oauth_callback_happy_path(monkeypatch):
 
     conn = service.handle_callback(db, "gdrive", code="abc", state=start["state"], user=user)
     assert conn.status == "connected"
-    assert conn.access_token == "token-1"
+    assert conn.access_token != "token-1"
+    assert conn.access_token.startswith("enc:v1:")
+    assert connector_token_crypto.decrypt(conn.access_token) == "token-1"
     assert conn.email == "user@example.com"
 
 
 def test_sync_happy_path_and_failure_persistence(monkeypatch):
+    _set_encryption_key("Q6iMLfJ8sNy0DV1N7s9fM2NnV7Jvn0BLPw6EB0fXxHg=")
     db = FakeDB()
     service = ConnectorService()
     user = SimpleNamespace(id=uuid4(), email="u@example.com")
     conn = service._get_or_create(db, "gdrive", user)
-    conn.access_token = "token"
+    conn.access_token = connector_token_crypto.encrypt("token")
 
     monkeypatch.setattr(
         "app.services.connectors.google_drive.GoogleDriveProvider.list_remote_files",
@@ -173,3 +185,49 @@ def test_callback_route_returns_connection(monkeypatch):
 
     assert response.status_code == 200
     assert response.json()["type"] == "gdrive"
+
+
+def test_sync_reencrypts_legacy_plaintext_access_token(monkeypatch):
+    _set_encryption_key("Q6iMLfJ8sNy0DV1N7s9fM2NnV7Jvn0BLPw6EB0fXxHg=")
+    db = FakeDB()
+    service = ConnectorService()
+    user = SimpleNamespace(id=uuid4(), email="u@example.com")
+    conn = service._get_or_create(db, "gdrive", user)
+    conn.access_token = "legacy-plaintext"
+
+    monkeypatch.setattr(
+        "app.services.connectors.google_drive.GoogleDriveProvider.list_remote_files",
+        lambda self, access_token: [],
+    )
+
+    synced_conn, _log, _result = service.sync_connection(db, "gdrive", user)
+    assert synced_conn.access_token.startswith("enc:v1:")
+    assert connector_token_crypto.decrypt(synced_conn.access_token) == "legacy-plaintext"
+
+
+def test_callback_fails_when_encryption_key_missing(monkeypatch):
+    _set_encryption_key("")
+    db = FakeDB()
+    service = ConnectorService()
+
+    monkeypatch.setattr(
+        "app.services.connectors.google_drive.GoogleDriveProvider.build_authorization_url",
+        lambda self, state: SimpleNamespace(authorization_url="https://example.test/auth", state=state),
+    )
+    user = SimpleNamespace(id=uuid4(), email="u@example.com")
+    start = service.start_oauth(db, "gdrive", user)
+
+    monkeypatch.setattr(
+        "app.services.connectors.google_drive.GoogleDriveProvider.exchange_code_for_tokens",
+        lambda self, code: SimpleNamespace(
+            account_email="user@example.com",
+            account_id="acct-123",
+            access_token="token-1",
+            refresh_token="refresh-1",
+            expires_at=datetime.now(timezone.utc),
+            scopes=["scope-a"],
+        ),
+    )
+
+    with pytest.raises(RuntimeError, match="CONNECTOR_TOKEN_ENCRYPTION_KEY"):
+        service.handle_callback(db, "gdrive", code="abc", state=start["state"], user=user)
