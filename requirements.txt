@@ -42,7 +42,7 @@ cryptography==42.0.8
 prometheus-client==0.19.0
 
 # Testing
-pytest==8.0.0
+pytest==7.4.4
 pytest-asyncio==0.23.4
 
 sqlalchemy-utils==0.41.1
