@@ -80,7 +80,7 @@ class SearchService:
         search_query = db.query(Document).filter(Document.is_archived.is_(False))
         ts_query = self._build_ts_query(parsed) if parsed.normalized else None
 
-        if ts_query:
+        if ts_query is not None:
             search_query = search_query.filter(Document.search_vector.op("@@")(ts_query))
 
         if filters:
@@ -88,7 +88,7 @@ class SearchService:
 
         total = search_query.count()
 
-        if ts_query:
+        if ts_query is not None:
             search_query = search_query.order_by(
                 func.ts_rank_cd(Document.search_vector, ts_query).desc(),
                 Document.upload_date.desc(),
