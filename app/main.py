@@ -10,9 +10,9 @@ from app.api.v1 import analysis, categories, connections, documents, insights, q
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: create all tables (safe to call multiple times)
+    # Startup: schema is managed by Alembic (create_all only when ALEMBIC_SKIP=true).
     from app.db.base import init_db
-    # Import all models so SQLAlchemy registers them before create_all
+    # Import models so metadata is available for optional fallback init_db paths
     import app.models  # noqa: F401
 
     init_db()
