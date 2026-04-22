@@ -36,9 +36,9 @@ class Settings(BaseSettings):
     QDRANT_PORT: int = 6333
     AI_MAX_TOKENS: int = 4096
 
-    STORAGE_PATH: str = "/app/data"
-    UPLOAD_PATH: str = "/app/data/uploads"
-    PROCESSED_PATH: str = "/app/data/processed"
+    STORAGE_PATH: str = "data"
+    UPLOAD_PATH: str = "data/uploads"
+    PROCESSED_PATH: str = "data/processed"
 
     ENABLE_AUTO_CATEGORIZATION: bool = True
     ENABLE_ENTITY_EXTRACTION: bool = True
