@@ -22,7 +22,7 @@ class DocumentRelationship(Base):
     )
     relationship_type = Column(String(50), nullable=False, index=True)
     confidence = Column(Float)
-    metadata = Column(JSONB, default=dict)
+    relationship_metadata = Column("metadata", JSONB, default=dict)
     created_at = Column(TIMESTAMP(timezone=True), default=func.now())
 
     source_document = relationship(
