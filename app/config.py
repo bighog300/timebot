@@ -38,7 +38,7 @@ class Settings(BaseSettings):
     CELERY_TASK_DEFAULT_RETRY_DELAY: int = 60
 
     ANTHROPIC_API_KEY: str = ""
-    AI_MODEL: str = "claude-sonnet-4-6"
+    AI_MODEL: str = "claude-sonnet-4-20250514"
 
     QDRANT_HOST: str = "localhost"
     QDRANT_PORT: int = 6333

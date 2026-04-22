@@ -1,8 +1,13 @@
+> **STATUS: RESOLVED (April 2026)**
+> The frontend described as missing in this report has since been implemented.
+> See frontend/ for the React + TypeScript application.
+> This document is kept for historical reference only.
+
 # Stage 4 Gap Report
 
 ## Executive summary
 
-The repository contains **extensive frontend documentation**, but not the actual frontend app. Stage 4 is therefore still in the **specification state**, not implementation state.
+This report captured a point-in-time gap before the frontend implementation landed. The current repository now includes a working frontend in `frontend/`; treat the sections below as historical context.
 
 ## What already exists
 
@@ -46,6 +51,9 @@ The repository contains **extensive frontend documentation**, but not the actual
 - frontend-oriented config examples in `docs/package.json`, `docs/vite.config.ts`, `docs/tailwind.config.js`
 
 ## What is missing
+
+_Historical note:_ the items below were open gaps at report time and may now be implemented.
+
 
 ### 1. No frontend application exists yet
 Missing in the real repo:

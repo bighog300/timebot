@@ -1,7 +1,9 @@
+import os
+from typing import Generator
+
 from sqlalchemy import create_engine, text
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, Session
-from typing import Generator
+from sqlalchemy.orm import Session, sessionmaker
 
 from app.config import settings
 
@@ -25,8 +27,11 @@ def get_db() -> Generator[Session, None, None]:
         db.close()
 
 
-def init_db():
-    Base.metadata.create_all(bind=engine)
+def init_db() -> None:
+    # Normal app startup uses Alembic migrations.
+    # Keep create_all as an opt-in fallback for local tests/dev.
+    if os.getenv("ALEMBIC_SKIP", "false").lower() == "true":
+        Base.metadata.create_all(bind=engine)
 
 
 def check_db_connection() -> bool:

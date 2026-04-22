@@ -1,0 +1,43 @@
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Python tooling
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+.eggs/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Runtime/build artifacts
+data/
+build/
+dist/
+*.log
+
+# Node / frontend
+frontend/node_modules/
+frontend/dist/
+
+# OS / editor junk
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*~
