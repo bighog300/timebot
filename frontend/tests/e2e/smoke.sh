@@ -43,7 +43,7 @@ upload_resp=$(curl -sS -w '\n%{http_code}' "${auth_header[@]}" -F "file=@$pdf_fi
 rm -f "$pdf_file"
 upload_body=$(echo "$upload_resp" | head -n -1)
 upload_code=$(echo "$upload_resp" | tail -n1)
-[[ "$upload_code" == "200" ]]
+[[ "$upload_code" == "202" ]]
 DOC_ID=$(echo "$upload_body" | jq -r '.id')
 [[ -n "$DOC_ID" && "$DOC_ID" != "null" ]]
 
@@ -51,21 +51,20 @@ echo "[4/7] Poll document processing"
 for _ in {1..30}; do
   doc_resp=$(curl -sS "${auth_header[@]}" "$BASE_URL/api/v1/documents/$DOC_ID")
   status=$(echo "$doc_resp" | jq -r '.processing_status')
-  if [[ "$status" != "queued" ]]; then
+  if [[ "$status" == "completed" || "$status" == "failed" ]]; then
     break
   fi
   sleep 1
 done
-[[ "$status" != "queued" ]]
+[[ "$status" == "completed" || "$status" == "failed" ]]
 
 echo "[5/7] Search"
-search_payload=$(jq -n '{query:"smoke",limit:5,skip:0}')
-search_resp=$(curl -sS -w '\n%{http_code}' "${auth_header[@]}" -H 'Content-Type: application/json' -d "$search_payload" "$BASE_URL/api/v1/search")
+search_resp=$(curl -sS -w '\n%{http_code}' "${auth_header[@]}" -X POST "$BASE_URL/api/v1/search?query=smoke&limit=5&skip=0")
 search_code=$(echo "$search_resp" | tail -n1)
 [[ "$search_code" == "200" ]]
 
 echo "[6/7] Insights actions"
-insights_resp=$(curl -sS -w '\n%{http_code}' "${auth_header[@]}" "$BASE_URL/api/v1/insights/actions")
+insights_resp=$(curl -sS -w '\n%{http_code}' "${auth_header[@]}" "$BASE_URL/api/v1/insights/overview")
 insights_body=$(echo "$insights_resp" | head -n -1)
 insights_code=$(echo "$insights_resp" | tail -n1)
 [[ "$insights_code" == "200" ]]
