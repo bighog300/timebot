@@ -171,7 +171,7 @@ class RelationshipDetectionService:
             if existing:
                 if (existing.confidence or 0.0) < candidate.confidence:
                     existing.confidence = candidate.confidence
-                    existing.metadata = candidate.metadata
+                    existing.relationship_metadata = candidate.metadata
                     db.add(existing)
                     updated += 1
                 continue
@@ -182,7 +182,7 @@ class RelationshipDetectionService:
                     target_doc_id=candidate.target_doc_id,
                     relationship_type=candidate.relationship_type,
                     confidence=candidate.confidence,
-                    metadata=candidate.metadata,
+                    relationship_metadata=candidate.metadata,
                 )
             )
             created += 1
