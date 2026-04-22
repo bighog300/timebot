@@ -37,6 +37,12 @@ def queue_stats(db: Session = Depends(get_db)):
         completed=status_counts.get("completed", 0),
         failed=status_counts.get("failed", 0),
         total=sum(status_counts.values()),
+        pending_review_count=(
+            db.query(func.count(Document.id))
+            .filter(Document.review_status == "pending")
+            .scalar()
+            or 0
+        ),
     )
 
     try:

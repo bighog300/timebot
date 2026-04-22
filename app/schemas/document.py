@@ -47,6 +47,11 @@ class DocumentResponse(BaseModel):
     ai_tags: List[str] = []
     user_tags: List[str] = []
     ai_confidence: Optional[float] = None
+    review_status: Optional[str] = None
+    reviewed_at: Optional[datetime] = None
+    reviewed_by: Optional[str] = None
+    override_summary: Optional[str] = None
+    override_tags: Optional[List[str]] = None
     is_favorite: bool = False
     is_archived: bool = False
     user_notes: Optional[str] = None
@@ -62,3 +67,10 @@ class DocumentSearchResponse(BaseModel):
     documents: List[DocumentResponse]
     total: int
     query: str
+
+
+class DocumentReviewRequest(BaseModel):
+    action: str
+    override_summary: Optional[str] = None
+    override_tags: Optional[List[str]] = None
+    reviewed_by: Optional[str] = None

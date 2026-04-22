@@ -93,3 +93,16 @@ def count_documents(db: Session, include_archived: bool = False) -> int:
     if not include_archived:
         q = q.filter(Document.is_archived == False)
     return q.count()
+
+
+def get_review_queue(
+    db: Session, status: str = "pending", skip: int = 0, limit: int = 50
+) -> List[Document]:
+    return (
+        db.query(Document)
+        .filter(Document.review_status == status, Document.is_archived == False)
+        .order_by(Document.ai_confidence.asc().nullsfirst(), desc(Document.upload_date))
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )

@@ -8,6 +8,7 @@ import { QueuePage } from '@/pages/QueuePage';
 import { CategoriesPage } from '@/pages/CategoriesPage';
 import { InsightsPage } from '@/pages/InsightsPage';
 import { ConnectionsPage } from '@/pages/ConnectionsPage';
+import { ReviewQueuePage } from '@/pages/ReviewQueuePage';
 
 export const router = createBrowserRouter([
   {
@@ -19,6 +20,7 @@ export const router = createBrowserRouter([
       { path: 'documents/:id', element: <DocumentDetailPage /> },
       { path: 'search', element: <SearchPage /> },
       { path: 'queue', element: <QueuePage /> },
+      { path: 'review', element: <ReviewQueuePage /> },
       { path: 'categories', element: <CategoriesPage /> },
       { path: 'insights', element: <InsightsPage /> },
       { path: 'connections', element: <ConnectionsPage /> },

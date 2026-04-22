@@ -27,5 +27,6 @@ class QueueStatsResponse(BaseModel):
     completed: int
     failed: int
     total: int
+    pending_review_count: int = 0
     celery_active: Optional[int] = None
     celery_reserved: Optional[int] = None
