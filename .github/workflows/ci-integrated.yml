@@ -4,18 +4,28 @@ on:
   pull_request:
     paths:
       - 'app/**'
+      - 'migrations/**'
+      - 'scripts/**'
+      - 'alembic.ini'
       - 'tests/**'
       - 'frontend/**'
       - 'requirements.txt'
+      - 'requirements-dev.txt'
+      - '.env.example'
       - 'docker-compose.yml'
       - '.github/workflows/ci-integrated.yml'
   push:
     branches: [main]
     paths:
       - 'app/**'
+      - 'migrations/**'
+      - 'scripts/**'
+      - 'alembic.ini'
       - 'tests/**'
       - 'frontend/**'
       - 'requirements.txt'
+      - 'requirements-dev.txt'
+      - '.env.example'
       - 'docker-compose.yml'
       - '.github/workflows/ci-integrated.yml'
   workflow_dispatch:
@@ -56,6 +66,11 @@ jobs:
       CELERY_BROKER_URL: redis://127.0.0.1:6379/0
       CELERY_RESULT_BACKEND: redis://127.0.0.1:6379/0
       ANTHROPIC_API_KEY: test-key
+      AUTH_SECRET_KEY: ci-test-auth-secret-key
+      CONNECTOR_TOKEN_ENCRYPTION_KEY: 6T-VEv2ueVr0VriM8n4QfSMqkA9R7sQfD_gJK4jI8Y8=
+      STORAGE_PATH: /tmp/timebot-data
+      UPLOAD_PATH: /tmp/timebot-data/uploads
+      PROCESSED_PATH: /tmp/timebot-data/processed
 
     steps:
       - name: Checkout
@@ -73,7 +88,7 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
-          cache-dependency-path: frontend/package.json
+          cache-dependency-path: frontend/package-lock.json
 
       - name: Install backend dependencies
         run: |
@@ -81,7 +96,7 @@ jobs:
           pip install -r requirements-dev.txt
 
       - name: Install frontend dependencies
-        run: npm install
+        run: npm ci
         working-directory: frontend
 
       - name: Run migrations

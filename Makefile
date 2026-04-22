@@ -1,4 +1,4 @@
-.PHONY: backend-install migrate backend frontend bootstrap test-backend test-frontend
+.PHONY: backend-install migrate backend frontend bootstrap test-backend test-frontend ci-backend ci-frontend ci-integrated-smoke
 
 backend-install:
 	python -m pip install --upgrade pip
@@ -21,3 +21,18 @@ test-backend:
 
 test-frontend:
 	cd frontend && npm run test
+
+ci-backend:
+	python -m pip install --upgrade pip
+	python -m pip install -r requirements-dev.txt
+	pytest tests -q
+
+ci-frontend:
+	cd frontend && npm ci
+	cd frontend && npm run type-check
+	cd frontend && npm run lint
+	cd frontend && npm run test
+	cd frontend && npm run build
+
+ci-integrated-smoke:
+	bash frontend/tests/e2e/smoke.sh

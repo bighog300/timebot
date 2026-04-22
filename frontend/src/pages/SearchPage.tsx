@@ -9,10 +9,6 @@ import type { SearchResponse, SearchResultItem, SemanticSearchResponse, Semantic
 type SearchMode = 'keyword' | 'semantic';
 type SearchResult = SearchResponse | SemanticSearchResponse;
 
-const isKeywordResponse = (payload: SearchResult | undefined): payload is SearchResponse => {
-  return Boolean(payload && 'pages' in payload);
-};
-
 export function SearchPage() {
   const [query, setQuery] = useState('');
   const [mode, setMode] = useState<SearchMode>('keyword');

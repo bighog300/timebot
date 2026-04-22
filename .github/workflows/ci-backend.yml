@@ -4,8 +4,13 @@ on:
   pull_request:
     paths:
       - 'app/**'
+      - 'migrations/**'
+      - 'scripts/**'
+      - 'alembic.ini'
       - 'tests/**'
       - 'requirements.txt'
+      - 'requirements-dev.txt'
+      - '.env.example'
       - 'Dockerfile'
       - 'docker-compose.yml'
       - '.github/workflows/ci-backend.yml'
@@ -13,8 +18,13 @@ on:
     branches: [main]
     paths:
       - 'app/**'
+      - 'migrations/**'
+      - 'scripts/**'
+      - 'alembic.ini'
       - 'tests/**'
       - 'requirements.txt'
+      - 'requirements-dev.txt'
+      - '.env.example'
       - 'Dockerfile'
       - 'docker-compose.yml'
       - '.github/workflows/ci-backend.yml'
