@@ -38,16 +38,21 @@ services:
       - doc-network
 
   qdrant:
-  image: qdrant/qdrant:latest
-  container_name: doc-qdrant
-  ports:
-    - "6335:6333"
-    - "6336:6334"
-  volumes:
-    - qdrant_data:/qdrant/storage
-  restart: unless-stopped
-  networks:
-    - doc-network
+    image: qdrant/qdrant:latest
+    container_name: doc-qdrant
+    ports:
+      - "6335:6333"
+      - "6336:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6333/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - doc-network
 
   app:
     build:
