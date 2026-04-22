@@ -51,6 +51,7 @@ class Settings(BaseSettings):
     GOOGLE_OAUTH_CLIENT_SECRET: str = ""
     GOOGLE_OAUTH_REDIRECT_URI: str = ""
     GOOGLE_OAUTH_SCOPES: str = "openid,email,profile,https://www.googleapis.com/auth/drive.metadata.readonly"
+    CONNECTOR_TOKEN_ENCRYPTION_KEY: str = ""
 
     AUTH_SECRET_KEY: str = "dev-insecure-change-me"
     AUTH_ALGORITHM: str = "HS256"

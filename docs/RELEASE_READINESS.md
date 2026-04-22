@@ -6,6 +6,7 @@
 - React frontend with auth guards, review queue, queue, connections, and shared app shell.
 - Alembic is the schema authority and should be used for all schema changes.
 - Targeted backend and frontend test suites exist for auth/review/connectors and major UI pages.
+- Connector OAuth tokens are encrypted at rest using `CONNECTOR_TOKEN_ENCRYPTION_KEY` (Fernet), with a repo script for legacy plaintext backfill.
 
 ## Partially implemented / limited
 
@@ -15,7 +16,6 @@
 
 ## Deferred hardening items (must be addressed before production launch)
 
-1. **Connector token encryption at rest is not implemented yet** (`connections.access_token` / `refresh_token` are stored plaintext in DB).
-2. **Refresh-token rotation/revocation hardening is incomplete** (basic token usage works, full lifecycle hardening is pending).
-3. **Security policy hardening remains**: set strict CORS origins per environment, rotate strong `AUTH_SECRET_KEY`, and enforce HTTPS + secret management outside `.env`.
-4. **Operational hardening remains**: structured central logging, rate-limiting, and production alerting are not fully implemented in this repository.
+1. **Refresh-token rotation/revocation hardening is incomplete** (basic token usage works, full lifecycle hardening is pending).
+2. **Security policy hardening remains**: set strict CORS origins per environment, rotate strong `AUTH_SECRET_KEY`, and enforce HTTPS + secret management outside `.env`.
+3. **Operational hardening remains**: structured central logging, rate-limiting, and production alerting are not fully implemented in this repository.

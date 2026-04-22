@@ -10,15 +10,11 @@ from app.models.relationships import Connection, SyncLog
 from app.models.user import User
 from app.services.connectors.base import SyncResult
 from app.services.connectors.registry import get_provider, list_provider_types
+from app.services.connectors.token_crypto import connector_token_crypto
 
 
 class ConnectorService:
-    """Connector management for current single-workspace deployment.
-
-    Tokens are persisted in plaintext database columns for now because repo-native
-    encryption/key-management has not been introduced yet. Sprint 7+ should replace
-    this with encrypted-at-rest secrets handling.
-    """
+    """Connector management for current single-workspace deployment."""
 
     def _get_or_create(self, db: Session, provider_type: str, user: User) -> Connection:
         conn = db.query(Connection).filter(Connection.type == provider_type, Connection.user_id == user.id).first()
@@ -71,8 +67,11 @@ class ConnectorService:
         conn.is_authenticated = True
         conn.email = token_result.account_email
         conn.external_account_id = token_result.account_id
-        conn.access_token = token_result.access_token
-        conn.refresh_token = token_result.refresh_token or conn.refresh_token
+        conn.access_token = connector_token_crypto.encrypt(token_result.access_token)
+
+        existing_refresh_token = connector_token_crypto.decrypt(conn.refresh_token)
+        next_refresh_token = token_result.refresh_token or existing_refresh_token
+        conn.refresh_token = connector_token_crypto.encrypt(next_refresh_token)
         conn.token_expires_at = token_result.expires_at
         conn.token_scopes = token_result.scopes
         conn.oauth_state = None
@@ -104,6 +103,15 @@ class ConnectorService:
         if not conn.access_token:
             raise ValueError("Connection has no access token")
 
+        access_token = connector_token_crypto.decrypt(conn.access_token)
+        if access_token is None:
+            raise ValueError("Connection has no access token")
+
+        if not connector_token_crypto.is_encrypted(conn.access_token):
+            # Legacy plaintext token row; re-encrypt in place once key material is configured.
+            conn.access_token = connector_token_crypto.encrypt(access_token)
+            db.add(conn)
+
         started = datetime.now(timezone.utc)
         conn.status = "syncing"
         conn.sync_progress = 5
@@ -115,7 +123,7 @@ class ConnectorService:
         db.commit()
 
         try:
-            remote_files = provider.list_remote_files(access_token=conn.access_token)
+            remote_files = provider.list_remote_files(access_token=access_token)
             added, updated, failed, bytes_synced = self._upsert_documents(db, conn, remote_files, user)
 
             conn.status = "connected"

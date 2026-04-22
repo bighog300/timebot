@@ -78,11 +78,26 @@ npm run dev
 | `GOOGLE_OAUTH_CLIENT_SECRET` | Optional | Google Drive OAuth secret |
 | `GOOGLE_OAUTH_REDIRECT_URI` | Optional | OAuth callback URL |
 | `GOOGLE_OAUTH_SCOPES` | Optional | OAuth scopes list |
+| `CONNECTOR_TOKEN_ENCRYPTION_KEY` | Required when connectors are used | Fernet key used to encrypt connector `access_token`/`refresh_token` values at rest |
 | `QDRANT_HOST` / `QDRANT_PORT` | Optional | Semantic search backend |
 | `STORAGE_PATH`, `UPLOAD_PATH`, `PROCESSED_PATH` | Optional | File storage locations |
 | `ALEMBIC_SKIP` | Optional (test-only) | Enables fallback `create_all` for isolated tests |
 
 See `.env.example` for the full list and safe local defaults.
+
+### Connector token encryption key
+
+- Generate a key with:
+  ```bash
+  python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+  ```
+- Set `CONNECTOR_TOKEN_ENCRYPTION_KEY` before using connector OAuth callback/sync flows.
+- Runtime intentionally fails for connector token operations if this key is missing/invalid.
+- If upgrading an existing environment that already has plaintext connector tokens, run:
+  ```bash
+  python scripts/reencrypt_connector_tokens.py
+  ```
+  after setting `CONNECTOR_TOKEN_ENCRYPTION_KEY`.
 
 ## Migrations (Alembic is authoritative)
 
