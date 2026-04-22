@@ -33,11 +33,16 @@ class StorageService:
         name_hash = hashlib.md5(
             f"{file.filename}{datetime.now().isoformat()}".encode()
         ).hexdigest()[:8]
-        stem = Path(file.filename).stem
-        suffix = Path(file.filename).suffix
+        # Strip directory components to prevent path traversal
+        bare_name = Path(file.filename).name
+        stem = Path(bare_name).stem
+        suffix = Path(bare_name).suffix
         safe_name = f"{stem}_{name_hash}{suffix}"
 
         dest = self._dated_dir(self.upload_path) / safe_name
+        # Guard: ensure dest is still inside the upload root
+        if not dest.resolve().is_relative_to(self.upload_path.resolve()):
+            raise ValueError("Invalid upload path")
         async with aiofiles.open(dest, "wb") as f:
             await f.write(content)
 
