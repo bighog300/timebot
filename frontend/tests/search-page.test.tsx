@@ -1,21 +1,18 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { vi } from 'vitest';
+import { expect, test, vi } from 'vitest';
 import { SearchPage } from '@/pages/SearchPage';
 
-const searchKeyword = vi.fn();
-const searchSemantic = vi.fn();
-const listSuggestions = vi.fn();
-const listFacets = vi.fn();
+const apiMocks = vi.hoisted(() => ({
+  searchKeyword: vi.fn(),
+  searchSemantic: vi.fn(),
+  listSuggestions: vi.fn(),
+  listFacets: vi.fn(),
+}));
 
 vi.mock('@/services/api', () => ({
-  api: {
-    searchKeyword,
-    searchSemantic,
-    listSuggestions,
-    listFacets,
-  },
+  api: apiMocks,
 }));
 
 function renderPage() {
@@ -32,10 +29,10 @@ function renderPage() {
 }
 
 test('shows empty state when query has no results', async () => {
-  searchKeyword.mockResolvedValue({ query: 'missing', results: [], total: 0, page: 1, pages: 1 });
-  searchSemantic.mockResolvedValue({ query: 'missing', results: [], total: 0 });
-  listSuggestions.mockResolvedValue([]);
-  listFacets.mockResolvedValue({});
+  apiMocks.searchKeyword.mockResolvedValue({ query: 'missing', results: [], total: 0, page: 1, pages: 1 });
+  apiMocks.searchSemantic.mockResolvedValue({ query: 'missing', results: [], total: 0 });
+  apiMocks.listSuggestions.mockResolvedValue([]);
+  apiMocks.listFacets.mockResolvedValue({});
 
   renderPage();
 

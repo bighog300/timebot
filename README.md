@@ -1,203 +1,57 @@
-# AI-Powered Document Organization Tool
+# Timebot
 
-An intelligent document management system with AI-powered organization, tagging, and search capabilities.
+AI-assisted document intelligence platform with upload/search, review workflow, user auth, and connector foundations.
 
-## Features
+## Architecture / UI preview
 
-- 🤖 AI-powered document analysis and categorization
-- 📁 Smart folder organization
-- 🏷️ Automatic tagging and metadata extraction
-- 🔍 Semantic search across documents
-- 📄 Support for PDF, DOCX, XLSX, PPTX, and images
-- 🔒 Secure document storage
-- 📊 Document insights and analytics
+> Add latest architecture diagram or UI screenshot here before external release.
 
-## Quick Start
+## Prerequisites
 
-### Prerequisites
+- Python 3.11+
+- Node.js 20+
+- PostgreSQL 14+
+- Redis 7+
+- Anthropic API key
 
-- Docker and Docker Compose
-- Anthropic API key ([get one here](https://console.anthropic.com/))
+## Quick start (Docker Compose)
 
-### Local Development
+1. Copy env template:
+   ```bash
+   cp .env.example .env
+   ```
+2. Set required secrets in `.env` (at minimum `ANTHROPIC_API_KEY`, `AUTH_SECRET_KEY`).
+3. Start stack:
+   ```bash
+   docker compose up --build
+   ```
+4. Run migrations (from app container shell or local environment):
+   ```bash
+   alembic upgrade head
+   ```
 
-### Background Workers (Phase 4 Queue)
+API: `http://localhost:8000`  
+Frontend (dev): `http://localhost:5173`
 
-Start API + workers with Docker:
+## Local development
+
+### Minimal bootstrap (recommended)
+
 ```bash
-docker-compose up --build
+./scripts/bootstrap_dev.sh
 ```
 
-Manual local worker commands:
+This installs backend deps, creates `.env` if missing, and runs `alembic upgrade head`.
+
+### Backend
+
 ```bash
-celery -A app.workers.celery_app worker --loglevel=info -Q documents,maintenance
-celery -A app.workers.celery_app beat --loglevel=info
-celery -A app.workers.celery_app flower --port=5555
+python -m pip install -r requirements-dev.txt
+alembic upgrade head
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
-Queue endpoints:
-- `GET /api/v1/queue/items`
-- `GET /api/v1/queue/stats`
-- `GET /api/v1/queue/health`
-- `POST /api/v1/queue/retry-failed`
-
-WebSocket endpoints:
-- `/api/v1/ws/documents/{document_id}`
-- `/api/v1/ws/all`
-
-
-1. Clone the repository:
-```bash
-git clone https://github.com/yourusername/your-repo-name.git
-cd your-repo-name
-```
-
-2. Copy the environment template:
-```bash
-cp .env.example .env
-```
-
-3. Edit `.env` and add your Anthropic API key:
-```bash
-ANTHROPIC_API_KEY=your_actual_api_key_here
-```
-
-4. Build and run with Docker Compose:
-```bash
-docker-compose up --build
-```
-
-5. Access the application at `http://localhost:8000`
-
-## Deployment
-
-### Using Docker Hub
-
-1. Build the image:
-```bash
-docker build -t yourusername/doc-organizer:latest .
-```
-
-2. Push to Docker Hub:
-```bash
-docker push yourusername/doc-organizer:latest
-```
-
-3. Run on your server:
-```bash
-docker run -d \
-  -p 8000:8000 \
-  -e ANTHROPIC_API_KEY=your_key \
-  -v /path/to/data:/app/data \
-  yourusername/doc-organizer:latest
-```
-
-### Using GitHub Container Registry (Automatic)
-
-This repository includes GitHub Actions that automatically build and push Docker images to GitHub Container Registry on every push to `main`.
-
-1. Ensure GitHub Actions is enabled for your repository
-2. Push to the `main` branch
-3. The Docker image will be available at: `ghcr.io/yourusername/your-repo-name:latest`
-
-To pull and run:
-```bash
-docker pull ghcr.io/yourusername/your-repo-name:latest
-docker run -d -p 8000:8000 \
-  -e ANTHROPIC_API_KEY=your_key \
-  ghcr.io/yourusername/your-repo-name:latest
-```
-
-### Environment Variables
-
-See `.env.example` for all available configuration options.
-
-Required:
-- `ANTHROPIC_API_KEY`: Your Anthropic API key
-
-Optional but recommended:
-- `DATABASE_URL`: PostgreSQL connection string
-- `REDIS_URL`: Redis connection string for caching
-- `SECRET_KEY`: Secret key for session management
-
-## Architecture
-
-```
-├── app/
-│   ├── api/              # API endpoints
-│   ├── core/             # Core business logic
-│   ├── models/           # Database models
-│   ├── services/         # AI and document processing
-│   └── utils/            # Utility functions
-├── data/                 # Persistent data (mounted volume)
-├── tests/                # Test suite
-├── Dockerfile            # Docker configuration
-├── docker-compose.yml    # Multi-container setup
-└── requirements.txt      # Python dependencies
-```
-
-## AI Features
-
-### Document Analysis
-- Automatic extraction of key information
-- Entity recognition (dates, names, organizations)
-- Topic classification
-
-### Smart Organization
-- AI-suggested folder structures
-- Automatic categorization
-- Duplicate detection
-
-### Semantic Search
-- Natural language queries
-- Context-aware results
-- Relationship mapping
-
-## Development
-
-### Running Tests
-```bash
-docker-compose exec app pytest
-```
-
-### Database Migrations
-```bash
-docker-compose exec app alembic upgrade head
-```
-
-### Logs
-```bash
-docker-compose logs -f app
-```
-
-## Security Notes
-
-- Never commit `.env` files with real credentials
-- Change `SECRET_KEY` in production
-- Use environment-specific configurations
-- Enable HTTPS in production
-- Regularly update dependencies
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Submit a pull request
-
-## License
-
-MIT License - see LICENSE file for details
-
-## Support
-
-For issues and questions, please open a GitHub issue.
-
-## Frontend (Stage 4)
-
-A production-oriented React + TypeScript frontend now lives in `frontend/`.
-
-### Run frontend locally
+### Frontend
 
 ```bash
 cd frontend
@@ -206,80 +60,89 @@ npm install
 npm run dev
 ```
 
-By default it proxies API calls to `http://localhost:8000` and expects websocket events at `/api/v1/ws/all`.
+## Environment variables
 
-If your environment enforces an outbound HTTP(S) proxy, verify the proxy can reach npm registry hosts before installing:
+| Key | Required | Purpose |
+|---|---|---|
+| `DATABASE_URL` | Yes | SQLAlchemy + Alembic database connection |
+| `REDIS_URL` | Yes | Redis cache + Celery broker default |
+| `CELERY_BROKER_URL` | Yes | Celery broker URL |
+| `CELERY_RESULT_BACKEND` | Yes | Celery result backend |
+| `ANTHROPIC_API_KEY` | Yes for AI features | Claude API key |
+| `AI_MODEL` | Optional | Claude model id (`claude-sonnet-4-20250514`) |
+| `AUTH_SECRET_KEY` | Yes outside local dev | JWT signing secret |
+| `AUTH_ALGORITHM` | Optional | JWT algorithm (default `HS256`) |
+| `AUTH_ACCESS_TOKEN_EXPIRE_MINUTES` | Optional | Access token TTL |
+| `ALLOWED_ORIGINS` | Yes | CSV of frontend origins for CORS |
+| `GOOGLE_OAUTH_CLIENT_ID` | Optional | Google Drive OAuth client ID |
+| `GOOGLE_OAUTH_CLIENT_SECRET` | Optional | Google Drive OAuth secret |
+| `GOOGLE_OAUTH_REDIRECT_URI` | Optional | OAuth callback URL |
+| `GOOGLE_OAUTH_SCOPES` | Optional | OAuth scopes list |
+| `QDRANT_HOST` / `QDRANT_PORT` | Optional | Semantic search backend |
+| `STORAGE_PATH`, `UPLOAD_PATH`, `PROCESSED_PATH` | Optional | File storage locations |
+| `ALEMBIC_SKIP` | Optional (test-only) | Enables fallback `create_all` for isolated tests |
+
+See `.env.example` for the full list and safe local defaults.
+
+## Migrations (Alembic is authoritative)
 
 ```bash
-curl -I https://registry.npmjs.org/react
+alembic upgrade head
 ```
 
-If you receive `403 Forbidden` from the proxy tunnel, npm install will fail until proxy/network policy allows npm registry access.
-
-### Frontend environment variables
-
-`frontend/.env` supports:
-
-- `VITE_API_BASE_URL` (default: `/api/v1`)
-- `VITE_WS_BASE_URL` (default: `ws://localhost:8000/api/v1/ws`)
-
-Example for local backend:
+Create a new migration after model changes:
 
 ```bash
-VITE_API_BASE_URL=http://localhost:8000/api/v1
-VITE_WS_BASE_URL=ws://localhost:8000/api/v1/ws
+alembic revision --autogenerate -m "describe change"
 ```
 
-### Frontend checks
+## Running tests
+
+### Backend
 
 ```bash
+pytest tests -q
+```
+
+### Frontend
+
+```bash
+cd frontend
 npm run type-check
-npm run lint
 npm run test
 npm run build
 ```
 
-### Backend local run (without Docker)
+## Architecture
 
-```bash
-python -m pip install -r requirements.txt
-python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+```text
+app/
+  api/v1/           FastAPI routes (auth, documents, queue, connectors, insights)
+  models/           SQLAlchemy models (users, documents, relationships)
+  services/         Domain services (AI analysis, auth, connectors, search)
+  workers/          Celery tasks / monitoring
+migrations/         Alembic config + migration versions
+frontend/           React + TypeScript client
+tests/              Backend tests
 ```
 
-### End-to-end local smoke sequence
+## Deployment notes
 
-1. Start backend (`uvicorn`) on port `8000`.
-2. Start frontend (`npm run dev`) on port `5173`.
-3. Open:
-   - `/documents`
-   - `/documents/:id`
-   - `/search`
-   - `/queue`
-   - `/categories`
-   - `/insights`
-   - `/connections`
-4. Trigger a document upload/reprocess and verify queue + connection pages refresh from websocket events.
+- Run migrations (`alembic upgrade head`) during each deploy before serving traffic.
+- Use production-only `AUTH_SECRET_KEY` and strict `ALLOWED_ORIGINS` values.
+- Configure HTTPS, secret manager integration, and real deployment automation (current deploy workflow is a placeholder).
+- Review known deferred items in `docs/RELEASE_READINESS.md` before production launch.
 
-## GitHub Actions rollout (execution bundle)
+## Known limitations and production handoff
 
-For the Codex execution bundle used to get workflows green, see:
+See `docs/RELEASE_READINESS.md` for clear split between complete, partial, and deferred hardening work.
 
-- `docs/timebot-github-actions-bundle/README.md`
-- `docs/timebot-github-actions-bundle/docs/GITHUB_ACTIONS_ROLLOUT_PLAN.md`
-- `docs/timebot-github-actions-bundle/docs/GITHUB_SECRETS_AND_VARIABLES.md`
-- `docs/timebot-github-actions-bundle/docs/BRANCH_PROTECTION_CHECKLIST.md`
+## Contributing
 
-### Required secrets and variables
+1. Create a feature branch.
+2. Run backend/frontend checks locally.
+3. Open a PR with test evidence.
 
-Use GitHub repository variables for non-sensitive defaults:
+## License
 
-- `PYTHON_VERSION` (recommended: `3.11`)
-- `NODE_VERSION` (recommended: `20`)
-
-Use GitHub environment secrets for deploy credentials (set per environment such as `staging` and `production`):
-
-- `DEPLOY_HOST`
-- `DEPLOY_USER`
-- `DEPLOY_SSH_KEY`
-
-The deploy workflow is intentionally a safe placeholder until you replace the deployment command with your infrastructure-specific command path.
+MIT
