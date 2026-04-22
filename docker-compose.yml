@@ -38,16 +38,16 @@ services:
       - doc-network
 
   qdrant:
-    image: qdrant/qdrant:latest
-    container_name: doc-qdrant
-    ports:
-      - "6333:6333"
-      - "6334:6334"
-    volumes:
-      - qdrant_data:/qdrant/storage
-    restart: unless-stopped
-    networks:
-      - doc-network
+  image: qdrant/qdrant:latest
+  container_name: doc-qdrant
+  ports:
+    - "6335:6333"
+    - "6336:6334"
+  volumes:
+    - qdrant_data:/qdrant/storage
+  restart: unless-stopped
+  networks:
+    - doc-network
 
   app:
     build:
