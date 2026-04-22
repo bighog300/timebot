@@ -109,17 +109,36 @@ export interface InsightsResponse {
 export interface Connection {
   id: string;
   type: 'gmail' | 'gdrive' | 'dropbox' | 'onedrive';
-  status: 'connected' | 'disconnected' | 'error' | 'syncing';
+  status: 'connected' | 'disconnected' | 'error' | 'syncing' | 'auth_pending';
   display_name: string;
   email?: string | null;
+  external_account_id?: string | null;
   last_sync_date?: string | null;
   last_sync_status?: 'success' | 'failed' | 'partial' | 'in_progress' | null;
+  last_error_message?: string | null;
+  last_error_at?: string | null;
   sync_progress: number;
   document_count: number;
   total_size: number;
   auto_sync: boolean;
   sync_interval: number;
   is_authenticated: boolean;
+}
+
+export interface ConnectStartResponse {
+  provider: string;
+  authorization_url: string;
+  state: string;
+}
+
+export interface SyncRunResponse {
+  message: string;
+  files_seen: number;
+  documents_added: number;
+  documents_updated: number;
+  documents_failed: number;
+  bytes_synced: number;
+  connection: Connection;
 }
 
 export interface SyncLog {

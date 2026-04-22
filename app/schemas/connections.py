@@ -11,8 +11,11 @@ class ConnectionResponse(BaseModel):
     status: str
     display_name: str
     email: Optional[str] = None
+    external_account_id: Optional[str] = None
     last_sync_date: Optional[datetime] = None
     last_sync_status: Optional[str] = None
+    last_error_message: Optional[str] = None
+    last_error_at: Optional[datetime] = None
     sync_progress: int
     document_count: int
     total_size: int
@@ -21,6 +24,22 @@ class ConnectionResponse(BaseModel):
     is_authenticated: bool
 
     model_config = {"from_attributes": True}
+
+
+class OAuthStartResponse(BaseModel):
+    provider: str
+    authorization_url: str
+    state: str
+
+
+class SyncRunResponse(BaseModel):
+    message: str
+    files_seen: int
+    documents_added: int
+    documents_updated: int
+    documents_failed: int
+    bytes_synced: int
+    connection: ConnectionResponse
 
 
 class SyncLogResponse(BaseModel):

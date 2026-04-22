@@ -55,11 +55,20 @@ class Settings(BaseSettings):
     MAX_UPLOAD_SIZE_MB: int = 50
     ALLOWED_FILE_TYPES: str = "pdf,docx,doc,xlsx,xls,pptx,ppt,txt,jpg,jpeg,png,gif,tiff,bmp"
 
+    GOOGLE_OAUTH_CLIENT_ID: str = ""
+    GOOGLE_OAUTH_CLIENT_SECRET: str = ""
+    GOOGLE_OAUTH_REDIRECT_URI: str = ""
+    GOOGLE_OAUTH_SCOPES: str = "openid,email,profile,https://www.googleapis.com/auth/drive.metadata.readonly"
+
     model_config = {"env_file": ".env", "extra": "ignore"}
 
     @property
     def celery_accept_content(self) -> list[str]:
         return [item.strip() for item in self.CELERY_ACCEPT_CONTENT.split(",") if item.strip()]
+
+    @property
+    def google_oauth_scopes(self) -> list[str]:
+        return [item.strip() for item in self.GOOGLE_OAUTH_SCOPES.split(",") if item.strip()]
 
 
 settings = Settings()
