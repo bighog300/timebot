@@ -9,6 +9,7 @@ import { CategoriesPage } from '@/pages/CategoriesPage';
 import { InsightsPage } from '@/pages/InsightsPage';
 import { ConnectionsPage } from '@/pages/ConnectionsPage';
 import { ReviewQueuePage } from '@/pages/ReviewQueuePage';
+import { ConnectionCallbackPage } from '@/pages/ConnectionCallbackPage';
 
 export const router = createBrowserRouter([
   {
@@ -24,6 +25,7 @@ export const router = createBrowserRouter([
       { path: 'categories', element: <CategoriesPage /> },
       { path: 'insights', element: <InsightsPage /> },
       { path: 'connections', element: <ConnectionsPage /> },
+      { path: 'connections/callback', element: <ConnectionCallbackPage /> },
     ],
   },
 ]);

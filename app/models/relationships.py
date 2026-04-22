@@ -62,7 +62,15 @@ class Connection(Base):
     auto_sync = Column(Boolean, default=True)
     sync_interval = Column(Integer, default=15)
     is_authenticated = Column(Boolean, default=False)
+    external_account_id = Column(String(255))
+    access_token = Column(Text)
+    refresh_token = Column(Text)
+    token_scopes = Column(JSONB, default=list)
     token_expires_at = Column(TIMESTAMP(timezone=True))
+    oauth_state = Column(String(255))
+    oauth_state_expires_at = Column(TIMESTAMP(timezone=True))
+    last_error_message = Column(Text)
+    last_error_at = Column(TIMESTAMP(timezone=True))
     sync_state = Column(JSONB, default=dict)
     created_at = Column(TIMESTAMP(timezone=True), default=func.now())
     updated_at = Column(TIMESTAMP(timezone=True), default=func.now(), onupdate=func.now())
@@ -76,7 +84,7 @@ class Connection(Base):
     __table_args__ = (
         CheckConstraint("type IN ('gmail', 'gdrive', 'dropbox', 'onedrive')", name="valid_connection_type"),
         CheckConstraint(
-            "status IN ('connected', 'disconnected', 'error', 'syncing')", name="valid_connection_status"
+            "status IN ('connected', 'disconnected', 'error', 'syncing', 'auth_pending')", name="valid_connection_status"
         ),
         CheckConstraint(
             "last_sync_status IS NULL OR last_sync_status IN ('success', 'failed', 'partial', 'in_progress')",

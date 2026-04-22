@@ -1,6 +1,7 @@
 import { http } from '@/services/http';
 import type {
   Connection,
+  ConnectStartResponse,
   Document,
   InsightsResponse,
   QueueItem,
@@ -8,6 +9,7 @@ import type {
   SearchResponse,
   SemanticSearchResponse,
   SyncLog,
+  SyncRunResponse,
   TimelineResponse,
 } from '@/types/api';
 
@@ -63,9 +65,11 @@ export const api = {
     (await http.get('/insights/trends')).data,
   getInsightsRollups: async (): Promise<Record<string, unknown>> => (await http.get('/insights/rollups')).data,
   listConnections: async (): Promise<Connection[]> => (await http.get('/connections')).data,
-  connectProvider: async (type: string): Promise<Connection> => (await http.post(`/connections/${type}/connect`)).data,
+  startConnectProvider: async (type: string): Promise<ConnectStartResponse> =>
+    (await http.post(`/connections/${type}/connect/start`)).data,
+  completeConnectProvider: async (type: string, code: string, state: string): Promise<Connection> =>
+    (await http.get(`/connections/${type}/connect/callback`, { params: { code, state } })).data,
   disconnectProvider: async (type: string): Promise<Connection> => (await http.post(`/connections/${type}/disconnect`)).data,
-  syncProvider: async (type: string): Promise<{ message: string; connection: Connection }> =>
-    (await http.post(`/connections/${type}/sync`)).data,
+  syncProvider: async (type: string): Promise<SyncRunResponse> => (await http.post(`/connections/${type}/sync`)).data,
   getSyncLogs: async (type: string): Promise<SyncLog[]> => (await http.get(`/connections/${type}/sync-logs`)).data,
 };
