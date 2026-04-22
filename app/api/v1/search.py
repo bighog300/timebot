@@ -6,18 +6,19 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db
+from app.api.deps import get_current_user, get_db
 from app.models.category import Category
 from app.models.document import Document
 from app.schemas.intelligence import CategoryIntelligenceResponse, InsightsResponse, TimelineResponse
 from app.schemas.search import HybridSearchResponse, SearchResponse, SemanticSearchResponse
+from app.models.user import User
 from app.services.category_intelligence import category_intelligence_service
 from app.services.insights_service import insights_service
 from app.services.relationship_detection import relationship_detection_service
 from app.services.search_service import search_service
 from app.services.timeline_service import timeline_service
 
-router = APIRouter(prefix="/search", tags=["search"])
+router = APIRouter(prefix="/search", tags=["search"], dependencies=[Depends(get_current_user)])
 
 
 @router.post("/", response_model=SearchResponse)
@@ -33,6 +34,7 @@ async def search_documents(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     filters = {}
     if categories:
@@ -47,6 +49,7 @@ async def search_documents(
         filters["date_range"] = {"start": date_start, "end": date_end}
     if is_favorite is not None:
         filters["is_favorite"] = is_favorite
+    filters["user_id"] = str(current_user.id)
 
     return search_service.search_documents(db=db, query=query, filters=filters, skip=skip, limit=limit)
 
@@ -67,6 +70,7 @@ async def hybrid_search_documents(
     semantic_weight: float = Query(0.4, ge=0.0, le=1.0),
     semantic_threshold: float = Query(0.35, ge=0.0, le=1.0),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     filters = {}
     if categories:
@@ -81,6 +85,7 @@ async def hybrid_search_documents(
         filters["date_range"] = {"start": date_start, "end": date_end}
     if is_favorite is not None:
         filters["is_favorite"] = is_favorite
+    filters["user_id"] = str(current_user.id)
 
     if lexical_weight + semantic_weight <= 0:
         lexical_weight, semantic_weight = 0.6, 0.4
@@ -102,8 +107,9 @@ async def get_search_suggestions(
     q: str = Query(..., min_length=1),
     limit: int = Query(5, ge=1, le=10),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    return {"query": q, "suggestions": search_service.get_search_suggestions(db, q, limit)}
+    return {"query": q, "suggestions": search_service.get_search_suggestions(db, q, limit, user_id=str(current_user.id))}
 
 
 @router.get("/popular")
@@ -115,8 +121,8 @@ async def get_popular_searches(
 
 
 @router.get("/facets")
-async def get_search_facets(query: Optional[str] = None, db: Session = Depends(get_db)):
-    base_query = db.query(Document).filter(Document.is_archived.is_(False))
+async def get_search_facets(query: Optional[str] = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    base_query = db.query(Document).filter(Document.is_archived.is_(False), Document.user_id == current_user.id)
 
     if query:
         base_query = base_query.filter(Document.search_vector.op("@@")(func.plainto_tsquery("english", query)))
@@ -145,6 +151,7 @@ async def semantic_search(
     limit: int = Query(10, ge=1, le=50),
     threshold: float = Query(0.5, ge=0.0, le=1.0),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     from app.services.embedding_service import embedding_service
 
@@ -154,7 +161,7 @@ async def semantic_search(
     if not document_ids:
         return {"query": query, "results": [], "total": 0}
 
-    documents = db.query(Document).filter(Document.id.in_(document_ids)).all()
+    documents = db.query(Document).filter(Document.id.in_(document_ids), Document.user_id == current_user.id).all()
     documents_by_id = {str(doc.id): doc for doc in documents}
 
     results = []
@@ -167,10 +174,10 @@ async def semantic_search(
 
 
 @router.get("/documents/{document_id}/similar", response_model=SemanticSearchResponse)
-async def find_similar_documents(document_id: UUID, limit: int = Query(5, ge=1, le=20), db: Session = Depends(get_db)):
+async def find_similar_documents(document_id: UUID, limit: int = Query(5, ge=1, le=20), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     from app.services.embedding_service import embedding_service
 
-    document = db.query(Document).filter(Document.id == document_id).first()
+    document = db.query(Document).filter(Document.id == document_id, Document.user_id == current_user.id).first()
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
 
@@ -179,7 +186,7 @@ async def find_similar_documents(document_id: UUID, limit: int = Query(5, ge=1, 
     if not doc_ids:
         return {"query": str(document_id), "results": [], "total": 0}
 
-    documents = db.query(Document).filter(Document.id.in_(doc_ids)).all()
+    documents = db.query(Document).filter(Document.id.in_(doc_ids), Document.user_id == current_user.id).all()
     documents_by_id = {str(doc.id): doc for doc in documents}
 
     results = []

@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.models.document import Document
 from app.models.relationships import Connection, SyncLog
+from app.models.user import User
 from app.services.connectors.base import SyncResult
 from app.services.connectors.registry import get_provider, list_provider_types
 
@@ -19,26 +20,26 @@ class ConnectorService:
     this with encrypted-at-rest secrets handling.
     """
 
-    def _get_or_create(self, db: Session, provider_type: str) -> Connection:
-        conn = db.query(Connection).filter(Connection.type == provider_type).first()
+    def _get_or_create(self, db: Session, provider_type: str, user: User) -> Connection:
+        conn = db.query(Connection).filter(Connection.type == provider_type, Connection.user_id == user.id).first()
         if conn:
             return conn
 
         provider = get_provider(provider_type)
-        conn = Connection(type=provider_type, display_name=provider.display_name, status="disconnected")
+        conn = Connection(type=provider_type, display_name=provider.display_name, status="disconnected", user_id=user.id)
         db.add(conn)
         db.commit()
         db.refresh(conn)
         return conn
 
-    def list_connections(self, db: Session) -> list[Connection]:
+    def list_connections(self, db: Session, user: User) -> list[Connection]:
         for provider_type in list_provider_types():
-            self._get_or_create(db, provider_type)
-        return db.query(Connection).order_by(Connection.type.asc()).all()
+            self._get_or_create(db, provider_type, user)
+        return db.query(Connection).filter(Connection.user_id == user.id).order_by(Connection.type.asc()).all()
 
-    def start_oauth(self, db: Session, provider_type: str) -> dict:
+    def start_oauth(self, db: Session, provider_type: str, user: User) -> dict:
         provider = get_provider(provider_type)
-        conn = self._get_or_create(db, provider_type)
+        conn = self._get_or_create(db, provider_type, user)
         state = secrets.token_urlsafe(24)
         result = provider.build_authorization_url(state=state)
 
@@ -55,9 +56,9 @@ class ConnectorService:
             "state": state,
         }
 
-    def handle_callback(self, db: Session, provider_type: str, *, code: str, state: str) -> Connection:
+    def handle_callback(self, db: Session, provider_type: str, *, code: str, state: str, user: User) -> Connection:
         provider = get_provider(provider_type)
-        conn = self._get_or_create(db, provider_type)
+        conn = self._get_or_create(db, provider_type, user)
 
         if not conn.oauth_state or conn.oauth_state != state:
             raise ValueError("Invalid OAuth state")
@@ -83,8 +84,8 @@ class ConnectorService:
         db.refresh(conn)
         return conn
 
-    def disconnect(self, db: Session, provider_type: str) -> Connection:
-        conn = self._get_or_create(db, provider_type)
+    def disconnect(self, db: Session, provider_type: str, user: User) -> Connection:
+        conn = self._get_or_create(db, provider_type, user)
         conn.status = "disconnected"
         conn.is_authenticated = False
         conn.access_token = None
@@ -97,9 +98,9 @@ class ConnectorService:
         db.refresh(conn)
         return conn
 
-    def sync_connection(self, db: Session, provider_type: str) -> tuple[Connection, SyncLog, SyncResult]:
+    def sync_connection(self, db: Session, provider_type: str, user: User) -> tuple[Connection, SyncLog, SyncResult]:
         provider = get_provider(provider_type)
-        conn = self._get_or_create(db, provider_type)
+        conn = self._get_or_create(db, provider_type, user)
         if not conn.access_token:
             raise ValueError("Connection has no access token")
 
@@ -115,13 +116,13 @@ class ConnectorService:
 
         try:
             remote_files = provider.list_remote_files(access_token=conn.access_token)
-            added, updated, failed, bytes_synced = self._upsert_documents(db, conn, remote_files)
+            added, updated, failed, bytes_synced = self._upsert_documents(db, conn, remote_files, user)
 
             conn.status = "connected"
             conn.sync_progress = 100
             conn.last_sync_date = datetime.now(timezone.utc)
             conn.last_sync_status = "success" if failed == 0 else "partial"
-            conn.document_count = db.query(Document).filter(Document.connection_id == conn.id).count()
+            conn.document_count = db.query(Document).filter(Document.connection_id == conn.id, Document.user_id == user.id).count()
             conn.total_size = bytes_synced
             conn.last_error_message = None
             conn.last_error_at = None
@@ -154,7 +155,7 @@ class ConnectorService:
         db.refresh(log)
         return conn, log, result
 
-    def _upsert_documents(self, db: Session, conn: Connection, remote_files: list[dict]) -> tuple[int, int, int, int]:
+    def _upsert_documents(self, db: Session, conn: Connection, remote_files: list[dict], user: User) -> tuple[int, int, int, int]:
         added = 0
         updated = 0
         failed = 0
@@ -164,7 +165,11 @@ class ConnectorService:
             try:
                 source_id = remote["id"]
                 size = int(remote.get("size") or 0)
-                doc = db.query(Document).filter(Document.source == conn.type, Document.source_id == source_id).first()
+                doc = db.query(Document).filter(
+                    Document.source == conn.type,
+                    Document.source_id == source_id,
+                    Document.user_id == user.id,
+                ).first()
 
                 metadata = {
                     "provider": conn.type,
@@ -192,6 +197,7 @@ class ConnectorService:
                             source=conn.type,
                             source_id=source_id,
                             connection_id=conn.id,
+                            user_id=user.id,
                             processing_status="completed",
                             extracted_metadata=metadata,
                         )

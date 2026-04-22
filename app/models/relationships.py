@@ -50,6 +50,7 @@ class Connection(Base):
     __tablename__ = "connections"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     type = Column(String(50), nullable=False, index=True)
     status = Column(String(50), default="disconnected", index=True)
     display_name = Column(String(255), nullable=False)
@@ -75,6 +76,7 @@ class Connection(Base):
     created_at = Column(TIMESTAMP(timezone=True), default=func.now())
     updated_at = Column(TIMESTAMP(timezone=True), default=func.now(), onupdate=func.now())
 
+    owner = relationship("User", back_populates="connections")
     documents = relationship("Document", back_populates="connection")
     sync_logs = relationship(
         "SyncLog", back_populates="connection", cascade="all, delete-orphan",
@@ -91,7 +93,7 @@ class Connection(Base):
             name="valid_sync_status",
         ),
         CheckConstraint("sync_progress >= 0 AND sync_progress <= 100", name="valid_sync_progress"),
-        UniqueConstraint("type", name="unique_connection_type"),
+        UniqueConstraint("user_id", "type", name="unique_connection_per_user"),
     )
 
 

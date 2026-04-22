@@ -4,7 +4,7 @@ from uuid import uuid4
 
 from fastapi.testclient import TestClient
 
-from app.api.deps import get_db
+from app.api.deps import get_current_user, get_db
 from app.main import app
 from app.services.connectors.service import ConnectorService
 
@@ -73,7 +73,8 @@ def test_connection_list_initializes_google_drive_only():
     db = FakeDB()
     service = ConnectorService()
 
-    rows = service.list_connections(db)
+    user = SimpleNamespace(id=uuid4(), email="u@example.com")
+    rows = service.list_connections(db, user)
 
     assert len(rows) == 1
     assert rows[0].type == "gdrive"
@@ -87,7 +88,8 @@ def test_oauth_callback_happy_path(monkeypatch):
         "app.services.connectors.google_drive.GoogleDriveProvider.build_authorization_url",
         lambda self, state: SimpleNamespace(authorization_url="https://example.test/auth", state=state),
     )
-    start = service.start_oauth(db, "gdrive")
+    user = SimpleNamespace(id=uuid4(), email="u@example.com")
+    start = service.start_oauth(db, "gdrive", user)
 
     monkeypatch.setattr(
         "app.services.connectors.google_drive.GoogleDriveProvider.exchange_code_for_tokens",
@@ -101,7 +103,7 @@ def test_oauth_callback_happy_path(monkeypatch):
         ),
     )
 
-    conn = service.handle_callback(db, "gdrive", code="abc", state=start["state"])
+    conn = service.handle_callback(db, "gdrive", code="abc", state=start["state"], user=user)
     assert conn.status == "connected"
     assert conn.access_token == "token-1"
     assert conn.email == "user@example.com"
@@ -110,7 +112,8 @@ def test_oauth_callback_happy_path(monkeypatch):
 def test_sync_happy_path_and_failure_persistence(monkeypatch):
     db = FakeDB()
     service = ConnectorService()
-    conn = service._get_or_create(db, "gdrive")
+    user = SimpleNamespace(id=uuid4(), email="u@example.com")
+    conn = service._get_or_create(db, "gdrive", user)
     conn.access_token = "token"
 
     monkeypatch.setattr(
@@ -121,7 +124,7 @@ def test_sync_happy_path_and_failure_persistence(monkeypatch):
         ],
     )
 
-    synced_conn, _log, result = service.sync_connection(db, "gdrive")
+    synced_conn, _log, result = service.sync_connection(db, "gdrive", user)
     assert result.files_seen == 2
     assert synced_conn.last_sync_status in {"success", "partial"}
 
@@ -130,7 +133,7 @@ def test_sync_happy_path_and_failure_persistence(monkeypatch):
         lambda self, access_token: (_ for _ in ()).throw(RuntimeError("google unavailable")),
     )
 
-    failed_conn, failed_log, _ = service.sync_connection(db, "gdrive")
+    failed_conn, failed_log, _ = service.sync_connection(db, "gdrive", user)
     assert failed_conn.status == "error"
     assert "google unavailable" in (failed_conn.last_error_message or "")
     assert failed_log.status == "failed"
@@ -141,6 +144,7 @@ def test_callback_route_returns_connection(monkeypatch):
         pass
 
     app.dependency_overrides[get_db] = lambda: iter([DummyDB()])
+    app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(id=uuid4(), email="u@example.com")
 
     conn = SimpleNamespace(
         id=uuid4(),
@@ -160,7 +164,7 @@ def test_callback_route_returns_connection(monkeypatch):
         sync_interval=15,
         is_authenticated=True,
     )
-    monkeypatch.setattr("app.api.v1.connections.connector_service.handle_callback", lambda db, provider_type, code, state: conn)
+    monkeypatch.setattr("app.api.v1.connections.connector_service.handle_callback", lambda db, provider_type, code, state, user: conn)
 
     with TestClient(app) as client:
         response = client.get("/api/v1/connections/gdrive/connect/callback", params={"code": "abc", "state": "s1"})

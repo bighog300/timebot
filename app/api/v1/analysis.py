@@ -3,25 +3,26 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db
+from app.api.deps import get_current_user, get_db
+from app.models.user import User
 from app.services.category_discovery import category_discovery
 
-router = APIRouter(prefix="/analysis", tags=["analysis"])
+router = APIRouter(prefix="/analysis", tags=["analysis"], dependencies=[Depends(get_current_user)])
 
 
 @router.post("/categories/discover")
-def discover_categories(db: Session = Depends(get_db)):
+def discover_categories(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     return category_discovery.discover_categories(db)
 
 
 @router.post("/documents/{document_id}/analyze")
-def analyze_document(document_id: UUID, db: Session = Depends(get_db)):
+def analyze_document(document_id: UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     from app.crud.document import get_document
     from app.models.category import Category
     from app.services.ai_analyzer import ai_analyzer
     from app.services.categorizer import categorizer
 
-    document = get_document(db, id=document_id)
+    document = get_document(db, id=document_id, user=current_user)
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
     if not document.raw_text:

@@ -53,6 +53,7 @@ except ModuleNotFoundError:  # pragma: no cover - local test fallback when deps 
         user_tags = _ModelFieldFallback()
         is_favorite = _ModelFieldFallback()
         file_type = _ModelFieldFallback()
+        user_id = _ModelFieldFallback()
 from app.services.embedding_service import embedding_service
 from app.services.query_parser import ParsedQuery, query_parser
 
@@ -217,6 +218,9 @@ class SearchService:
         return None
 
     def _apply_filters(self, query, filters: Dict):
+        if filters.get("user_id"):
+            query = query.filter(Document.user_id == filters["user_id"])
+
         if filters.get("categories"):
             query = query.filter(
                 or_(
@@ -322,15 +326,19 @@ class SearchService:
         except Exception:
             return text
 
-    def get_search_suggestions(self, db: Session, partial_query: str, limit: int = 5) -> List[str]:
+    def get_search_suggestions(self, db: Session, partial_query: str, limit: int = 5, user_id: str | None = None) -> List[str]:
         suggestions = set()
 
         categories = db.query(Category).filter(Category.name.ilike(f"%{partial_query}%")).limit(limit).all()
         for category in categories:
             suggestions.add(category.name)
 
+        docs_with_tags_query = db.query(Document.ai_tags, Document.user_tags)
+        if user_id:
+            docs_with_tags_query = docs_with_tags_query.filter(Document.user_id == user_id)
+
         docs_with_tags = (
-            db.query(Document.ai_tags, Document.user_tags)
+            docs_with_tags_query
             .filter(
                 or_(
                     func.array_to_string(Document.ai_tags, " ").ilike(f"%{partial_query}%"),
@@ -346,8 +354,12 @@ class SearchService:
                 if partial_query.lower() in tag.lower():
                     suggestions.add(tag)
 
+        filename_hits_query = db.query(Document.filename)
+        if user_id:
+            filename_hits_query = filename_hits_query.filter(Document.user_id == user_id)
+
         filename_hits = (
-            db.query(Document.filename)
+            filename_hits_query
             .filter(Document.filename.ilike(f"%{partial_query}%"))
             .order_by(case((Document.is_favorite.is_(True), 0), else_=1), Document.upload_date.desc())
             .limit(limit)

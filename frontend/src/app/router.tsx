@@ -10,11 +10,20 @@ import { InsightsPage } from '@/pages/InsightsPage';
 import { ConnectionsPage } from '@/pages/ConnectionsPage';
 import { ReviewQueuePage } from '@/pages/ReviewQueuePage';
 import { ConnectionCallbackPage } from '@/pages/ConnectionCallbackPage';
+import { LoginPage } from '@/pages/auth/LoginPage';
+import { RegisterPage } from '@/pages/auth/RegisterPage';
+import { RequireAuth } from '@/components/auth/RequireAuth';
 
 export const router = createBrowserRouter([
+  { path: '/login', element: <LoginPage /> },
+  { path: '/register', element: <RegisterPage /> },
   {
     path: '/',
-    element: <AppShell />,
+    element: (
+      <RequireAuth>
+        <AppShell />
+      </RequireAuth>
+    ),
     children: [
       { index: true, element: <TimelinePage /> },
       { path: 'documents', element: <DocumentsPage /> },

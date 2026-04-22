@@ -5,6 +5,7 @@ from uuid import uuid4
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.api.deps import get_current_user
 from app.api.v1.queue import queue_stats
 from app.schemas.document import DocumentResponse
 from app.services.document_processor import DocumentProcessor
@@ -47,7 +48,8 @@ def _doc(**kwargs):
 def test_get_review_queue_returns_pending_only(monkeypatch):
     docs = [_doc(review_status="pending", ai_confidence=0.2)]
 
-    monkeypatch.setattr("app.api.v1.documents.crud_document.get_review_queue", lambda db, status, skip, limit: docs)
+    app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(id=uuid4(), email="reviewer@example.com")
+    monkeypatch.setattr("app.api.v1.documents.crud_document.get_review_queue", lambda db, user, status, skip, limit: docs)
 
     with TestClient(app) as client:
         response = client.get("/api/v1/documents/review-queue")
@@ -56,6 +58,7 @@ def test_get_review_queue_returns_pending_only(monkeypatch):
     payload = response.json()
     assert len(payload) == 1
     assert payload[0]["review_status"] == "pending"
+    app.dependency_overrides.clear()
 
 
 def test_document_response_schema_includes_review_fields():
@@ -70,7 +73,8 @@ def test_document_response_schema_includes_review_fields():
 def test_review_endpoint_approve_sets_review_fields(monkeypatch):
     doc = _doc()
 
-    monkeypatch.setattr("app.api.v1.documents.crud_document.get_document", lambda db, id: doc)
+    app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(id=uuid4(), email="editor@example.com")
+    monkeypatch.setattr("app.api.v1.documents.crud_document.get_document", lambda db, id, user: doc)
 
     def _update(db, db_obj, **kwargs):
         for key, value in kwargs.items():
@@ -85,14 +89,16 @@ def test_review_endpoint_approve_sets_review_fields(monkeypatch):
     assert response.status_code == 200
     data = response.json()
     assert data["review_status"] == "approved"
-    assert data["reviewed_by"] == "manual-reviewer"
+    assert data["reviewed_by"] == "reviewer@example.com"
+    app.dependency_overrides.clear()
     assert data["reviewed_at"] is not None
 
 
 def test_review_endpoint_edit_stores_overrides(monkeypatch):
     doc = _doc()
 
-    monkeypatch.setattr("app.api.v1.documents.crud_document.get_document", lambda db, id: doc)
+    app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(id=uuid4(), email="reviewer@example.com")
+    monkeypatch.setattr("app.api.v1.documents.crud_document.get_document", lambda db, id, user: doc)
 
     def _update(db, db_obj, **kwargs):
         for key, value in kwargs.items():
@@ -105,7 +111,6 @@ def test_review_endpoint_edit_stores_overrides(monkeypatch):
         "action": "edit",
         "override_summary": "Human corrected summary",
         "override_tags": ["corrected", "important"],
-        "reviewed_by": "qa@example.com",
     }
     with TestClient(app) as client:
         response = client.post(f"/api/v1/documents/{doc.id}/review", json=body)
@@ -115,7 +120,8 @@ def test_review_endpoint_edit_stores_overrides(monkeypatch):
     assert data["review_status"] == "edited"
     assert data["override_summary"] == "Human corrected summary"
     assert data["override_tags"] == ["corrected", "important"]
-    assert data["reviewed_by"] == "qa@example.com"
+    assert data["reviewed_by"] == "editor@example.com"
+    app.dependency_overrides.clear()
 
 
 def test_low_confidence_documents_enter_pending_review(monkeypatch):
@@ -172,6 +178,6 @@ def test_queue_stats_includes_pending_review_count():
             self.calls += 1
             return FakeGroupedQuery() if self.calls == 1 else FakeScalarQuery()
 
-    stats = queue_stats(FakeDB())
+    stats = queue_stats(FakeDB(), SimpleNamespace(id=uuid4()))
     assert stats.pending_review_count == 4
     assert stats.queued == 2

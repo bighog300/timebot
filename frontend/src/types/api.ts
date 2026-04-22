@@ -153,3 +153,17 @@ export interface SyncLog {
   bytes_synced: number;
   error_message?: string | null;
 }
+
+export interface AuthUser {
+  id: string;
+  email: string;
+  display_name: string;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface AuthResponse {
+  access_token: string;
+  token_type: string;
+  user: AuthUser;
+}
