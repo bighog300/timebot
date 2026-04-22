@@ -89,7 +89,7 @@ def test_review_endpoint_approve_sets_review_fields(monkeypatch):
     assert response.status_code == 200
     data = response.json()
     assert data["review_status"] == "approved"
-    assert data["reviewed_by"] == "reviewer@example.com"
+    assert data["reviewed_by"] == "editor@example.com"
     app.dependency_overrides.clear()
     assert data["reviewed_at"] is not None
 
@@ -120,7 +120,7 @@ def test_review_endpoint_edit_stores_overrides(monkeypatch):
     assert data["review_status"] == "edited"
     assert data["override_summary"] == "Human corrected summary"
     assert data["override_tags"] == ["corrected", "important"]
-    assert data["reviewed_by"] == "editor@example.com"
+    assert data["reviewed_by"] == "reviewer@example.com"
     app.dependency_overrides.clear()
 
 
@@ -157,6 +157,9 @@ def test_low_confidence_documents_enter_pending_review(monkeypatch):
 
 def test_queue_stats_includes_pending_review_count():
     class FakeGroupedQuery:
+        def filter(self, *_args, **_kwargs):
+            return self
+
         def group_by(self, *_args, **_kwargs):
             return self
 

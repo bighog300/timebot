@@ -36,7 +36,7 @@ def test_queue_stats_endpoint_shape(monkeypatch):
             self.calls += 1
             return FakeGroupedQuery() if self.calls == 1 else FakeScalarQuery()
 
-    app.dependency_overrides[get_db] = lambda: iter([FakeDB()])
+    app.dependency_overrides[get_db] = lambda: FakeDB()
     monkeypatch.setattr('app.api.v1.queue.inspect_workers', lambda timeout=2: {'active_tasks': 0, 'reserved_tasks': 0})
 
     with TestClient(app) as client:
@@ -75,7 +75,7 @@ def test_retry_failed_endpoint(monkeypatch):
         def commit(self):
             return None
 
-    app.dependency_overrides[get_db] = lambda: iter([FakeDB()])
+    app.dependency_overrides[get_db] = lambda: FakeDB()
     monkeypatch.setattr('app.workers.tasks.process_document_task.apply_async', lambda *args, **kwargs: None)
 
     with TestClient(app) as client:
