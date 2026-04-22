@@ -5,15 +5,16 @@ from typing import Any, Dict
 
 from sqlalchemy.orm import Session
 
+from app.config import settings
+from app.services.openai_client import openai_client_service
+
 logger = logging.getLogger(__name__)
 
 
 class CategoryDiscoveryService:
     def discover_categories(self, db: Session) -> Dict[str, Any]:
-        from app.config import settings
-
-        if not settings.ANTHROPIC_API_KEY:
-            return {"error": "ANTHROPIC_API_KEY not configured"}
+        if not openai_client_service.enabled:
+            return {"error": "OPENAI_API_KEY not configured"}
 
         from app.models.category import Category
         from app.models.document import Document
@@ -45,27 +46,27 @@ class CategoryDiscoveryService:
         existing = [c.name for c in db.query(Category).all()]
 
         try:
-            import anthropic
-
             from app.prompts.category_discovery import (
                 CATEGORY_DISCOVERY_SYSTEM,
                 CATEGORY_DISCOVERY_TEMPLATE,
             )
 
-            client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
             prompt = CATEGORY_DISCOVERY_TEMPLATE.format(
                 documents_sample=json.dumps(sample, indent=2),
                 current_categories=", ".join(existing) or "none",
             )
 
-            response = client.messages.create(
-                model=settings.AI_MODEL,
+            response = openai_client_service.client.chat.completions.create(
+                model=settings.OPENAI_MODEL,
                 max_tokens=2048,
-                system=CATEGORY_DISCOVERY_SYSTEM,
-                messages=[{"role": "user", "content": prompt}],
+                response_format={"type": "json_object"},
+                messages=[
+                    {"role": "system", "content": CATEGORY_DISCOVERY_SYSTEM},
+                    {"role": "user", "content": prompt},
+                ],
             )
 
-            content = response.content[0].text.strip()
+            content = (response.choices[0].message.content or "").strip()
             if content.startswith("```"):
                 lines = content.splitlines()
                 content = "\n".join(lines[1:-1] if lines[-1] == "```" else lines[1:])

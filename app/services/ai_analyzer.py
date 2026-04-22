@@ -2,10 +2,9 @@ import json
 import logging
 from typing import Any, Dict, List, Optional
 
-import anthropic
-
 from app.config import settings
 from app.prompts.document_analysis import DOCUMENT_ANALYSIS_SYSTEM, DOCUMENT_ANALYSIS_TEMPLATE
+from app.services.openai_client import APIError, openai_client_service
 
 logger = logging.getLogger(__name__)
 
@@ -13,15 +12,6 @@ MAX_TEXT_CHARS = 15_000  # ~3 750 tokens
 
 
 class AIAnalyzer:
-    def __init__(self):
-        self._client: Optional[anthropic.Anthropic] = None
-
-    @property
-    def client(self) -> anthropic.Anthropic:
-        if self._client is None:
-            self._client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
-        return self._client
-
     def analyze_document(
         self,
         text: str,
@@ -31,8 +21,8 @@ class AIAnalyzer:
     ) -> Optional[Dict[str, Any]]:
         if not text or not text.strip():
             return None
-        if not settings.ANTHROPIC_API_KEY:
-            logger.warning("ANTHROPIC_API_KEY not configured — skipping AI analysis")
+        if not openai_client_service.enabled:
+            logger.warning("OPENAI_API_KEY not configured — skipping AI analysis")
             return None
 
         try:
@@ -45,23 +35,20 @@ class AIAnalyzer:
                 categories=categories_str,
             )
 
-            response = self.client.messages.create(
-                model=settings.AI_MODEL,
+            response = openai_client_service.client.chat.completions.create(
+                model=settings.OPENAI_MODEL,
                 max_tokens=settings.AI_MAX_TOKENS,
-                system=[
-                    {
-                        "type": "text",
-                        "text": DOCUMENT_ANALYSIS_SYSTEM,
-                        "cache_control": {"type": "ephemeral"},
-                    }
+                response_format={"type": "json_object"},
+                messages=[
+                    {"role": "system", "content": DOCUMENT_ANALYSIS_SYSTEM},
+                    {"role": "user", "content": prompt},
                 ],
-                messages=[{"role": "user", "content": prompt}],
             )
+            content = (response.choices[0].message.content or "").strip()
+            return self._parse_json(content)
 
-            return self._parse_json(response.content[0].text)
-
-        except anthropic.APIError as e:
-            logger.error("Anthropic API error: %s", e)
+        except APIError as e:
+            logger.error("OpenAI API error: %s", e)
             return None
         except Exception as e:
             logger.error("AI analysis error: %s", e)
@@ -69,7 +56,6 @@ class AIAnalyzer:
 
     def _parse_json(self, content: str) -> Optional[Dict[str, Any]]:
         content = content.strip()
-        # Strip markdown fences if present
         if content.startswith("```"):
             lines = content.splitlines()
             content = "\n".join(lines[1:-1] if lines[-1] == "```" else lines[1:])

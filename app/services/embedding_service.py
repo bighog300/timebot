@@ -2,6 +2,7 @@ import logging
 from typing import Dict, List, Optional
 
 from app.config import settings
+from app.services.openai_client import APIError, openai_client_service
 
 logger = logging.getLogger(__name__)
 
@@ -10,21 +11,24 @@ class EmbeddingService:
     """Generate and store embeddings in Qdrant."""
 
     def __init__(self):
-        self.embedding_dim = 384
+        self.embedding_dim = 1536
         self.collection_name = "documents"
         self._enabled = True
 
+        if not openai_client_service.enabled:
+            logger.warning("OPENAI_API_KEY not configured; semantic embedding disabled")
+            self._enabled = False
+            self.qdrant = None
+            return
+
         try:
             from qdrant_client import QdrantClient
-            from sentence_transformers import SentenceTransformer
 
-            self.model = SentenceTransformer("all-MiniLM-L6-v2")
             self.qdrant = QdrantClient(host=settings.QDRANT_HOST, port=settings.QDRANT_PORT)
             self._ensure_collection()
         except Exception as exc:
             logger.warning("Embedding service initialization failed: %s", exc)
             self._enabled = False
-            self.model = None
             self.qdrant = None
 
     def _ensure_collection(self):
@@ -43,11 +47,27 @@ class EmbeddingService:
         return self._enabled
 
     def generate_embedding(self, text: str) -> List[float]:
-        if not self.enabled:
+        if not self.enabled or not text:
             return [0.0] * self.embedding_dim
-        if not text:
-            return [0.0] * self.embedding_dim
-        return self.model.encode(text[:5000], convert_to_numpy=True).tolist()
+        try:
+            response = openai_client_service.client.embeddings.create(
+                model=settings.OPENAI_EMBEDDING_MODEL,
+                input=text[:8000],
+            )
+            embedding = response.data[0].embedding
+            if len(embedding) != self.embedding_dim:
+                logger.warning(
+                    "Embedding size mismatch: expected=%s got=%s. Updating runtime dimension.",
+                    self.embedding_dim,
+                    len(embedding),
+                )
+                self.embedding_dim = len(embedding)
+            return embedding
+        except APIError as e:
+            logger.error("OpenAI embedding API error: %s", e)
+        except Exception as e:
+            logger.error("Embedding generation failed: %s", e)
+        return [0.0] * self.embedding_dim
 
     def store_document_embedding(self, document_id: str, text: str, metadata: Optional[Dict] = None):
         if not self.enabled:
