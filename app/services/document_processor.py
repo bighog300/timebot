@@ -125,11 +125,18 @@ class DocumentProcessor:
             existing_categories=[c.name for c in categories],
         )
         if analysis:
+            confidence = ai_analyzer.compute_confidence(analysis)
             document.summary = analysis.get("summary")
             document.key_points = analysis.get("key_points", [])
             document.entities = analysis.get("entities", {})
             document.action_items = analysis.get("action_items", [])
             document.ai_tags = analysis.get("tags", [])
+            document.ai_confidence = confidence
+            document.review_status = (
+                "pending"
+                if confidence < settings.REVIEW_CONFIDENCE_THRESHOLD
+                else "approved"
+            )
             categorizer.apply_category(db, document, analysis)
 
 

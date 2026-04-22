@@ -79,5 +79,22 @@ class AIAnalyzer:
             logger.error("JSON parse error in AI response: %s", e)
             return None
 
+    def compute_confidence(self, analysis: Dict[str, Any]) -> float:
+        confidence = 1.0
+
+        summary = (analysis.get("summary") or "").strip()
+        if len(summary.split()) < 20:
+            confidence -= 0.15
+
+        for field_name in ("key_points", "entities", "tags"):
+            value = analysis.get(field_name)
+            if not value:
+                confidence -= 0.1
+
+        if not analysis.get("action_items"):
+            confidence -= 0.2
+
+        return max(0.0, min(1.0, confidence))
+
 
 ai_analyzer = AIAnalyzer()

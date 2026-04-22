@@ -21,6 +21,11 @@ export interface Document {
   ai_tags: string[];
   user_tags: string[];
   ai_confidence?: number | null;
+  review_status?: 'pending' | 'approved' | 'rejected' | 'edited' | null;
+  reviewed_at?: string | null;
+  reviewed_by?: string | null;
+  override_summary?: string | null;
+  override_tags?: string[] | null;
   is_favorite: boolean;
   is_archived: boolean;
   user_notes?: string | null;
@@ -63,6 +68,7 @@ export interface QueueStats {
   completed: number;
   failed: number;
   total: number;
+  pending_review_count: number;
   celery_active?: number | null;
   celery_reserved?: number | null;
 }

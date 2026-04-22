@@ -5,6 +5,7 @@ export const keys = {
   documents: ['documents'] as const,
   queueStats: ['queue-stats'] as const,
   queueItems: ['queue-items'] as const,
+  reviewQueue: ['review-queue'] as const,
   categories: ['categories'] as const,
   connections: ['connections'] as const,
 };
@@ -29,6 +30,23 @@ export function useQueueStats() {
 
 export function useQueueItems() {
   return useQuery({ queryKey: keys.queueItems, queryFn: api.getQueueItems, refetchInterval: 5000 });
+}
+
+export function useReviewQueue() {
+  return useQuery({ queryKey: keys.reviewQueue, queryFn: api.getReviewQueue, refetchInterval: 5000 });
+}
+
+export function useReviewDocument() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, action, overrideSummary, overrideTags }: { id: string; action: 'approve' | 'reject' | 'edit'; overrideSummary?: string; overrideTags?: string[] }) =>
+      api.reviewDocument(id, action, overrideSummary, overrideTags),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: keys.reviewQueue });
+      qc.invalidateQueries({ queryKey: keys.queueStats });
+      qc.invalidateQueries({ queryKey: keys.documents });
+    },
+  });
 }
 
 export function useCategories() {

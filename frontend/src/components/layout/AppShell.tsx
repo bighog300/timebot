@@ -1,11 +1,13 @@
 import { NavLink, Outlet } from 'react-router-dom';
 import { useUIStore } from '@/store/uiStore';
+import { useQueueStats } from '@/hooks/useApi';
 
 const links = [
   ['/', 'Timeline'],
   ['/documents', 'Documents'],
   ['/search', 'Search'],
   ['/queue', 'Queue'],
+  ['/review', 'Review'],
   ['/categories', 'Categories'],
   ['/insights', 'Insights'],
   ['/connections', 'Connections'],
@@ -13,6 +15,8 @@ const links = [
 
 export function AppShell() {
   const { toasts, dismissToast } = useUIStore();
+  const queueStats = useQueueStats();
+  const pendingReviewCount = queueStats.data?.pending_review_count ?? 0;
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
       <header className="border-b border-slate-800 px-4 py-3 font-semibold">Document Intelligence Platform</header>
@@ -27,7 +31,12 @@ export function AppShell() {
                   `rounded px-3 py-2 text-sm ${isActive ? 'bg-slate-700 text-white' : 'text-slate-300 hover:bg-slate-800'}`
                 }
               >
-                {label}
+                <span className="inline-flex items-center gap-2">
+                  {label}
+                  {to === '/review' && pendingReviewCount > 0 && (
+                    <span className="rounded-full bg-red-600 px-2 py-0.5 text-[10px] text-white">{pendingReviewCount}</span>
+                  )}
+                </span>
               </NavLink>
             ))}
           </nav>

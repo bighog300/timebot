@@ -38,6 +38,11 @@ class Document(Base):
         UUID(as_uuid=True), ForeignKey("categories.id", ondelete="SET NULL"), index=True
     )
     ai_confidence = Column(Float)
+    review_status = Column(String(50), nullable=False, default="pending", index=True)
+    reviewed_at = Column(TIMESTAMP(timezone=True))
+    reviewed_by = Column(String(255))
+    override_summary = Column(Text)
+    override_tags = Column(JSONB, default=list)
     user_category_id = Column(
         UUID(as_uuid=True), ForeignKey("categories.id", ondelete="SET NULL"), index=True
     )
@@ -99,6 +104,10 @@ class Document(Base):
         CheckConstraint(
             "ai_confidence IS NULL OR (ai_confidence >= 0 AND ai_confidence <= 1)",
             name="valid_confidence",
+        ),
+        CheckConstraint(
+            "review_status IN ('pending', 'approved', 'rejected', 'edited')",
+            name="valid_review_status",
         ),
     )
 

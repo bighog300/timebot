@@ -43,6 +43,20 @@ export const api = {
     (await http.get('/categories')).data,
   getQueueStats: async (): Promise<QueueStats> => (await http.get('/queue/stats')).data,
   getQueueItems: async (): Promise<QueueItem[]> => (await http.get('/queue/items')).data,
+  getReviewQueue: async (): Promise<Document[]> => (await http.get('/documents/review-queue')).data,
+  reviewDocument: async (
+    id: string,
+    action: 'approve' | 'reject' | 'edit',
+    overrideSummary?: string,
+    overrideTags?: string[],
+  ): Promise<Document> =>
+    (
+      await http.post(`/documents/${id}/review`, {
+        action,
+        override_summary: overrideSummary,
+        override_tags: overrideTags,
+      })
+    ).data,
   retryFailedQueue: async (): Promise<{ message: string }> => (await http.post('/queue/retry-failed')).data,
   getInsightsOverview: async (): Promise<InsightsResponse> => (await http.get('/insights/overview')).data,
   getInsightsTrends: async (): Promise<{ lookback_days: number; trends: Array<Record<string, unknown>> }> =>

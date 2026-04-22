@@ -51,6 +51,7 @@ class Settings(BaseSettings):
     ENABLE_AUTO_CATEGORIZATION: bool = True
     ENABLE_ENTITY_EXTRACTION: bool = True
     CATEGORY_CONFIDENCE_THRESHOLD: float = 0.7
+    REVIEW_CONFIDENCE_THRESHOLD: float = 0.75
     MAX_UPLOAD_SIZE_MB: int = 50
     ALLOWED_FILE_TYPES: str = "pdf,docx,doc,xlsx,xls,pptx,ppt,txt,jpg,jpeg,png,gif,tiff,bmp"
 

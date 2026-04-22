@@ -1,4 +1,5 @@
 import { useMutation } from '@tanstack/react-query';
+import { Link } from 'react-router-dom';
 import { useQueueItems, useQueueStats } from '@/hooks/useApi';
 import { api } from '@/services/api';
 import { Button } from '@/components/ui/Button';
@@ -20,7 +21,10 @@ export function QueuePage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">Queue</h1>
-        <Button onClick={() => retry.mutate()}>Retry Failed</Button>
+        <div className="flex items-center gap-2">
+          <Link to="/review" className="text-sm text-blue-300 hover:text-blue-200">Go to review queue →</Link>
+          <Button onClick={() => retry.mutate()}>Retry Failed</Button>
+        </div>
       </div>
       <div className="grid gap-3 md:grid-cols-5">
         {stats.isLoading && <LoadingState label="Loading queue stats..." />}
@@ -28,6 +32,12 @@ export function QueuePage() {
         {Object.entries(stats.data ?? {}).filter(([k]) => ['queued', 'processing', 'completed', 'failed', 'total'].includes(k)).map(([k, v]) => (
           <Card key={k}><div className="text-xs uppercase text-slate-400">{k}</div><div className="text-2xl">{String(v)}</div></Card>
         ))}
+        {stats.data && (
+          <Card>
+            <div className="text-xs uppercase text-slate-400">pending review</div>
+            <div className="text-2xl">{stats.data.pending_review_count}</div>
+          </Card>
+        )}
       </div>
       <Card>
         <h3 className="mb-2">Items</h3>
