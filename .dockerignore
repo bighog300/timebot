@@ -1,0 +1,17 @@
+.git
+.github
+docs/
+frontend/
+*.md
+docker-compose*.yml
+docker-build.yml
+docker-hub.yml
+.env
+.env.*
+!.env.example
+tests/
+.pytest_cache/
+__pycache__/
+*.pyc
+data/
+*.log

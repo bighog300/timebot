@@ -1,54 +1,52 @@
-# Timebot
+# Timebot — AI Document Intelligence Platform
 
-AI-assisted document intelligence platform with upload/search, review workflow, user auth, and connector foundations.
+Timebot is an AI-assisted document intelligence platform for uploading, analyzing, searching, and operationalizing documents through a FastAPI backend, React frontend, and background workers.
 
-## Architecture / UI preview
+## Features
 
-> Add latest architecture diagram or UI screenshot here before external release.
+- AI-assisted document upload, parsing, and analysis
+- Hybrid search and retrieval workflows
+- Review queue and confidence-driven processing
+- Background processing via Celery workers
+- Connector foundations for external providers
+- Real-time updates via WebSocket events
 
 ## Prerequisites
 
-- Python 3.11+
+- Docker + Docker Compose
 - Node.js 20+
-- PostgreSQL 14+
-- Redis 7+
-- OpenAI API key
+- Python 3.11+
+- Anthropic API key
 
-## Quick start (Docker Compose)
+## Quick Start (Docker)
 
-1. Copy env template:
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/{YOUR_GITHUB_USERNAME}/{YOUR_REPO_NAME}.git
+   cd {YOUR_REPO_NAME}
+   ```
+2. Copy environment template:
    ```bash
    cp .env.example .env
    ```
-2. Set required secrets in `.env` (at minimum `OPENAI_API_KEY`, `AUTH_SECRET_KEY`).
-3. Start stack:
+3. Add your API key(s) in `.env` (at minimum `OPENAI_API_KEY`; set `AI_MODEL` as needed).
+4. Start the stack:
    ```bash
    docker compose up --build
    ```
-4. Run migrations (from app container shell or local environment):
-   ```bash
-   alembic upgrade head
-   ```
+5. Access the app:
+   - API: `http://localhost:8000`
+   - API docs: `http://localhost:8000/docs`
+   - Frontend dev server: `http://localhost:5173`
 
-API: `http://localhost:8000`  
-Frontend (dev): `http://localhost:5173`
-
-## Local development
-
-### Minimal bootstrap (recommended)
-
-```bash
-./scripts/bootstrap_dev.sh
-```
-
-This installs backend deps, creates `.env` if missing, and runs `alembic upgrade head`.
+## Local Development (without Docker)
 
 ### Backend
 
 ```bash
 python -m pip install -r requirements-dev.txt
 alembic upgrade head
-python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 ### Frontend
@@ -60,111 +58,141 @@ npm install
 npm run dev
 ```
 
-## Environment variables
+### Background workers
 
-| Key | Required | Purpose |
-|---|---|---|
-| `DATABASE_URL` | Yes | SQLAlchemy + Alembic database connection |
-| `REDIS_URL` | Yes | Redis cache + Celery broker default |
-| `CELERY_BROKER_URL` | Yes | Celery broker URL |
-| `CELERY_RESULT_BACKEND` | Yes | Celery result backend |
-| `OPENAI_API_KEY` | Yes for AI features | OpenAI API key for analysis + embeddings |
-| `OPENAI_MODEL` | Optional | Chat model id (default `gpt-4o-mini`) |
-| `OPENAI_EMBEDDING_MODEL` | Optional | Embedding model id (default `text-embedding-3-small`) |
-| `AUTH_SECRET_KEY` | Yes outside local dev | JWT signing secret |
-| `AUTH_ALGORITHM` | Optional | JWT algorithm (default `HS256`) |
-| `AUTH_ACCESS_TOKEN_EXPIRE_MINUTES` | Optional | Access token TTL |
-| `ALLOWED_ORIGINS` | Yes | CSV of frontend origins for CORS |
-| `GOOGLE_OAUTH_CLIENT_ID` | Optional | Google Drive OAuth client ID |
-| `GOOGLE_OAUTH_CLIENT_SECRET` | Optional | Google Drive OAuth secret |
-| `GOOGLE_OAUTH_REDIRECT_URI` | Optional | OAuth callback URL |
-| `GOOGLE_OAUTH_SCOPES` | Optional | OAuth scopes list |
-| `CONNECTOR_TOKEN_ENCRYPTION_KEY` | Required when connectors are used | Fernet key used to encrypt connector `access_token`/`refresh_token` values at rest |
-| `QDRANT_HOST` / `QDRANT_PORT` | Optional | Semantic search backend |
-| `STORAGE_PATH`, `UPLOAD_PATH`, `PROCESSED_PATH` | Optional | File storage locations |
-| `ALEMBIC_SKIP` | Optional (test-only) | Enables fallback `create_all` for isolated tests |
+```bash
+celery -A app.workers.celery_app worker --loglevel=info -Q documents,maintenance
+celery -A app.workers.celery_app beat --loglevel=info
+celery -A app.workers.celery_app flower --port=5555
+```
 
-See `.env.example` for the full list and safe local defaults.
+## Environment Variables
 
-## AI provider model
+| Variable | Description | Required | Default |
+|---|---|---|---|
+| `DEBUG` | Enable debug/reload behavior | No | `false` |
+| `APP_HOST` | App host bind address | No | `0.0.0.0` |
+| `APP_PORT` | App port | No | `8000` |
+| `ALLOWED_ORIGINS` | CORS origins (CSV) | Yes | `http://localhost:5173,http://localhost:3000` |
+| `DATABASE_URL` | Postgres connection string | Yes | `postgresql://docuser:docpass@localhost:5432/documents` |
+| `ALEMBIC_SKIP` | Test-only migration bypass | No | `false` |
+| `REDIS_URL` | Redis connection URL | Yes | `redis://localhost:6379/0` |
+| `CELERY_BROKER_URL` | Celery broker URL | Yes | `redis://localhost:6379/0` |
+| `CELERY_RESULT_BACKEND` | Celery result backend URL | Yes | `redis://localhost:6379/0` |
+| `CELERY_WORKER_CONCURRENCY` | Worker concurrency | No | `4` |
+| `CELERY_TASK_MAX_RETRIES` | Max task retries | No | `3` |
+| `CELERY_TASK_SERIALIZER` | Celery task serializer | No | `json` |
+| `CELERY_RESULT_SERIALIZER` | Celery result serializer | No | `json` |
+| `CELERY_ACCEPT_CONTENT` | Accepted Celery payloads | No | `json` |
+| `CELERY_TIMEZONE` | Celery timezone | No | `UTC` |
+| `CELERY_ENABLE_UTC` | Enable UTC for Celery | No | `true` |
+| `CELERY_WORKER_MAX_TASKS_PER_CHILD` | Worker recycle threshold | No | `1000` |
+| `CELERY_TASK_TIME_LIMIT` | Hard task timeout seconds | No | `600` |
+| `CELERY_TASK_SOFT_TIME_LIMIT` | Soft task timeout seconds | No | `540` |
+| `CELERY_TASK_DEFAULT_RETRY_DELAY` | Retry delay seconds | No | `60` |
+| `OPENAI_API_KEY` | AI provider API key | Yes | _none_ |
+| `OPENAI_MODEL` | OpenAI chat model ID | No | `gpt-4o-mini` |
+| `OPENAI_EMBEDDING_MODEL` | Embedding model ID | No | `text-embedding-3-small` |
+| `AI_MODEL` | Anthropic-style model setting used by app config | No | `claude-sonnet-4-20250514` |
+| `AI_MAX_TOKENS` | Max model output tokens | No | `4096` |
+| `AUTH_SECRET_KEY` | JWT signing key | Yes (non-dev) | `dev-insecure-change-me` |
+| `AUTH_ALGORITHM` | JWT algorithm | No | `HS256` |
+| `AUTH_ACCESS_TOKEN_EXPIRE_MINUTES` | Access token lifetime | No | `60` |
+| `STORAGE_PATH` | Base file storage path | No | `./data` |
+| `UPLOAD_PATH` | Upload directory | No | `./data/uploads` |
+| `PROCESSED_PATH` | Processed output directory | No | `./data/processed` |
+| `QDRANT_HOST` | Qdrant host | No | `localhost` |
+| `QDRANT_PORT` | Qdrant port | No | `6333` |
+| `ENABLE_AUTO_CATEGORIZATION` | Enable auto categorization | No | `true` |
+| `ENABLE_ENTITY_EXTRACTION` | Enable entity extraction | No | `true` |
+| `CATEGORY_CONFIDENCE_THRESHOLD` | Category confidence threshold | No | `0.7` |
+| `REVIEW_CONFIDENCE_THRESHOLD` | Review confidence threshold | No | `0.75` |
+| `MAX_UPLOAD_SIZE_MB` | Max upload size (MB) | No | `50` |
+| `ALLOWED_FILE_TYPES` | Allowed upload file extensions (CSV) | No | `pdf,docx,doc,xlsx,xls,pptx,ppt,txt,jpg,jpeg,png,gif,tiff,bmp` |
+| `GOOGLE_OAUTH_CLIENT_ID` | Google OAuth client ID | No | _none_ |
+| `GOOGLE_OAUTH_CLIENT_SECRET` | Google OAuth client secret | No | _none_ |
+| `GOOGLE_OAUTH_REDIRECT_URI` | OAuth callback URL | No | `http://localhost:5173/connections/callback?provider=gdrive` |
+| `GOOGLE_OAUTH_SCOPES` | OAuth scopes (CSV) | No | `openid,email,profile,https://www.googleapis.com/auth/drive.metadata.readonly` |
+| `CONNECTOR_TOKEN_ENCRYPTION_KEY` | Fernet key for encrypted connector tokens | Required when connectors enabled | _none_ |
 
-- The backend is now **OpenAI-only** for document analysis, category discovery, and semantic embeddings.
-- Local transformer embedding runtime paths were removed (no `sentence-transformers`, Torch/CUDA/NVIDIA dependency chain in the app path).
-- Qdrant remains the vector database for semantic search.
+## Architecture
 
+```text
+├── app/
+│   ├── api/v1/          # Route handlers (documents, search, upload, queue, insights, connections, analysis, websocket)
+│   ├── crud/            # Database CRUD helpers
+│   ├── db/              # SQLAlchemy engine and session
+│   ├── models/          # ORM models (Document, Category, Connection, relationships)
+│   ├── prompts/         # Anthropic prompt templates
+│   ├── schemas/         # Pydantic request/response schemas
+│   ├── services/        # Business logic (AI analyzer, search, text extractor, insights, etc.)
+│   ├── workers/         # Celery tasks, beat scheduler, monitoring
+│   └── config.py        # Settings (pydantic-settings)
+├── frontend/            # React + TypeScript UI (Vite, TanStack Query, Tailwind)
+├── docs/                # Planning docs and sprint bundles
+├── tests/               # Backend pytest suite
+├── schema.sql           # Reference SQL schema (Alembic manages migrations)
+├── app.py               # Local dev entry point (python app.py)
+├── Dockerfile
+└── docker-compose.yml
+```
 
-### Connector token encryption key
+## Running Tests
 
-- Generate a key with:
-  ```bash
-  python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
-  ```
-- Set `CONNECTOR_TOKEN_ENCRYPTION_KEY` before using connector OAuth callback/sync flows.
-- Runtime intentionally fails for connector token operations if this key is missing/invalid.
-- If upgrading an existing environment that already has plaintext connector tokens, run:
-  ```bash
-  python scripts/reencrypt_connector_tokens.py
-  ```
-  after setting `CONNECTOR_TOKEN_ENCRYPTION_KEY`.
+```bash
+pytest tests/ -q
+cd frontend && npm run test
+```
 
-## Migrations (Alembic is authoritative)
+## Database Migrations
 
 ```bash
 alembic upgrade head
 ```
 
-Create a new migration after model changes:
+## API Reference
 
-```bash
-alembic revision --autogenerate -m "describe change"
-```
+When the app is running, open: `http://localhost:8000/docs`
 
-## Running tests
+## WebSocket Events
 
-### Backend
+- `ws://localhost:8000/api/v1/ws`
+- `connection_update`
+- `connection_sync`
+- `queue_update`
 
-```bash
-pytest tests -q
-```
+## Queue Endpoints
 
-### Frontend
+- `GET /api/v1/queue/stats`
+- `GET /api/v1/queue/items`
+- `POST /api/v1/queue/items/{item_id}/approve`
+- `POST /api/v1/queue/items/{item_id}/reject`
 
-```bash
-cd frontend
-npm run type-check
-npm run test
-npm run build
-```
+## Deployment
 
-## Architecture
+### Docker Hub
 
-```text
-app/
-  api/v1/           FastAPI routes (auth, documents, queue, connectors, insights)
-  models/           SQLAlchemy models (users, documents, relationships)
-  services/         Domain services (AI analysis, auth, connectors, search)
-  workers/          Celery tasks / monitoring
-migrations/         Alembic config + migration versions
-frontend/           React + TypeScript client
-tests/              Backend tests
-```
+Build and push using your preferred CI/CD flow or local Docker commands.
 
-## Deployment notes
+### GitHub Container Registry
 
-- Run migrations (`alembic upgrade head`) during each deploy before serving traffic.
-- Use production-only `AUTH_SECRET_KEY` and strict `ALLOWED_ORIGINS` values.
-- Configure HTTPS, secret manager integration, and real deployment automation (current deploy workflow is a placeholder).
-- Review known deferred items in `docs/RELEASE_READINESS.md` before production launch.
+Tag and push images under `ghcr.io/{YOUR_GITHUB_USERNAME}/{YOUR_REPO_NAME}`.
 
-## Known limitations and production handoff
+## GitHub Actions
 
-See `docs/RELEASE_READINESS.md` for clear split between complete, partial, and deferred hardening work.
+See `.github/workflows/` for CI/CD pipeline definitions.
+
+## Security Notes
+
+- Use a strong non-default `AUTH_SECRET_KEY` outside local development.
+- Restrict `ALLOWED_ORIGINS` to trusted frontend domains.
+- Keep OAuth secrets and API keys in a secure secret manager.
 
 ## Contributing
 
-1. Create a feature branch.
-2. Run backend/frontend checks locally.
-3. Open a PR with test evidence.
+1. Create a branch from `main`.
+2. Run backend and frontend checks locally.
+3. Open a PR with a clear summary and validation notes.
 
 ## License
 

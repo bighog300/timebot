@@ -79,6 +79,12 @@ async def disconnect_provider(provider_type: str, db: Session = Depends(get_db),
     return conn
 
 
+# NOTE (Sprint 4): This endpoint simulates a sync operation.
+# Real OAuth-based sync (Google Drive etc.) is implemented in Sprint 4
+# of CODEX_PLAN.md. Until then, the status briefly sets to 'syncing' via
+# WebSocket but the DB record is immediately marked 'connected' to avoid
+# the UI showing a stuck syncing state. Do not remove the two-step status
+# writes without implementing real async sync progress tracking.
 @router.post('/{provider_type}/sync', response_model=SyncRunResponse)
 async def sync_provider(provider_type: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     try:

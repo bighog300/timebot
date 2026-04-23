@@ -35,6 +35,7 @@ class Settings(BaseSettings):
 
     QDRANT_HOST: str = "localhost"
     QDRANT_PORT: int = 6333
+    AI_MODEL: str = "claude-sonnet-4-20250514"
     AI_MAX_TOKENS: int = 4096
 
     STORAGE_PATH: str = "data"
