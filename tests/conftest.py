@@ -74,13 +74,35 @@ def db(engine):
 
 
 @pytest.fixture(scope="function")
+def fake_redis():
+    """In-memory Redis replacement for tests and CI."""
+    fakeredis = pytest.importorskip("fakeredis")
+    return fakeredis.FakeStrictRedis(decode_responses=True)
+
+
+@pytest.fixture(scope="function", autouse=True)
+def mock_celery(monkeypatch):
+    """Run Celery tasks eagerly in-process so tests never need a live broker."""
+    from app.workers.celery_app import celery_app
+
+    previous_always_eager = celery_app.conf.task_always_eager
+    previous_eager_propagates = celery_app.conf.task_eager_propagates
+    celery_app.conf.task_always_eager = True
+    celery_app.conf.task_eager_propagates = True
+    yield
+    celery_app.conf.task_always_eager = previous_always_eager
+    celery_app.conf.task_eager_propagates = previous_eager_propagates
+
+
+@pytest.fixture(scope="function")
 def test_user(db):
     from app.models.user import User
+    from app.services.auth import auth_service
 
     user = User(
         id=uuid.uuid4(),
         email="test@example.com",
-        password_hash="pbkdf2_sha256$dummy$dummy",
+        password_hash=auth_service.hash_password("password123"),
         display_name="Test User",
         is_active=True,
     )
@@ -88,6 +110,18 @@ def test_user(db):
     db.commit()
     db.refresh(user)
     return user
+
+
+@pytest.fixture(scope="function")
+def auth_token(test_user):
+    from app.services.auth import auth_service
+
+    return auth_service.create_access_token(test_user)
+
+
+@pytest.fixture(scope="function")
+def auth_headers(auth_token):
+    return {"Authorization": f"Bearer {auth_token}"}
 
 
 @pytest.fixture(scope="function")

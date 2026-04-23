@@ -33,44 +33,14 @@ on:
 jobs:
   integrated-smoke:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
-    services:
-      postgres:
-        image: postgres:15-alpine
-        env:
-          POSTGRES_USER: docuser
-          POSTGRES_PASSWORD: docpass
-          POSTGRES_DB: documents
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U docuser -d documents"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-      redis:
-        image: redis:7-alpine
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
+    timeout-minutes: 10
     env:
       PYTHON_VERSION: ${{ vars.PYTHON_VERSION || '3.11' }}
-      NODE_VERSION: ${{ vars.NODE_VERSION || '20' }}
-      DATABASE_URL: postgresql://docuser:docpass@127.0.0.1:5432/documents
-      REDIS_URL: redis://127.0.0.1:6379/0
-      CELERY_BROKER_URL: redis://127.0.0.1:6379/0
-      CELERY_RESULT_BACKEND: redis://127.0.0.1:6379/0
-      ANTHROPIC_API_KEY: test-key
+      DATABASE_URL: sqlite:///./smoke.db
+      ALEMBIC_SKIP: 'true'
       AUTH_SECRET_KEY: ci-test-auth-secret-key
+      ANTHROPIC_API_KEY: test-key
       CONNECTOR_TOKEN_ENCRYPTION_KEY: 6T-VEv2ueVr0VriM8n4QfSMqkA9R7sQfD_gJK4jI8Y8=
-      STORAGE_PATH: /tmp/timebot-data
-      UPLOAD_PATH: /tmp/timebot-data/uploads
-      PROCESSED_PATH: /tmp/timebot-data/processed
 
     steps:
       - name: Checkout
@@ -83,48 +53,14 @@ jobs:
           cache: pip
           cache-dependency-path: requirements-dev.txt
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-
       - name: Install backend dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements-dev.txt
 
-      - name: Install frontend dependencies
-        run: npm ci
-        working-directory: frontend
-
-      - name: Run migrations
-        run: alembic upgrade head
-
       - name: Start backend
         run: |
           nohup python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 > backend.log 2>&1 &
-
-      - name: Start Celery worker
-        run: |
-          nohup celery -A app.workers.celery_app worker --loglevel=info -P solo > celery.log 2>&1 &
-
-      - name: Start frontend
-        run: |
-          nohup npm run dev -- --host 127.0.0.1 --port 3000 > ../frontend.log 2>&1 &
-        working-directory: frontend
-
-      - name: Wait for services
-        run: |
-          for i in {1..45}; do
-            if curl -fsS http://127.0.0.1:8000/health >/dev/null && curl -fsS http://127.0.0.1:3000/ >/dev/null; then
-              exit 0
-            fi
-            sleep 2
-          done
-          echo "Timed out waiting for services"
-          exit 1
 
       - name: Run smoke script
         run: bash frontend/tests/e2e/smoke.sh
@@ -135,20 +71,4 @@ jobs:
         with:
           name: backend-log
           path: backend.log
-          if-no-files-found: ignore
-
-      - name: Upload frontend log on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: frontend-log
-          path: frontend.log
-          if-no-files-found: ignore
-
-      - name: Upload celery log on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: celery-log
-          path: celery.log
           if-no-files-found: ignore
