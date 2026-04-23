@@ -52,4 +52,17 @@ jobs:
           pip install -r requirements-dev.txt
 
       - name: Run backend tests
-        run: pytest tests -q
+        env:
+          DATABASE_URL: sqlite:///./test.db
+          ALEMBIC_SKIP: "true"
+          ANTHROPIC_API_KEY: "test-key-not-real"
+          REDIS_URL: "redis://localhost:6379/0"
+        run: |
+          pytest tests/ -q --cov=app --cov-report=term-missing --cov-fail-under=30
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: .coverage

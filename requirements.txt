@@ -53,3 +53,6 @@ python-engineio==4.9.0
 
 PyJWT==2.9.0
 email-validator==2.2.0
+
+pytest-cov==4.1.0
+fakeredis==2.21.1

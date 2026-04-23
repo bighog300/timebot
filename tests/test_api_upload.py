@@ -1,0 +1,39 @@
+import io
+from pathlib import Path
+from unittest.mock import patch
+
+
+def _upload(client, filename='test.pdf', content_type='application/pdf', payload=b'%PDF-1.4 fake content'):
+    files = {'file': (filename, io.BytesIO(payload), content_type)}
+    return client.post('/api/v1/upload/', files=files)
+
+
+def test_upload_valid_pdf_returns_202(client):
+    with patch('app.services.storage.storage.save_upload', return_value=(Path('/tmp/test.pdf'), 22)), patch(
+        'app.workers.tasks.process_document_task.apply_async'
+    ):
+        response = _upload(client)
+    assert response.status_code == 202
+
+
+def test_upload_returns_document_shape(client):
+    with patch('app.services.storage.storage.save_upload', return_value=(Path('/tmp/test.pdf'), 22)), patch(
+        'app.workers.tasks.process_document_task.apply_async'
+    ):
+        data = _upload(client).json()
+    for key in ('id', 'filename', 'processing_status'):
+        assert key in data
+
+
+def test_upload_sets_processing_status_queued(client):
+    with patch('app.services.storage.storage.save_upload', return_value=(Path('/tmp/test.pdf'), 22)), patch(
+        'app.workers.tasks.process_document_task.apply_async'
+    ):
+        data = _upload(client).json()
+    assert data['processing_status'] in ('queued', 'pending')
+
+
+def test_upload_unsupported_file_type_returns_400(client):
+    files = {'file': ('malware.exe', io.BytesIO(b'fake'), 'application/octet-stream')}
+    response = client.post('/api/v1/upload/', files=files)
+    assert response.status_code == 400
