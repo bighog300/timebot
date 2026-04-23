@@ -1,4 +1,7 @@
 -r requirements.txt
 
 # Dev/test-only additions
-pytest-cov==5.0.0
+pytest==7.4.4
+pytest-asyncio==0.23.4
+pytest-cov==4.1.0
+fakeredis==2.21.1
