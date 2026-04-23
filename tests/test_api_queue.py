@@ -1,86 +1,67 @@
-from types import SimpleNamespace
-from uuid import uuid4
+import uuid
+from unittest.mock import patch
 
-from fastapi.testclient import TestClient
-
-from app.api.deps import get_current_user, get_db
-from app.main import app
+from app.models.document import Document
 
 
-def test_queue_stats_endpoint_shape(monkeypatch):
-    user = SimpleNamespace(id=uuid4(), email='queue@example.com')
-    app.dependency_overrides[get_current_user] = lambda: user
-
-    class FakeGroupedQuery:
-        def filter(self, *_args, **_kwargs):
-            return self
-
-        def group_by(self, *_args, **_kwargs):
-            return self
-
-        def all(self):
-            return [('queued', 1), ('completed', 2)]
-
-    class FakeScalarQuery:
-        def filter(self, *_args, **_kwargs):
-            return self
-
-        def scalar(self):
-            return 1
-
-    class FakeDB:
-        def __init__(self):
-            self.calls = 0
-
-        def query(self, *_args, **_kwargs):
-            self.calls += 1
-            return FakeGroupedQuery() if self.calls == 1 else FakeScalarQuery()
-
-    app.dependency_overrides[get_db] = lambda: FakeDB()
-    monkeypatch.setattr('app.api.v1.queue.inspect_workers', lambda timeout=2: {'active_tasks': 0, 'reserved_tasks': 0})
-
-    with TestClient(app) as client:
+def test_queue_stats_returns_200(client):
+    with patch('app.api.v1.queue.inspect_workers', return_value={'active_tasks': 0, 'reserved_tasks': 0}):
         response = client.get('/api/v1/queue/stats')
-
-    app.dependency_overrides.clear()
     assert response.status_code == 200
-    payload = response.json()
-    assert payload['pending_review_count'] == 1
-    assert payload['total'] == 3
 
 
-def test_retry_failed_endpoint(monkeypatch):
-    user = SimpleNamespace(id=uuid4(), email='queue@example.com')
-    app.dependency_overrides[get_current_user] = lambda: user
+def test_queue_stats_response_shape(client):
+    with patch('app.api.v1.queue.inspect_workers', return_value={'active_tasks': 0, 'reserved_tasks': 0}):
+        data = client.get('/api/v1/queue/stats').json()
+    for key in ('queued', 'processing', 'completed', 'failed', 'total'):
+        assert key in data
 
-    class Doc(SimpleNamespace):
-        pass
 
-    docs = [Doc(id=uuid4(), processing_status='failed', processing_error='err')]
+def test_queue_stats_counts_documents(client, sample_document, db):
+    sample_document.processing_status = 'completed'
+    db.add(sample_document)
+    db.commit()
 
-    class FakeQuery:
-        def filter(self, *_args, **_kwargs):
-            return self
+    with patch('app.api.v1.queue.inspect_workers', return_value={'active_tasks': 0, 'reserved_tasks': 0}):
+        data = client.get('/api/v1/queue/stats').json()
+    assert data['completed'] >= 1
 
-        def all(self):
-            return docs
 
-    class FakeDB:
-        def query(self, _model):
-            return FakeQuery()
+def test_queue_items_returns_200(client):
+    response = client.get('/api/v1/queue/items')
+    assert response.status_code == 200
 
-        def add(self, _obj):
-            return None
 
-        def commit(self):
-            return None
+def test_queue_items_returns_list(client):
+    data = client.get('/api/v1/queue/items').json()
+    assert isinstance(data, list)
 
-    app.dependency_overrides[get_db] = lambda: FakeDB()
-    monkeypatch.setattr('app.workers.tasks.process_document_task.apply_async', lambda *args, **kwargs: None)
 
-    with TestClient(app) as client:
+def test_retry_failed_returns_200(client):
+    with patch('app.workers.tasks.process_document_task.apply_async'):
         response = client.post('/api/v1/queue/retry-failed')
-
-    app.dependency_overrides.clear()
     assert response.status_code == 200
-    assert 'Queued' in response.json()['message']
+
+
+def test_retry_failed_requeues_failed_documents(client, test_user, db):
+    doc = Document(
+        id=uuid.uuid4(),
+        filename='failed.pdf',
+        original_path='/tmp/failed.pdf',
+        file_type='pdf',
+        file_size=123,
+        mime_type='application/pdf',
+        processing_status='failed',
+        source='upload',
+        user_id=test_user.id,
+    )
+    db.add(doc)
+    db.commit()
+    db.refresh(doc)
+
+    with patch('app.workers.tasks.process_document_task.apply_async'):
+        response = client.post('/api/v1/queue/retry-failed')
+    assert response.status_code == 200
+
+    refreshed = client.get(f'/api/v1/documents/{doc.id}').json()
+    assert refreshed['processing_status'] != 'failed'
