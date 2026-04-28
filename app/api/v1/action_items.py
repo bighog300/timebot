@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user, get_db
 from app.models.user import User
 from app.schemas.review_workflow import (
+    ActionItemMetricsResponse,
     ActionItemResponse,
     ActionItemUpdate,
     BulkActionItemMutationResponse,
@@ -23,6 +24,14 @@ def list_action_items(
     current_user: User = Depends(get_current_user),
 ):
     return action_items_service.list_items(db, user_id=current_user.id, state=state)
+
+
+@router.get("/action-items/metrics", response_model=ActionItemMetricsResponse)
+def get_action_item_metrics(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return action_items_service.get_metrics(db, user_id=current_user.id)
 
 
 @router.get("/documents/{document_id}/action-items", response_model=list[ActionItemResponse])

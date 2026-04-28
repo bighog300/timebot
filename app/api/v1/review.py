@@ -9,6 +9,7 @@ from app.schemas.review_workflow import (
     BulkMutationRequest,
     BulkReviewItemMutationResponse,
     DocumentReviewItemResponse,
+    ReviewMetricsResponse,
     ReviewAuditEventResponse,
     ReviewResolutionRequest,
 )
@@ -25,6 +26,14 @@ def list_review_items(
     current_user: User = Depends(get_current_user),
 ):
     return review_queue_service.list_items(db, current_user.id, status=status)
+
+
+@router.get("/metrics", response_model=ReviewMetricsResponse)
+def get_review_metrics(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return review_queue_service.get_metrics(db, user_id=current_user.id)
 
 
 @router.get("/items/{item_id}", response_model=DocumentReviewItemResponse)
