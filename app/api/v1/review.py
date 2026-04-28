@@ -9,10 +9,13 @@ from app.schemas.review_workflow import (
     BulkMutationRequest,
     BulkReviewItemMutationResponse,
     DocumentReviewItemResponse,
+    RelationshipReviewDecisionRequest,
+    RelationshipReviewResponse,
     ReviewAuditEventResponse,
     ReviewResolutionRequest,
 )
 from app.services.review_audit import review_audit_service
+from app.services.relationship_review import relationship_review_service
 from app.services.review_queue import review_queue_service
 
 router = APIRouter(prefix="/review", tags=["review"])
@@ -109,4 +112,63 @@ def list_review_audit_events(
         document_id=document_id,
         skip=skip,
         limit=limit,
+    )
+
+
+@router.get("/relationships", response_model=list[RelationshipReviewResponse])
+def list_relationship_reviews(
+    status: str = Query("pending"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return relationship_review_service.list_items(db, user_id=current_user.id, status=status)
+
+
+@router.get("/relationships/{relationship_id}", response_model=RelationshipReviewResponse)
+def get_relationship_review(
+    relationship_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    review = relationship_review_service.get_item(db, relationship_id=relationship_id, user_id=current_user.id)
+    if not review:
+        raise HTTPException(status_code=404, detail="Relationship review not found")
+    return review
+
+
+@router.post("/relationships/{relationship_id}/confirm", response_model=RelationshipReviewResponse)
+def confirm_relationship_review(
+    relationship_id: UUID,
+    request: RelationshipReviewDecisionRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    review = relationship_review_service.get_item(db, relationship_id=relationship_id, user_id=current_user.id)
+    if not review:
+        raise HTTPException(status_code=404, detail="Relationship review not found")
+    return relationship_review_service.confirm(
+        db,
+        relationship_review=review,
+        reviewer_id=current_user.id,
+        reason_codes_json=request.reason_codes_json,
+        metadata_json=request.metadata_json,
+    )
+
+
+@router.post("/relationships/{relationship_id}/dismiss", response_model=RelationshipReviewResponse)
+def dismiss_relationship_review(
+    relationship_id: UUID,
+    request: RelationshipReviewDecisionRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    review = relationship_review_service.get_item(db, relationship_id=relationship_id, user_id=current_user.id)
+    if not review:
+        raise HTTPException(status_code=404, detail="Relationship review not found")
+    return relationship_review_service.dismiss(
+        db,
+        relationship_review=review,
+        reviewer_id=current_user.id,
+        reason_codes_json=request.reason_codes_json,
+        metadata_json=request.metadata_json,
     )

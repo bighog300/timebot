@@ -43,6 +43,7 @@ except ModuleNotFoundError:  # pragma: no cover - local test fallback when deps 
         is_archived = _ModelFieldFallback()
         upload_date = _ModelFieldFallback()
 from app.services.embedding_service import embedding_service
+from app.services.relationship_review import relationship_review_service
 
 
 @dataclass
@@ -187,8 +188,27 @@ class RelationshipDetectionService:
             )
             created += 1
 
+            review_type = self._to_review_type(candidate.relationship_type)
+            if review_type:
+                relationship_review_service.create_or_refresh_pending(
+                    db,
+                    source_document_id=candidate.source_doc_id,
+                    target_document_id=candidate.target_doc_id,
+                    relationship_type=review_type,
+                    confidence=candidate.confidence,
+                    reason_codes_json=["model_detection"],
+                    metadata_json=candidate.metadata,
+                )
+
         db.commit()
         return {"created": created, "updated": updated}
+
+    def _to_review_type(self, relationship_type: str) -> str | None:
+        return {
+            "duplicates": "duplicate",
+            "similar_to": "similar",
+            "related_to": "related",
+        }.get(relationship_type)
 
 
 relationship_detection_service = RelationshipDetectionService()
