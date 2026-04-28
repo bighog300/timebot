@@ -8,6 +8,7 @@ from app.models.user import User
 from app.schemas.review_workflow import (
     ActionItemMetricsResponse,
     ActionItemResponse,
+    ActionItemState,
     ActionItemUpdate,
     BulkActionItemMutationResponse,
     BulkMutationRequest,
@@ -19,7 +20,7 @@ router = APIRouter(tags=["action-items"])
 
 @router.get("/action-items", response_model=list[ActionItemResponse])
 def list_action_items(
-    state: str | None = Query(default=None),
+    state: ActionItemState | None = Query(default=None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):

@@ -1,6 +1,7 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models.intelligence import DocumentActionItem, ReviewAuditEvent
@@ -70,18 +71,23 @@ class ActionItemsService:
         from app.models.document import Document
 
         now = now or self._now()
-        items = (
-            db.query(DocumentActionItem)
+        recent_threshold = now - timedelta(hours=recent_window_hours)
+
+        state_counts = (
+            db.query(DocumentActionItem.state, func.count(DocumentActionItem.id))
             .join(Document, Document.id == DocumentActionItem.document_id)
             .filter(Document.user_id == user_id)
+            .group_by(DocumentActionItem.state)
             .all()
         )
+        state_totals = {state: count for state, count in state_counts}
 
-        open_items = [item for item in items if item.state == "open"]
-        completed_items = [item for item in items if item.state == "completed"]
-        dismissed_items = [item for item in items if item.state == "dismissed"]
-        total_count = len(items)
-        recent_threshold = now.timestamp() - (recent_window_hours * 3600)
+        open_items = (
+            db.query(DocumentActionItem)
+            .join(Document, Document.id == DocumentActionItem.document_id)
+            .filter(Document.user_id == user_id, DocumentActionItem.state == "open")
+            .all()
+        )
 
         parseable_open_due_dates = 0
         overdue_count = 0
@@ -93,18 +99,30 @@ class ActionItemsService:
             if due_date < now:
                 overdue_count += 1
 
-        recently_completed_count = 0
-        for item in completed_items:
-            completed_at = self._to_utc(item.completed_at)
-            if completed_at and completed_at.timestamp() >= recent_threshold:
-                recently_completed_count += 1
+        recently_completed_count = (
+            db.query(func.count(DocumentActionItem.id))
+            .join(Document, Document.id == DocumentActionItem.document_id)
+            .filter(
+                Document.user_id == user_id,
+                DocumentActionItem.state == "completed",
+                DocumentActionItem.completed_at.isnot(None),
+                DocumentActionItem.completed_at >= recent_threshold,
+            )
+            .scalar()
+            or 0
+        )
+
+        open_count = state_totals.get("open", 0)
+        completed_count = state_totals.get("completed", 0)
+        dismissed_count = state_totals.get("dismissed", 0)
+        total_count = open_count + completed_count + dismissed_count
 
         return {
-            "open_count": len(open_items),
-            "completed_count": len(completed_items),
-            "dismissed_count": len(dismissed_items),
+            "open_count": open_count,
+            "completed_count": completed_count,
+            "dismissed_count": dismissed_count,
             "overdue_count": overdue_count if parseable_open_due_dates > 0 else None,
-            "completion_rate": round(len(completed_items) / total_count, 4) if total_count else 0.0,
+            "completion_rate": round(completed_count / total_count, 4) if total_count else 0.0,
             "recently_completed_count": recently_completed_count,
         }
 
@@ -159,8 +177,6 @@ class ActionItemsService:
         if metadata is not None:
             item.action_metadata = metadata
         db.add(item)
-        db.commit()
-        db.refresh(item)
         review_audit_service.create_event(
             db,
             document_id=item.document_id,
@@ -170,6 +186,8 @@ class ActionItemsService:
             before_json=before,
             after_json={"content": item.content, "action_metadata": item.action_metadata},
         )
+        db.commit()
+        db.refresh(item)
         return item
 
     def complete_item(self, db: Session, item: DocumentActionItem, actor_id: UUID | None = None) -> DocumentActionItem:
@@ -177,8 +195,6 @@ class ActionItemsService:
         item.state = "completed"
         item.completed_at = self._now()
         db.add(item)
-        db.commit()
-        db.refresh(item)
         review_audit_service.create_event(
             db,
             document_id=item.document_id,
@@ -187,6 +203,8 @@ class ActionItemsService:
             before_json=before,
             after_json={"state": item.state, "completed_at": item.completed_at.isoformat() if item.completed_at else None},
         )
+        db.commit()
+        db.refresh(item)
         return item
 
     def dismiss_item(self, db: Session, item: DocumentActionItem, actor_id: UUID | None = None) -> DocumentActionItem:
@@ -194,8 +212,6 @@ class ActionItemsService:
         item.state = "dismissed"
         item.dismissed_at = self._now()
         db.add(item)
-        db.commit()
-        db.refresh(item)
         review_audit_service.create_event(
             db,
             document_id=item.document_id,
@@ -204,6 +220,8 @@ class ActionItemsService:
             before_json=before,
             after_json={"state": item.state, "dismissed_at": item.dismissed_at.isoformat() if item.dismissed_at else None},
         )
+        db.commit()
+        db.refresh(item)
         return item
 
     def bulk_complete_items(
