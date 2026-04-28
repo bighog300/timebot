@@ -26,8 +26,7 @@ class ReviewAuditService:
             after_json=after_json or {},
         )
         db.add(event)
-        db.commit()
-        db.refresh(event)
+        db.flush()
         return event
 
     def list_events(

@@ -87,8 +87,6 @@ class DocumentIntelligenceService:
         for field, value in updates.items():
             setattr(intelligence, field, value)
         db.add(intelligence)
-        db.commit()
-        db.refresh(intelligence)
         review_audit_service.create_event(
             db,
             document_id=intelligence.document_id,
@@ -97,6 +95,8 @@ class DocumentIntelligenceService:
             before_json=before,
             after_json={field: getattr(intelligence, field) for field in updates},
         )
+        db.commit()
+        db.refresh(intelligence)
         return intelligence
 
     def approve_category(
@@ -115,8 +115,6 @@ class DocumentIntelligenceService:
         review_queue_service.resolve_document_items(db, document.id, "uncategorized")
         db.add(document)
         db.add(intelligence)
-        db.commit()
-        db.refresh(document)
         review_audit_service.create_event(
             db,
             document_id=document.id,
@@ -125,6 +123,8 @@ class DocumentIntelligenceService:
             before_json=before,
             after_json={"user_category_id": str(document.user_category_id), "category_status": intelligence.category_status},
         )
+        db.commit()
+        db.refresh(document)
         return document
 
     def override_category(
@@ -141,8 +141,6 @@ class DocumentIntelligenceService:
         review_queue_service.resolve_document_items(db, document.id, "uncategorized")
         db.add(document)
         db.add(intelligence)
-        db.commit()
-        db.refresh(document)
         review_audit_service.create_event(
             db,
             document_id=document.id,
@@ -151,6 +149,8 @@ class DocumentIntelligenceService:
             before_json=before,
             after_json={"user_category_id": str(document.user_category_id), "category_status": intelligence.category_status},
         )
+        db.commit()
+        db.refresh(document)
         return document
 
     def _refresh_review_items(self, db: Session, document: Document, intelligence: DocumentIntelligence) -> None:

@@ -46,7 +46,7 @@ class RelationshipReviewService:
         reason_codes_json: list[str] | None = None,
         metadata_json: dict | None = None,
     ) -> DocumentRelationshipReview:
-        existing = (
+        pending_matches = (
             db.query(DocumentRelationshipReview)
             .filter(
                 DocumentRelationshipReview.source_document_id == source_document_id,
@@ -54,13 +54,23 @@ class RelationshipReviewService:
                 DocumentRelationshipReview.relationship_type == relationship_type,
                 DocumentRelationshipReview.status == "pending",
             )
-            .first()
+            .order_by(DocumentRelationshipReview.created_at.asc(), DocumentRelationshipReview.id.asc())
+            .all()
         )
+        existing = pending_matches[0] if pending_matches else None
         if existing:
             existing.confidence = confidence
             existing.reason_codes_json = reason_codes_json or []
             existing.metadata_json = metadata_json or {}
             db.add(existing)
+            for duplicate in pending_matches[1:]:
+                duplicate.status = "dismissed"
+                duplicate.reviewed_at = datetime.now(timezone.utc)
+                duplicate.metadata_json = {
+                    **(duplicate.metadata_json or {}),
+                    "deduplicated_to": str(existing.id),
+                }
+                db.add(duplicate)
             return existing
 
         created = DocumentRelationshipReview(

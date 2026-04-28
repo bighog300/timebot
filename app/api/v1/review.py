@@ -9,8 +9,12 @@ from app.schemas.review_workflow import (
     BulkMutationRequest,
     BulkReviewItemMutationResponse,
     DocumentReviewItemResponse,
-
+    RelationshipReviewDecisionRequest,
+    RelationshipReviewResponse,
+    RelationshipReviewStatus,
     ReviewAuditEventResponse,
+    ReviewItemStatus,
+    ReviewMetricsResponse,
     ReviewResolutionRequest,
 )
 from app.services.review_audit import review_audit_service
@@ -22,7 +26,7 @@ router = APIRouter(prefix="/review", tags=["review"])
 
 @router.get("/items", response_model=list[DocumentReviewItemResponse])
 def list_review_items(
-    status: str = Query("open"),
+    status: ReviewItemStatus = Query(ReviewItemStatus.OPEN),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -124,7 +128,7 @@ def list_review_audit_events(
 
 @router.get("/relationships", response_model=list[RelationshipReviewResponse])
 def list_relationship_reviews(
-    status: str = Query("pending"),
+    status: RelationshipReviewStatus = Query(RelationshipReviewStatus.PENDING),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
