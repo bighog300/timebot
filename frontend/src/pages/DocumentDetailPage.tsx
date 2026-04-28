@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams } from 'react-router-dom';
 import { api } from '@/services/api';
@@ -5,6 +6,15 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { ErrorState, LoadingState, EmptyState } from '@/components/ui/States';
 import { useUIStore } from '@/store/uiStore';
+import {
+  useApproveDocumentCategory,
+  useCategories,
+  useDocumentActionItems,
+  useDocumentAuditHistory,
+  useDocumentIntelligence,
+  useOverrideDocumentCategory,
+  usePatchDocumentIntelligence,
+} from '@/hooks/useApi';
 
 export function DocumentDetailPage() {
   const { id = '' } = useParams();
@@ -12,6 +22,26 @@ export function DocumentDetailPage() {
   const pushToast = useUIStore((s) => s.pushToast);
   const documentQuery = useQuery({ queryKey: ['document', id], queryFn: () => api.getDocument(id), enabled: !!id });
   const similarQuery = useQuery({ queryKey: ['similar', id], queryFn: () => api.findSimilar(id), enabled: !!id });
+
+  const intelligenceQuery = useDocumentIntelligence(id);
+  const categoriesQuery = useCategories();
+  const actionItemsQuery = useDocumentActionItems(id);
+  const auditQuery = useDocumentAuditHistory(id);
+  const patchIntelligence = usePatchDocumentIntelligence(id);
+  const approveCategory = useApproveDocumentCategory(id);
+  const overrideCategory = useOverrideDocumentCategory(id);
+
+  const [summaryDraft, setSummaryDraft] = useState('');
+  const [tagsDraft, setTagsDraft] = useState('');
+  const [keyPointsDraft, setKeyPointsDraft] = useState('');
+  const [categoryOverrideId, setCategoryOverrideId] = useState('');
+
+  useEffect(() => {
+    if (!intelligenceQuery.data) return;
+    setSummaryDraft(intelligenceQuery.data.summary ?? '');
+    setTagsDraft(intelligenceQuery.data.suggested_tags.join(', '));
+    setKeyPointsDraft(intelligenceQuery.data.key_points.join('\n'));
+  }, [intelligenceQuery.data]);
 
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ['document', id] });
@@ -65,28 +95,76 @@ export function DocumentDetailPage() {
           Delete
         </Button>
       </div>
+
       <Card>
-        <h2 className="mb-2 text-lg">Summary</h2>
-        <p className="text-slate-300">{doc.summary ?? 'No summary'}</p>
+        <h2 className="mb-2 text-lg">Document intelligence</h2>
+        {intelligenceQuery.isLoading && <LoadingState label="Loading intelligence..." />}
+        {intelligenceQuery.isError && <ErrorState message="Failed to load intelligence." />}
+        {intelligenceQuery.data && (
+          <div className="space-y-3">
+            <div className="text-sm text-slate-300">Confidence: <span className="font-medium">{intelligenceQuery.data.confidence}</span></div>
+            <div className="text-sm text-slate-300">Suggested category: <span className="font-medium">{doc.ai_category?.name ?? 'None'}</span></div>
+            <textarea className="w-full rounded border border-slate-700 bg-slate-950 p-2 text-sm" value={summaryDraft} onChange={(e) => setSummaryDraft(e.target.value)} rows={4} />
+            <textarea className="w-full rounded border border-slate-700 bg-slate-950 p-2 text-sm" value={keyPointsDraft} onChange={(e) => setKeyPointsDraft(e.target.value)} rows={4} />
+            <input className="w-full rounded border border-slate-700 bg-slate-950 p-2 text-sm" value={tagsDraft} onChange={(e) => setTagsDraft(e.target.value)} />
+            <div className="flex flex-wrap gap-2">
+              <Button
+                onClick={() =>
+                  patchIntelligence.mutate({
+                    summary: summaryDraft,
+                    key_points: keyPointsDraft.split('\n').map((v) => v.trim()).filter(Boolean),
+                    suggested_tags: tagsDraft.split(',').map((v) => v.trim()).filter(Boolean),
+                  })
+                }
+              >
+                Save intelligence edits
+              </Button>
+              <Button className="bg-emerald-700 hover:bg-emerald-600" onClick={() => approveCategory.mutate()}>Approve category</Button>
+              <select className="rounded border border-slate-700 bg-slate-950 px-2 py-2 text-sm" value={categoryOverrideId} onChange={(e) => setCategoryOverrideId(e.target.value)}>
+                <option value="">Select category override</option>
+                {(categoriesQuery.data ?? []).map((cat) => (
+                  <option key={cat.id} value={cat.id}>{cat.name}</option>
+                ))}
+              </select>
+              <Button disabled={!categoryOverrideId} onClick={() => overrideCategory.mutate(categoryOverrideId)}>Override category</Button>
+            </div>
+            <div>
+              <h3 className="mb-2 font-medium">Key points</h3>
+              <ul className="list-disc space-y-1 pl-5 text-sm">{intelligenceQuery.data.key_points.map((point) => <li key={point}>{point}</li>)}</ul>
+            </div>
+            <div>
+              <h3 className="mb-2 font-medium">Tags</h3>
+              <div className="flex flex-wrap gap-2">{intelligenceQuery.data.suggested_tags.map((tag) => <span className="rounded bg-slate-800 px-2 py-1 text-xs" key={tag}>{tag}</span>)}</div>
+            </div>
+            <div>
+              <h3 className="mb-2 font-medium">Entities</h3>
+              <pre className="overflow-auto text-xs text-slate-300">{JSON.stringify(intelligenceQuery.data.entities ?? {}, null, 2)}</pre>
+            </div>
+          </div>
+        )}
       </Card>
+
       <div className="grid gap-3 md:grid-cols-2">
         <Card>
-          <h3 className="mb-2">Key points</h3>
-          <ul className="list-disc space-y-1 pl-5 text-sm">{(doc.key_points ?? []).map((point) => <li key={point}>{point}</li>)}</ul>
+          <h3 className="mb-2">Document action items</h3>
+          {actionItemsQuery.isLoading && <LoadingState label="Loading action items..." />}
+          {actionItemsQuery.isError && <ErrorState message="Failed to load action items." />}
+          {actionItemsQuery.isSuccess && (actionItemsQuery.data?.length ?? 0) === 0 && <EmptyState label="No action items." />}
+          <ul className="list-disc space-y-1 pl-5 text-sm">{(actionItemsQuery.data ?? []).map((item) => <li key={item.id}>{item.content} ({item.state})</li>)}</ul>
         </Card>
         <Card>
-          <h3 className="mb-2">Action items</h3>
-          <ul className="list-disc space-y-1 pl-5 text-sm">{(doc.action_items ?? []).map((item) => <li key={item}>{item}</li>)}</ul>
+          <h3 className="mb-2">Review audit history</h3>
+          {auditQuery.isLoading && <LoadingState label="Loading audit history..." />}
+          {auditQuery.isError && <ErrorState message="Failed to load audit history." />}
+          {auditQuery.isSuccess && (auditQuery.data?.length ?? 0) === 0 && <EmptyState label="No audit events." />}
+          <ul className="space-y-2 text-sm">
+            {(auditQuery.data ?? []).map((event) => (
+              <li key={event.id} className="rounded border border-slate-800 p-2">{event.event_type} · {new Date(event.created_at).toLocaleString()}</li>
+            ))}
+          </ul>
         </Card>
       </div>
-      <Card>
-        <h3 className="mb-2">Tags</h3>
-        <div className="flex flex-wrap gap-2">{[...doc.ai_tags, ...doc.user_tags].map((tag) => <span className="rounded bg-slate-700 px-2 py-1 text-xs" key={tag}>{tag}</span>)}</div>
-      </Card>
-      <Card>
-        <h3 className="mb-2">Entities</h3>
-        <pre className="overflow-auto text-xs text-slate-300">{JSON.stringify(doc.entities ?? {}, null, 2)}</pre>
-      </Card>
+
       <Card>
         <h3 className="mb-2">Similar documents</h3>
         {similarQuery.isLoading && <LoadingState label="Loading similar documents..." />}

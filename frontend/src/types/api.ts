@@ -167,3 +167,92 @@ export interface AuthResponse {
   token_type: string;
   user: AuthUser;
 }
+
+export interface DocumentIntelligence {
+  document_id: string;
+  summary: string | null;
+  key_points: string[];
+  suggested_category_id: string | null;
+  confidence: 'low' | 'medium' | 'high';
+  suggested_tags: string[];
+  entities: Record<string, unknown>;
+  model_name: string | null;
+  model_version: string | null;
+  model_metadata: Record<string, unknown>;
+  category_status: 'suggested' | 'approved' | 'overridden';
+  generated_at: string;
+  updated_at: string;
+}
+
+export interface ReviewItem {
+  id: string;
+  document_id: string;
+  review_type: 'low_confidence' | 'uncategorized' | 'missing_tags' | 'duplicates' | 'action_items' | 'processing_issues';
+  status: 'open' | 'resolved' | 'dismissed';
+  reason: string | null;
+  payload: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+  resolved_at: string | null;
+  dismissed_at: string | null;
+}
+
+export interface ActionItem {
+  id: string;
+  document_id: string;
+  content: string;
+  state: 'open' | 'completed' | 'dismissed';
+  source: string;
+  action_metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+  completed_at: string | null;
+  dismissed_at: string | null;
+}
+
+export interface ReviewMetrics {
+  open_review_count: number;
+  resolved_review_count: number;
+  dismissed_review_count: number;
+  open_by_type: Record<string, number>;
+  open_by_priority: Record<string, number>;
+  average_age_hours: number;
+  oldest_open_items: Array<Record<string, unknown>>;
+  recently_resolved_count: number;
+  low_confidence_category_count: number;
+  uncategorized_count: number;
+}
+
+export interface ActionItemMetrics {
+  open_count: number;
+  completed_count: number;
+  dismissed_count: number;
+  overdue_count?: number | null;
+  completion_rate: number;
+  recently_completed_count: number;
+}
+
+export interface ReviewAuditEvent {
+  id: string;
+  document_id: string;
+  actor_id: string | null;
+  event_type: string;
+  note: string | null;
+  before_json: Record<string, unknown>;
+  after_json: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface RelationshipReviewItem {
+  id: string;
+  source_document_id: string;
+  target_document_id: string;
+  relationship_type: 'duplicate' | 'similar' | 'related';
+  confidence: number | null;
+  status: 'pending' | 'confirmed' | 'dismissed';
+  reason_codes_json: string[];
+  metadata_json: Record<string, unknown>;
+  created_at: string;
+  reviewed_at: string | null;
+  reviewed_by: string | null;
+}
