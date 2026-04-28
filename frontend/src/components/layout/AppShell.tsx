@@ -4,11 +4,14 @@ import { useQueueStats } from '@/hooks/useApi';
 import { useAuth } from '@/auth/AuthContext';
 
 const links = [
-  ['/', 'Timeline'],
+  ['/dashboard', 'Dashboard'],
+  ['/timeline', 'Timeline'],
   ['/documents', 'Documents'],
   ['/search', 'Search'],
   ['/queue', 'Queue'],
   ['/review', 'Review'],
+  ['/review/relationships', 'Relationships'],
+  ['/action-items', 'Action Items'],
   ['/categories', 'Categories'],
   ['/insights', 'Insights'],
   ['/connections', 'Connections'],

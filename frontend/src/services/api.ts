@@ -1,11 +1,18 @@
 import { http } from '@/services/http';
 import type {
+  ActionItem,
+  ActionItemMetrics,
   Connection,
   ConnectStartResponse,
   Document,
+  DocumentIntelligence,
   InsightsResponse,
   QueueItem,
   QueueStats,
+  RelationshipReviewItem,
+  ReviewAuditEvent,
+  ReviewItem,
+  ReviewMetrics,
   SearchResponse,
   SemanticSearchResponse,
   SyncLog,
@@ -46,6 +53,44 @@ export const api = {
   getQueueStats: async (): Promise<QueueStats> => (await http.get('/queue/stats')).data,
   getQueueItems: async (): Promise<QueueItem[]> => (await http.get('/queue/items')).data,
   getReviewQueue: async (): Promise<Document[]> => (await http.get('/documents/review-queue')).data,
+  listReviewItems: async (status: 'open' | 'resolved' | 'dismissed' = 'open'): Promise<ReviewItem[]> =>
+    (await http.get('/review/items', { params: { status } })).data,
+  resolveReviewItem: async (id: string, note?: string): Promise<ReviewItem> =>
+    (await http.post(`/review/items/${id}/resolve`, { note })).data,
+  dismissReviewItem: async (id: string, note?: string): Promise<ReviewItem> =>
+    (await http.post(`/review/items/${id}/dismiss`, { note })).data,
+  bulkResolveReviewItems: async (ids: string[], note?: string): Promise<{ updated_count: number; skipped_count: number; items: ReviewItem[] }> =>
+    (await http.post('/review/items/bulk-resolve', { ids, note })).data,
+  bulkDismissReviewItems: async (ids: string[], note?: string): Promise<{ updated_count: number; skipped_count: number; items: ReviewItem[] }> =>
+    (await http.post('/review/items/bulk-dismiss', { ids, note })).data,
+  getReviewMetrics: async (): Promise<ReviewMetrics> => (await http.get('/review/metrics')).data,
+  listReviewAuditEvents: async (documentId?: string): Promise<ReviewAuditEvent[]> =>
+    (await http.get('/review/audit', { params: documentId ? { document_id: documentId } : undefined })).data,
+  listRelationshipReviews: async (status: 'pending' | 'confirmed' | 'dismissed' = 'pending'): Promise<RelationshipReviewItem[]> =>
+    (await http.get('/review/relationships', { params: { status } })).data,
+  confirmRelationshipReview: async (id: string): Promise<RelationshipReviewItem> =>
+    (await http.post(`/review/relationships/${id}/confirm`, { reason_codes_json: [], metadata_json: {} })).data,
+  dismissRelationshipReview: async (id: string): Promise<RelationshipReviewItem> =>
+    (await http.post(`/review/relationships/${id}/dismiss`, { reason_codes_json: [], metadata_json: {} })).data,
+  getDocumentIntelligence: async (id: string): Promise<DocumentIntelligence> => (await http.get(`/documents/${id}/intelligence`)).data,
+  patchDocumentIntelligence: async (
+    id: string,
+    patch: Partial<Pick<DocumentIntelligence, 'summary' | 'key_points' | 'suggested_tags' | 'entities' | 'model_metadata'>>,
+  ): Promise<DocumentIntelligence> => (await http.patch(`/documents/${id}/intelligence`, patch)).data,
+  approveDocumentCategory: async (id: string): Promise<Document> => (await http.post(`/documents/${id}/category/approve`)).data,
+  overrideDocumentCategory: async (id: string, categoryId: string): Promise<Document> =>
+    (await http.post(`/documents/${id}/category/override`, { category_id: categoryId })).data,
+  getDocumentAuditHistory: async (id: string): Promise<ReviewAuditEvent[]> => (await http.get(`/documents/${id}/review-audit`)).data,
+  listActionItems: async (state?: 'open' | 'completed' | 'dismissed'): Promise<ActionItem[]> =>
+    (await http.get('/action-items', { params: state ? { state } : undefined })).data,
+  completeActionItem: async (id: string): Promise<ActionItem> => (await http.post(`/action-items/${id}/complete`)).data,
+  dismissActionItem: async (id: string): Promise<ActionItem> => (await http.post(`/action-items/${id}/dismiss`)).data,
+  bulkCompleteActionItems: async (ids: string[], note?: string): Promise<{ updated_count: number; skipped_count: number; items: ActionItem[] }> =>
+    (await http.post('/action-items/bulk-complete', { ids, note })).data,
+  bulkDismissActionItems: async (ids: string[], note?: string): Promise<{ updated_count: number; skipped_count: number; items: ActionItem[] }> =>
+    (await http.post('/action-items/bulk-dismiss', { ids, note })).data,
+  listDocumentActionItems: async (documentId: string): Promise<ActionItem[]> => (await http.get(`/documents/${documentId}/action-items`)).data,
+  getActionItemMetrics: async (): Promise<ActionItemMetrics> => (await http.get('/action-items/metrics')).data,
   reviewDocument: async (
     id: string,
     action: 'approve' | 'reject' | 'edit',

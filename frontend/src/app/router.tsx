@@ -13,6 +13,10 @@ import { ConnectionCallbackPage } from '@/pages/ConnectionCallbackPage';
 import { LoginPage } from '@/pages/auth/LoginPage';
 import { RegisterPage } from '@/pages/auth/RegisterPage';
 import { RequireAuth } from '@/components/auth/RequireAuth';
+import { DashboardPage } from '@/pages/DashboardPage';
+import { ActionItemsPage } from '@/pages/ActionItemsPage';
+import { RelationshipReviewPage } from '@/pages/RelationshipReviewPage';
+import { Navigate } from 'react-router-dom';
 
 export const router = createBrowserRouter([
   { path: '/login', element: <LoginPage /> },
@@ -25,12 +29,17 @@ export const router = createBrowserRouter([
       </RequireAuth>
     ),
     children: [
-      { index: true, element: <TimelinePage /> },
+      { index: true, element: <Navigate to="/dashboard" replace /> },
+      { path: 'dashboard', element: <DashboardPage /> },
+      { path: 'timeline', element: <TimelinePage /> },
       { path: 'documents', element: <DocumentsPage /> },
       { path: 'documents/:id', element: <DocumentDetailPage /> },
+      { path: 'documents/:id/intelligence', element: <DocumentDetailPage /> },
       { path: 'search', element: <SearchPage /> },
       { path: 'queue', element: <QueuePage /> },
       { path: 'review', element: <ReviewQueuePage /> },
+      { path: 'review/relationships', element: <RelationshipReviewPage /> },
+      { path: 'action-items', element: <ActionItemsPage /> },
       { path: 'categories', element: <CategoriesPage /> },
       { path: 'insights', element: <InsightsPage /> },
       { path: 'connections', element: <ConnectionsPage /> },
