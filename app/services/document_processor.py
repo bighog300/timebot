@@ -117,7 +117,7 @@ class DocumentProcessor:
     def _run_ai_analysis(self, db: Session, document: Document, text: str):
         from app.models.category import Category
         from app.services.ai_analyzer import ai_analyzer
-        from app.services.categorizer import categorizer
+        from app.services.document_intelligence import document_intelligence_service
 
         categories = db.query(Category).all()
         analysis = ai_analyzer.analyze_document(
@@ -128,18 +128,12 @@ class DocumentProcessor:
         )
         if analysis:
             confidence = ai_analyzer.compute_confidence(analysis)
-            document.summary = analysis.get("summary")
-            document.key_points = analysis.get("key_points", [])
-            document.entities = analysis.get("entities", {})
-            document.action_items = analysis.get("action_items", [])
-            document.ai_tags = analysis.get("tags", [])
-            document.ai_confidence = confidence
             document.review_status = (
                 "pending"
                 if confidence < settings.REVIEW_CONFIDENCE_THRESHOLD
                 else "approved"
             )
-            categorizer.apply_category(db, document, analysis)
+            document_intelligence_service.create_from_analysis(db, document, analysis)
 
 
 document_processor = DocumentProcessor()

@@ -14,6 +14,12 @@ from app.schemas.document import (
     DocumentSearchResponse,
     DocumentUpdate,
 )
+from app.schemas.review_workflow import (
+    CategoryOverrideRequest,
+    DocumentIntelligenceResponse,
+    DocumentIntelligenceUpdate,
+)
+from app.services.document_intelligence import document_intelligence_service
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
@@ -120,3 +126,77 @@ def review_document(
             updates["override_tags"] = review_in.override_tags
 
     return crud_document.update_document_fields(db, db_obj=document, **updates)
+
+
+@router.get("/{document_id}/intelligence", response_model=DocumentIntelligenceResponse)
+def get_document_intelligence(document_id: UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    document = crud_document.get_document(db, id=document_id, user=current_user)
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+    intelligence = document_intelligence_service.get_for_document(db, document)
+    if not intelligence:
+        raise HTTPException(status_code=404, detail="Document intelligence not found")
+    return intelligence
+
+
+@router.post("/{document_id}/intelligence/regenerate", response_model=DocumentIntelligenceResponse)
+def regenerate_document_intelligence(document_id: UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    document = crud_document.get_document(db, id=document_id, user=current_user)
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+    try:
+        return document_intelligence_service.regenerate(db, document)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@router.patch("/{document_id}/intelligence", response_model=DocumentIntelligenceResponse)
+def patch_document_intelligence(
+    document_id: UUID,
+    intelligence_in: DocumentIntelligenceUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    document = crud_document.get_document(db, id=document_id, user=current_user)
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+    intelligence = document_intelligence_service.get_for_document(db, document)
+    if not intelligence:
+        raise HTTPException(status_code=404, detail="Document intelligence not found")
+    return document_intelligence_service.update_intelligence(
+        db,
+        intelligence,
+        intelligence_in.model_dump(exclude_unset=True),
+    )
+
+
+@router.post("/{document_id}/category/approve", response_model=DocumentResponse)
+def approve_document_category(document_id: UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    document = crud_document.get_document(db, id=document_id, user=current_user)
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+    intelligence = document_intelligence_service.get_for_document(db, document)
+    if not intelligence:
+        raise HTTPException(status_code=404, detail="Document intelligence not found")
+    try:
+        return document_intelligence_service.approve_category(db, document, intelligence)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/{document_id}/category/override", response_model=DocumentResponse)
+def override_document_category(
+    document_id: UUID,
+    override_in: CategoryOverrideRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    document = crud_document.get_document(db, id=document_id, user=current_user)
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+    intelligence = document_intelligence_service.get_for_document(db, document)
+    if not intelligence:
+        raise HTTPException(status_code=404, detail="Document intelligence not found")
+    return document_intelligence_service.override_category(db, document, intelligence, override_in.category_id)

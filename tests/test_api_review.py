@@ -138,7 +138,18 @@ def test_low_confidence_documents_enter_pending_review(monkeypatch):
             "tags": [],
         },
     )
-    monkeypatch.setattr("app.services.categorizer.categorizer.apply_category", lambda db, document, analysis: None)
+    def _create_from_analysis(db, document, analysis):
+        document.summary = analysis.get("summary")
+        document.key_points = analysis.get("key_points", [])
+        document.entities = analysis.get("entities", {})
+        document.action_items = analysis.get("action_items", [])
+        document.ai_tags = analysis.get("tags", [])
+        document.ai_confidence = 0.45
+
+    monkeypatch.setattr(
+        "app.services.document_intelligence.document_intelligence_service.create_from_analysis",
+        _create_from_analysis,
+    )
 
     class FakeCategoryQuery:
         def all(self):
