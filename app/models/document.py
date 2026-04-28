@@ -87,6 +87,13 @@ class Document(Base):
         cascade="all, delete-orphan",
     )
     queue_items = relationship("ProcessingQueue", back_populates="document", cascade="all, delete-orphan")
+    intelligence = relationship("DocumentIntelligence", back_populates="document", uselist=False, cascade="all, delete-orphan")
+    review_items = relationship("DocumentReviewItem", back_populates="document", cascade="all, delete-orphan")
+    structured_action_items = relationship(
+        "DocumentActionItem",
+        back_populates="document",
+        cascade="all, delete-orphan",
+    )
     versions = relationship(
         "DocumentVersion",
         back_populates="document",

@@ -8,6 +8,7 @@ from sqlalchemy import text
 
 from app.config import settings
 from app.api.v1 import (
+    action_items,
     analysis,
     auth,
     categories,
@@ -15,6 +16,7 @@ from app.api.v1 import (
     documents,
     insights,
     queue,
+    review,
     search,
     upload,
     websocket,
@@ -70,6 +72,8 @@ app.include_router(search.router, prefix="/api/v1")
 app.include_router(insights.router, prefix="/api/v1")
 app.include_router(connections.router, prefix="/api/v1")
 app.include_router(auth.router, prefix="/api/v1")
+app.include_router(review.router, prefix="/api/v1")
+app.include_router(action_items.router, prefix="/api/v1")
 
 
 @app.get("/health", tags=["health"])

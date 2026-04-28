@@ -1,0 +1,71 @@
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.orm import Session
+
+from app.api.deps import get_current_user, get_db
+from app.models.user import User
+from app.schemas.review_workflow import ActionItemResponse, ActionItemUpdate
+from app.services.action_items import action_items_service
+
+router = APIRouter(tags=["action-items"])
+
+
+@router.get("/action-items", response_model=list[ActionItemResponse])
+def list_action_items(
+    state: str | None = Query(default=None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return action_items_service.list_items(db, user_id=current_user.id, state=state)
+
+
+@router.get("/documents/{document_id}/action-items", response_model=list[ActionItemResponse])
+def list_document_action_items(
+    document_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return action_items_service.list_document_items(db, user_id=current_user.id, document_id=document_id)
+
+
+@router.patch("/action-items/{action_item_id}", response_model=ActionItemResponse)
+def update_action_item(
+    action_item_id: UUID,
+    action_in: ActionItemUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    item = action_items_service.get_item(db, user_id=current_user.id, action_item_id=action_item_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="Action item not found")
+    return action_items_service.update_item(
+        db,
+        item,
+        content=action_in.content,
+        metadata=action_in.action_metadata,
+    )
+
+
+@router.post("/action-items/{action_item_id}/complete", response_model=ActionItemResponse)
+def complete_action_item(
+    action_item_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    item = action_items_service.get_item(db, user_id=current_user.id, action_item_id=action_item_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="Action item not found")
+    return action_items_service.complete_item(db, item)
+
+
+@router.post("/action-items/{action_item_id}/dismiss", response_model=ActionItemResponse)
+def dismiss_action_item(
+    action_item_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    item = action_items_service.get_item(db, user_id=current_user.id, action_item_id=action_item_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="Action item not found")
+    return action_items_service.dismiss_item(db, item)

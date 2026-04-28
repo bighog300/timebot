@@ -20,7 +20,7 @@ def analyze_document(document_id: UUID, db: Session = Depends(get_db), current_u
     from app.crud.document import get_document
     from app.models.category import Category
     from app.services.ai_analyzer import ai_analyzer
-    from app.services.categorizer import categorizer
+    from app.services.document_intelligence import document_intelligence_service
 
     document = get_document(db, id=document_id, user=current_user)
     if not document:
@@ -38,14 +38,6 @@ def analyze_document(document_id: UUID, db: Session = Depends(get_db), current_u
     if not analysis:
         raise HTTPException(status_code=500, detail="AI analysis failed")
 
-    document.summary = analysis.get("summary")
-    document.key_points = analysis.get("key_points", [])
-    document.entities = analysis.get("entities", {})
-    document.action_items = analysis.get("action_items", [])
-    document.ai_tags = analysis.get("tags", [])
-    categorizer.apply_category(db, document, analysis)
-    db.add(document)
-    db.commit()
-    db.refresh(document)
+    document_intelligence_service.create_from_analysis(db, document, analysis)
 
     return {"document_id": str(document_id), "analysis": analysis, "status": "completed"}
