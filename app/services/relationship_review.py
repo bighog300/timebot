@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session, aliased
 
 from app.models.document import Document
 from app.models.intelligence import DocumentRelationshipReview
+from app.services.review_audit import review_audit_service
 
 
 class RelationshipReviewService:
@@ -94,6 +95,16 @@ class RelationshipReviewService:
         reason_codes_json: list[str] | None = None,
         metadata_json: dict | None = None,
     ) -> DocumentRelationshipReview:
+        if relationship_review.status == "confirmed":
+            return relationship_review
+        if relationship_review.status != "pending":
+            raise ValueError("Only pending relationship reviews can be confirmed")
+
+        before = {
+            "status": relationship_review.status,
+            "reviewed_at": relationship_review.reviewed_at.isoformat() if relationship_review.reviewed_at else None,
+            "reviewed_by": str(relationship_review.reviewed_by) if relationship_review.reviewed_by else None,
+        }
         relationship_review.status = "confirmed"
         relationship_review.reviewed_at = datetime.now(timezone.utc)
         relationship_review.reviewed_by = reviewer_id
@@ -102,6 +113,20 @@ class RelationshipReviewService:
         if metadata_json is not None:
             relationship_review.metadata_json = metadata_json
         db.add(relationship_review)
+        review_audit_service.create_event(
+            db,
+            document_id=relationship_review.source_document_id,
+            event_type="relationship_review_confirmed",
+            actor_id=reviewer_id,
+            before_json=before,
+            after_json={
+                "status": relationship_review.status,
+                "reviewed_at": relationship_review.reviewed_at.isoformat() if relationship_review.reviewed_at else None,
+                "reviewed_by": str(relationship_review.reviewed_by) if relationship_review.reviewed_by else None,
+                "target_document_id": str(relationship_review.target_document_id),
+                "relationship_review_id": str(relationship_review.id),
+            },
+        )
         db.commit()
         db.refresh(relationship_review)
         return relationship_review
@@ -115,6 +140,16 @@ class RelationshipReviewService:
         reason_codes_json: list[str] | None = None,
         metadata_json: dict | None = None,
     ) -> DocumentRelationshipReview:
+        if relationship_review.status == "dismissed":
+            return relationship_review
+        if relationship_review.status != "pending":
+            raise ValueError("Only pending relationship reviews can be dismissed")
+
+        before = {
+            "status": relationship_review.status,
+            "reviewed_at": relationship_review.reviewed_at.isoformat() if relationship_review.reviewed_at else None,
+            "reviewed_by": str(relationship_review.reviewed_by) if relationship_review.reviewed_by else None,
+        }
         relationship_review.status = "dismissed"
         relationship_review.reviewed_at = datetime.now(timezone.utc)
         relationship_review.reviewed_by = reviewer_id
@@ -123,6 +158,20 @@ class RelationshipReviewService:
         if metadata_json is not None:
             relationship_review.metadata_json = metadata_json
         db.add(relationship_review)
+        review_audit_service.create_event(
+            db,
+            document_id=relationship_review.source_document_id,
+            event_type="relationship_review_dismissed",
+            actor_id=reviewer_id,
+            before_json=before,
+            after_json={
+                "status": relationship_review.status,
+                "reviewed_at": relationship_review.reviewed_at.isoformat() if relationship_review.reviewed_at else None,
+                "reviewed_by": str(relationship_review.reviewed_by) if relationship_review.reviewed_by else None,
+                "target_document_id": str(relationship_review.target_document_id),
+                "relationship_review_id": str(relationship_review.id),
+            },
+        )
         db.commit()
         db.refresh(relationship_review)
         return relationship_review

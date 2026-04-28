@@ -191,6 +191,11 @@ class ActionItemsService:
         return item
 
     def complete_item(self, db: Session, item: DocumentActionItem, actor_id: UUID | None = None) -> DocumentActionItem:
+        if item.state == "completed":
+            return item
+        if item.state != "open":
+            raise ValueError("Only open action items can be completed")
+
         before = {"state": item.state, "completed_at": item.completed_at.isoformat() if item.completed_at else None}
         item.state = "completed"
         item.completed_at = self._now()
@@ -208,6 +213,11 @@ class ActionItemsService:
         return item
 
     def dismiss_item(self, db: Session, item: DocumentActionItem, actor_id: UUID | None = None) -> DocumentActionItem:
+        if item.state == "dismissed":
+            return item
+        if item.state != "open":
+            raise ValueError("Only open action items can be dismissed")
+
         before = {"state": item.state, "dismissed_at": item.dismissed_at.isoformat() if item.dismissed_at else None}
         item.state = "dismissed"
         item.dismissed_at = self._now()
@@ -249,8 +259,16 @@ class ActionItemsService:
         items_by_id = {str(item.id): item for item in items}
         ordered_items = [items_by_id[str(item_id)] for item_id in unique_ids if str(item_id) in items_by_id]
         skipped_count = len(item_ids) - len(ordered_items)
+        affected_items: list[DocumentActionItem] = []
 
         for item in ordered_items:
+            if item.state == "completed":
+                affected_items.append(item)
+                continue
+            if item.state != "open":
+                skipped_count += 1
+                continue
+
             before = {"state": item.state, "completed_at": item.completed_at.isoformat() if item.completed_at else None}
             item.state = "completed"
             item.completed_at = now
@@ -265,11 +283,12 @@ class ActionItemsService:
                     after_json={"state": item.state, "completed_at": item.completed_at.isoformat()},
                 )
             )
+            affected_items.append(item)
 
         db.commit()
-        for item in ordered_items:
+        for item in affected_items:
             db.refresh(item)
-        return ordered_items, skipped_count
+        return affected_items, skipped_count
 
     def bulk_dismiss_items(
         self,
@@ -296,8 +315,16 @@ class ActionItemsService:
         items_by_id = {str(item.id): item for item in items}
         ordered_items = [items_by_id[str(item_id)] for item_id in unique_ids if str(item_id) in items_by_id]
         skipped_count = len(item_ids) - len(ordered_items)
+        affected_items: list[DocumentActionItem] = []
 
         for item in ordered_items:
+            if item.state == "dismissed":
+                affected_items.append(item)
+                continue
+            if item.state != "open":
+                skipped_count += 1
+                continue
+
             before = {"state": item.state, "dismissed_at": item.dismissed_at.isoformat() if item.dismissed_at else None}
             item.state = "dismissed"
             item.dismissed_at = now
@@ -312,11 +339,12 @@ class ActionItemsService:
                     after_json={"state": item.state, "dismissed_at": item.dismissed_at.isoformat()},
                 )
             )
+            affected_items.append(item)
 
         db.commit()
-        for item in ordered_items:
+        for item in affected_items:
             db.refresh(item)
-        return ordered_items, skipped_count
+        return affected_items, skipped_count
 
 
 action_items_service = ActionItemsService()

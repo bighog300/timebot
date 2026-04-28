@@ -190,6 +190,11 @@ class ReviewQueueService:
         note: str | None = None,
         actor_id: UUID | None = None,
     ) -> DocumentReviewItem:
+        if item.status == "resolved":
+            return item
+        if item.status != "open":
+            raise ValueError("Only open review items can be resolved")
+
         before = {"status": item.status, "resolved_at": item.resolved_at.isoformat() if item.resolved_at else None}
         item.status = "resolved"
         item.resolved_at = self._now()
@@ -218,6 +223,11 @@ class ReviewQueueService:
         note: str | None = None,
         actor_id: UUID | None = None,
     ) -> DocumentReviewItem:
+        if item.status == "dismissed":
+            return item
+        if item.status != "open":
+            raise ValueError("Only open review items can be dismissed")
+
         before = {"status": item.status, "dismissed_at": item.dismissed_at.isoformat() if item.dismissed_at else None}
         item.status = "dismissed"
         item.dismissed_at = self._now()
@@ -279,8 +289,16 @@ class ReviewQueueService:
         items_by_id = {str(item.id): item for item in items}
         ordered_items = [items_by_id[str(item_id)] for item_id in unique_ids if str(item_id) in items_by_id]
         skipped_count = len(item_ids) - len(ordered_items)
+        affected_items: list[DocumentReviewItem] = []
 
         for item in ordered_items:
+            if item.status == "resolved":
+                affected_items.append(item)
+                continue
+            if item.status != "open":
+                skipped_count += 1
+                continue
+
             before = {
                 "status": item.status,
                 "resolved_at": item.resolved_at.isoformat() if item.resolved_at else None,
@@ -302,11 +320,12 @@ class ReviewQueueService:
                     after_json={"status": item.status, "resolved_at": item.resolved_at.isoformat()},
                 )
             )
+            affected_items.append(item)
 
         db.commit()
-        for item in ordered_items:
+        for item in affected_items:
             db.refresh(item)
-        return ordered_items, skipped_count
+        return affected_items, skipped_count
 
     def bulk_dismiss_items(
         self,
@@ -333,8 +352,16 @@ class ReviewQueueService:
         items_by_id = {str(item.id): item for item in items}
         ordered_items = [items_by_id[str(item_id)] for item_id in unique_ids if str(item_id) in items_by_id]
         skipped_count = len(item_ids) - len(ordered_items)
+        affected_items: list[DocumentReviewItem] = []
 
         for item in ordered_items:
+            if item.status == "dismissed":
+                affected_items.append(item)
+                continue
+            if item.status != "open":
+                skipped_count += 1
+                continue
+
             before = {
                 "status": item.status,
                 "dismissed_at": item.dismissed_at.isoformat() if item.dismissed_at else None,
@@ -356,11 +383,12 @@ class ReviewQueueService:
                     after_json={"status": item.status, "dismissed_at": item.dismissed_at.isoformat()},
                 )
             )
+            affected_items.append(item)
 
         db.commit()
-        for item in ordered_items:
+        for item in affected_items:
             db.refresh(item)
-        return ordered_items, skipped_count
+        return affected_items, skipped_count
 
 
 review_queue_service = ReviewQueueService()

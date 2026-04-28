@@ -1,6 +1,6 @@
 import uuid
 
-from app.models.intelligence import DocumentRelationshipReview
+from app.models.intelligence import DocumentRelationshipReview, ReviewAuditEvent
 from app.services.relationship_review import relationship_review_service
 
 
@@ -50,8 +50,10 @@ def test_relationship_review_endpoints_list_get_confirm_dismiss(client, db, samp
         f"/api/v1/review/relationships/{review.id}/dismiss",
         json={"reason_codes_json": ["false_positive"]},
     )
-    assert dismiss_resp.status_code == 200
-    assert dismiss_resp.json()["status"] == "dismissed"
+    assert dismiss_resp.status_code == 409
+
+    events = db.query(ReviewAuditEvent).all()
+    assert len([event for event in events if event.event_type == "relationship_review_confirmed"]) == 1
 
 
 def test_create_or_refresh_pending_relationship_review_prevents_duplicates(db, sample_document):

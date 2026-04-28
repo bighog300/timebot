@@ -72,7 +72,10 @@ def complete_action_item(
     item = action_items_service.get_item(db, user_id=current_user.id, action_item_id=action_item_id)
     if not item:
         raise HTTPException(status_code=404, detail="Action item not found")
-    return action_items_service.complete_item(db, item, actor_id=current_user.id)
+    try:
+        return action_items_service.complete_item(db, item, actor_id=current_user.id)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @router.post("/action-items/{action_item_id}/dismiss", response_model=ActionItemResponse)
@@ -84,7 +87,10 @@ def dismiss_action_item(
     item = action_items_service.get_item(db, user_id=current_user.id, action_item_id=action_item_id)
     if not item:
         raise HTTPException(status_code=404, detail="Action item not found")
-    return action_items_service.dismiss_item(db, item, actor_id=current_user.id)
+    try:
+        return action_items_service.dismiss_item(db, item, actor_id=current_user.id)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @router.post("/action-items/bulk-complete", response_model=BulkActionItemMutationResponse)

@@ -59,7 +59,10 @@ def resolve_review_item(
     item = review_queue_service.get_item(db, item_id=item_id, user_id=current_user.id)
     if not item:
         raise HTTPException(status_code=404, detail="Review item not found")
-    return review_queue_service.resolve_item(db, item=item, note=request.note, actor_id=current_user.id)
+    try:
+        return review_queue_service.resolve_item(db, item=item, note=request.note, actor_id=current_user.id)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @router.post("/items/{item_id}/dismiss", response_model=DocumentReviewItemResponse)
@@ -72,7 +75,10 @@ def dismiss_review_item(
     item = review_queue_service.get_item(db, item_id=item_id, user_id=current_user.id)
     if not item:
         raise HTTPException(status_code=404, detail="Review item not found")
-    return review_queue_service.dismiss_item(db, item=item, note=request.note, actor_id=current_user.id)
+    try:
+        return review_queue_service.dismiss_item(db, item=item, note=request.note, actor_id=current_user.id)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @router.post("/items/bulk-resolve", response_model=BulkReviewItemMutationResponse)
@@ -157,13 +163,16 @@ def confirm_relationship_review(
     review = relationship_review_service.get_item(db, relationship_id=relationship_id, user_id=current_user.id)
     if not review:
         raise HTTPException(status_code=404, detail="Relationship review not found")
-    return relationship_review_service.confirm(
-        db,
-        relationship_review=review,
-        reviewer_id=current_user.id,
-        reason_codes_json=request.reason_codes_json,
-        metadata_json=request.metadata_json,
-    )
+    try:
+        return relationship_review_service.confirm(
+            db,
+            relationship_review=review,
+            reviewer_id=current_user.id,
+            reason_codes_json=request.reason_codes_json,
+            metadata_json=request.metadata_json,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @router.post("/relationships/{relationship_id}/dismiss", response_model=RelationshipReviewResponse)
@@ -176,10 +185,13 @@ def dismiss_relationship_review(
     review = relationship_review_service.get_item(db, relationship_id=relationship_id, user_id=current_user.id)
     if not review:
         raise HTTPException(status_code=404, detail="Relationship review not found")
-    return relationship_review_service.dismiss(
-        db,
-        relationship_review=review,
-        reviewer_id=current_user.id,
-        reason_codes_json=request.reason_codes_json,
-        metadata_json=request.metadata_json,
-    )
+    try:
+        return relationship_review_service.dismiss(
+            db,
+            relationship_review=review,
+            reviewer_id=current_user.id,
+            reason_codes_json=request.reason_codes_json,
+            metadata_json=request.metadata_json,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
