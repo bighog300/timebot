@@ -74,3 +74,16 @@ class ActionItemResponse(BaseModel):
 class ActionItemUpdate(BaseModel):
     content: str | None = None
     action_metadata: dict[str, Any] | None = None
+
+
+class ReviewAuditEventResponse(BaseModel):
+    id: UUID
+    document_id: UUID
+    actor_id: UUID | None = None
+    event_type: str
+    note: str | None = None
+    before_json: dict[str, Any] = Field(default_factory=dict)
+    after_json: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime
+
+    model_config = {"from_attributes": True}

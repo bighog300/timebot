@@ -90,3 +90,21 @@ class DocumentActionItem(Base):
         CheckConstraint("source IN ('ai', 'user')", name="valid_action_item_source"),
         UniqueConstraint("document_id", "content", name="unique_document_action_item_content"),
     )
+
+
+class ReviewAuditEvent(Base):
+    __tablename__ = "review_audit_events"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    document_id = Column(
+        UUID(as_uuid=True), ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    actor_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), index=True)
+    event_type = Column(String(64), nullable=False, index=True)
+    note = Column(Text)
+    before_json = Column(JSONB, default=dict)
+    after_json = Column(JSONB, default=dict)
+    created_at = Column(TIMESTAMP(timezone=True), nullable=False, default=func.now(), index=True)
+
+    document = relationship("Document", back_populates="review_audit_events")
+    actor = relationship("User")

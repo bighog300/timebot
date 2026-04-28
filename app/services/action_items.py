@@ -4,6 +4,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from app.models.intelligence import DocumentActionItem
+from app.services.review_audit import review_audit_service
 
 
 class ActionItemsService:
@@ -65,7 +66,17 @@ class ActionItemsService:
 
         db.commit()
 
-    def update_item(self, db: Session, item: DocumentActionItem, *, content: str | None, metadata: dict | None) -> DocumentActionItem:
+    def update_item(
+        self,
+        db: Session,
+        item: DocumentActionItem,
+        *,
+        content: str | None,
+        metadata: dict | None,
+        actor_id: UUID | None = None,
+        note: str | None = None,
+    ) -> DocumentActionItem:
+        before = {"content": item.content, "action_metadata": item.action_metadata}
         if content is not None:
             item.content = content
         if metadata is not None:
@@ -73,22 +84,49 @@ class ActionItemsService:
         db.add(item)
         db.commit()
         db.refresh(item)
+        review_audit_service.create_event(
+            db,
+            document_id=item.document_id,
+            event_type="action_item_updated",
+            actor_id=actor_id,
+            note=note,
+            before_json=before,
+            after_json={"content": item.content, "action_metadata": item.action_metadata},
+        )
         return item
 
-    def complete_item(self, db: Session, item: DocumentActionItem) -> DocumentActionItem:
+    def complete_item(self, db: Session, item: DocumentActionItem, actor_id: UUID | None = None) -> DocumentActionItem:
+        before = {"state": item.state, "completed_at": item.completed_at.isoformat() if item.completed_at else None}
         item.state = "completed"
         item.completed_at = datetime.now(timezone.utc)
         db.add(item)
         db.commit()
         db.refresh(item)
+        review_audit_service.create_event(
+            db,
+            document_id=item.document_id,
+            event_type="action_item_completed",
+            actor_id=actor_id,
+            before_json=before,
+            after_json={"state": item.state, "completed_at": item.completed_at.isoformat() if item.completed_at else None},
+        )
         return item
 
-    def dismiss_item(self, db: Session, item: DocumentActionItem) -> DocumentActionItem:
+    def dismiss_item(self, db: Session, item: DocumentActionItem, actor_id: UUID | None = None) -> DocumentActionItem:
+        before = {"state": item.state, "dismissed_at": item.dismissed_at.isoformat() if item.dismissed_at else None}
         item.state = "dismissed"
         item.dismissed_at = datetime.now(timezone.utc)
         db.add(item)
         db.commit()
         db.refresh(item)
+        review_audit_service.create_event(
+            db,
+            document_id=item.document_id,
+            event_type="action_item_dismissed",
+            actor_id=actor_id,
+            before_json=before,
+            after_json={"state": item.state, "dismissed_at": item.dismissed_at.isoformat() if item.dismissed_at else None},
+        )
         return item
 
 

@@ -44,6 +44,7 @@ def update_action_item(
         item,
         content=action_in.content,
         metadata=action_in.action_metadata,
+        actor_id=current_user.id,
     )
 
 
@@ -56,7 +57,7 @@ def complete_action_item(
     item = action_items_service.get_item(db, user_id=current_user.id, action_item_id=action_item_id)
     if not item:
         raise HTTPException(status_code=404, detail="Action item not found")
-    return action_items_service.complete_item(db, item)
+    return action_items_service.complete_item(db, item, actor_id=current_user.id)
 
 
 @router.post("/action-items/{action_item_id}/dismiss", response_model=ActionItemResponse)
@@ -68,4 +69,4 @@ def dismiss_action_item(
     item = action_items_service.get_item(db, user_id=current_user.id, action_item_id=action_item_id)
     if not item:
         raise HTTPException(status_code=404, detail="Action item not found")
-    return action_items_service.dismiss_item(db, item)
+    return action_items_service.dismiss_item(db, item, actor_id=current_user.id)

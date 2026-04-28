@@ -4,6 +4,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from app.models.intelligence import DocumentReviewItem
+from app.services.review_audit import review_audit_service
 
 
 class ReviewQueueService:
@@ -63,7 +64,14 @@ class ReviewQueueService:
         db.refresh(item)
         return item
 
-    def resolve_item(self, db: Session, item: DocumentReviewItem, note: str | None = None) -> DocumentReviewItem:
+    def resolve_item(
+        self,
+        db: Session,
+        item: DocumentReviewItem,
+        note: str | None = None,
+        actor_id: UUID | None = None,
+    ) -> DocumentReviewItem:
+        before = {"status": item.status, "resolved_at": item.resolved_at.isoformat() if item.resolved_at else None}
         item.status = "resolved"
         item.resolved_at = datetime.now(timezone.utc)
         payload = dict(item.payload or {})
@@ -73,9 +81,25 @@ class ReviewQueueService:
         db.add(item)
         db.commit()
         db.refresh(item)
+        review_audit_service.create_event(
+            db,
+            document_id=item.document_id,
+            event_type="review_item_resolved",
+            actor_id=actor_id,
+            note=note,
+            before_json=before,
+            after_json={"status": item.status, "resolved_at": item.resolved_at.isoformat() if item.resolved_at else None},
+        )
         return item
 
-    def dismiss_item(self, db: Session, item: DocumentReviewItem, note: str | None = None) -> DocumentReviewItem:
+    def dismiss_item(
+        self,
+        db: Session,
+        item: DocumentReviewItem,
+        note: str | None = None,
+        actor_id: UUID | None = None,
+    ) -> DocumentReviewItem:
+        before = {"status": item.status, "dismissed_at": item.dismissed_at.isoformat() if item.dismissed_at else None}
         item.status = "dismissed"
         item.dismissed_at = datetime.now(timezone.utc)
         payload = dict(item.payload or {})
@@ -85,6 +109,15 @@ class ReviewQueueService:
         db.add(item)
         db.commit()
         db.refresh(item)
+        review_audit_service.create_event(
+            db,
+            document_id=item.document_id,
+            event_type="review_item_dismissed",
+            actor_id=actor_id,
+            note=note,
+            before_json=before,
+            after_json={"status": item.status, "dismissed_at": item.dismissed_at.isoformat() if item.dismissed_at else None},
+        )
         return item
 
     def resolve_document_items(self, db: Session, document_id: UUID, review_type: str) -> None:

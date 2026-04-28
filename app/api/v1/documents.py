@@ -18,8 +18,10 @@ from app.schemas.review_workflow import (
     CategoryOverrideRequest,
     DocumentIntelligenceResponse,
     DocumentIntelligenceUpdate,
+    ReviewAuditEventResponse,
 )
 from app.services.document_intelligence import document_intelligence_service
+from app.services.review_audit import review_audit_service
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
@@ -169,6 +171,7 @@ def patch_document_intelligence(
         db,
         intelligence,
         intelligence_in.model_dump(exclude_unset=True),
+        actor_id=current_user.id,
     )
 
 
@@ -181,7 +184,7 @@ def approve_document_category(document_id: UUID, db: Session = Depends(get_db), 
     if not intelligence:
         raise HTTPException(status_code=404, detail="Document intelligence not found")
     try:
-        return document_intelligence_service.approve_category(db, document, intelligence)
+        return document_intelligence_service.approve_category(db, document, intelligence, actor_id=current_user.id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -199,4 +202,32 @@ def override_document_category(
     intelligence = document_intelligence_service.get_for_document(db, document)
     if not intelligence:
         raise HTTPException(status_code=404, detail="Document intelligence not found")
-    return document_intelligence_service.override_category(db, document, intelligence, override_in.category_id)
+    return document_intelligence_service.override_category(
+        db,
+        document,
+        intelligence,
+        override_in.category_id,
+        actor_id=current_user.id,
+    )
+
+
+@router.get("/{document_id}/review-audit", response_model=List[ReviewAuditEventResponse])
+def get_document_review_audit(
+    document_id: UUID,
+    event_type: str | None = Query(default=None),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    document = crud_document.get_document(db, id=document_id, user=current_user)
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return review_audit_service.list_events(
+        db,
+        user_id=current_user.id,
+        event_type=event_type,
+        document_id=document_id,
+        skip=skip,
+        limit=limit,
+    )
