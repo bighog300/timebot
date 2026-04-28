@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import CheckConstraint, Column, ForeignKey, String, Text, TIMESTAMP, UniqueConstraint
+from sqlalchemy import CheckConstraint, Column, Float, ForeignKey, String, Text, TIMESTAMP, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -108,3 +108,40 @@ class ReviewAuditEvent(Base):
 
     document = relationship("Document", back_populates="review_audit_events")
     actor = relationship("User")
+
+
+class DocumentRelationshipReview(Base):
+    __tablename__ = "document_relationship_reviews"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    source_document_id = Column(
+        UUID(as_uuid=True), ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    target_document_id = Column(
+        UUID(as_uuid=True), ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    relationship_type = Column(String(20), nullable=False, index=True)
+    confidence = Column(Float, nullable=True)
+    status = Column(String(20), nullable=False, default="pending", index=True)
+    reason_codes_json = Column(JSONB, default=list)
+    metadata_json = Column(JSONB, default=dict)
+    created_at = Column(TIMESTAMP(timezone=True), nullable=False, default=func.now())
+    reviewed_at = Column(TIMESTAMP(timezone=True))
+    reviewed_by = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), index=True)
+
+    source_document = relationship("Document", foreign_keys=[source_document_id])
+    target_document = relationship("Document", foreign_keys=[target_document_id])
+    reviewer = relationship("User")
+
+    __table_args__ = (
+        CheckConstraint("source_document_id != target_document_id", name="no_self_relationship_review"),
+        CheckConstraint(
+            "relationship_type IN ('duplicate', 'similar', 'related')",
+            name="valid_relationship_review_type",
+        ),
+        CheckConstraint("status IN ('pending', 'confirmed', 'dismissed')", name="valid_relationship_review_status"),
+        CheckConstraint(
+            "confidence IS NULL OR (confidence >= 0 AND confidence <= 1)",
+            name="valid_relationship_review_confidence",
+        ),
+    )

@@ -1,7 +1,13 @@
 from app.models.user import User
 from app.models.category import Category
 from app.models.document import Document
-from app.models.intelligence import DocumentActionItem, DocumentIntelligence, DocumentReviewItem, ReviewAuditEvent
+from app.models.intelligence import (
+    DocumentActionItem,
+    DocumentIntelligence,
+    DocumentRelationshipReview,
+    DocumentReviewItem,
+    ReviewAuditEvent,
+)
 from app.models.relationships import (
     Connection,
     DocumentRelationship,
@@ -17,6 +23,7 @@ __all__ = [
     "Document",
     "DocumentActionItem",
     "DocumentIntelligence",
+    "DocumentRelationshipReview",
     "DocumentReviewItem",
     "ReviewAuditEvent",
     "DocumentRelationship",

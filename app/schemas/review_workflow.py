@@ -110,32 +110,4 @@ class ReviewAuditEventResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class OldestOpenReviewItemResponse(BaseModel):
-    id: UUID
-    document_id: UUID
-    review_type: str
-    priority: str
-    age_hours: float
-    created_at: datetime
 
-
-class ReviewMetricsResponse(BaseModel):
-    open_review_count: int
-    resolved_review_count: int
-    dismissed_review_count: int
-    open_by_type: dict[str, int] = Field(default_factory=dict)
-    open_by_priority: dict[str, int] = Field(default_factory=dict)
-    average_age_hours: float
-    oldest_open_items: list[OldestOpenReviewItemResponse] = Field(default_factory=list)
-    recently_resolved_count: int
-    low_confidence_category_count: int
-    uncategorized_count: int
-
-
-class ActionItemMetricsResponse(BaseModel):
-    open_count: int
-    completed_count: int
-    dismissed_count: int
-    overdue_count: int | None = None
-    completion_rate: float
-    recently_completed_count: int
