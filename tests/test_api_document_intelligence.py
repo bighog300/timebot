@@ -133,17 +133,20 @@ def test_review_items_list_get_and_resolve(client, db, sample_document):
 
 def test_action_item_endpoints_complete_and_dismiss(client, db, sample_document):
     action_item = DocumentActionItem(document_id=sample_document.id, content="Follow up with finance")
+    dismiss_item = DocumentActionItem(document_id=sample_document.id, content="Dismiss me")
     db.add(action_item)
+    db.add(dismiss_item)
     db.commit()
     db.refresh(action_item)
+    db.refresh(dismiss_item)
 
     list_resp = client.get("/api/v1/action-items")
     assert list_resp.status_code == 200
-    assert len(list_resp.json()) == 1
+    assert len(list_resp.json()) == 2
 
     doc_list_resp = client.get(f"/api/v1/documents/{sample_document.id}/action-items")
     assert doc_list_resp.status_code == 200
-    assert len(doc_list_resp.json()) == 1
+    assert len(doc_list_resp.json()) == 2
 
     patch_resp = client.patch(f"/api/v1/action-items/{action_item.id}", json={"content": "Updated follow-up"})
     assert patch_resp.status_code == 200
@@ -153,9 +156,12 @@ def test_action_item_endpoints_complete_and_dismiss(client, db, sample_document)
     assert complete_resp.status_code == 200
     assert complete_resp.json()["state"] == "completed"
 
-    dismiss_resp = client.post(f"/api/v1/action-items/{action_item.id}/dismiss")
+    dismiss_resp = client.post(f"/api/v1/action-items/{dismiss_item.id}/dismiss")
     assert dismiss_resp.status_code == 200
     assert dismiss_resp.json()["state"] == "dismissed"
+
+    invalid_transition = client.post(f"/api/v1/action-items/{dismiss_item.id}/complete")
+    assert invalid_transition.status_code == 409
 
 
 def test_review_item_bulk_resolve_and_bulk_dismiss(client, db, sample_document):
@@ -196,6 +202,14 @@ def test_review_item_bulk_resolve_and_bulk_dismiss(client, db, sample_document):
     assert dismiss_payload["updated_count"] == 1
     assert dismiss_payload["skipped_count"] == 0
     assert dismiss_payload["items"][0]["status"] == "dismissed"
+
+    invalid_transition = client.post(
+        "/api/v1/review/items/bulk-dismiss",
+        json={"ids": [str(open_a.id)], "note": "cannot dismiss resolved"},
+    )
+    assert invalid_transition.status_code == 200
+    assert invalid_transition.json()["updated_count"] == 0
+    assert invalid_transition.json()["skipped_count"] == 1
 
 
 def test_action_item_bulk_complete_and_bulk_dismiss(client, db, sample_document):

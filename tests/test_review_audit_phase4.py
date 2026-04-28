@@ -2,7 +2,13 @@ import uuid
 from datetime import datetime, timedelta, timezone
 
 from app.models.category import Category
-from app.models.intelligence import DocumentActionItem, DocumentIntelligence, DocumentReviewItem, ReviewAuditEvent
+from app.models.intelligence import (
+    DocumentActionItem,
+    DocumentIntelligence,
+    DocumentRelationshipReview,
+    DocumentReviewItem,
+    ReviewAuditEvent,
+)
 
 
 def _event_types(db):
@@ -80,12 +86,21 @@ def test_bulk_mutations_create_audit_events(client, db, sample_document):
         status="open",
         reason="needs review",
     )
+    review_c = DocumentReviewItem(
+        id=uuid.uuid4(),
+        document_id=sample_document.id,
+        review_type="low_confidence",
+        status="open",
+        reason="needs review",
+    )
     action_a = DocumentActionItem(document_id=sample_document.id, content="Action A")
     action_b = DocumentActionItem(document_id=sample_document.id, content="Action B")
-    db.add_all([review_a, review_b, action_a, action_b])
+    action_c = DocumentActionItem(document_id=sample_document.id, content="Action C")
+    db.add_all([review_a, review_b, review_c, action_a, action_b, action_c])
     db.commit()
     db.refresh(action_a)
     db.refresh(action_b)
+    db.refresh(action_c)
 
     resolve_resp = client.post(
         "/api/v1/review/items/bulk-resolve",
@@ -95,7 +110,7 @@ def test_bulk_mutations_create_audit_events(client, db, sample_document):
 
     dismiss_resp = client.post(
         "/api/v1/review/items/bulk-dismiss",
-        json={"ids": [str(review_b.id)], "note": "bulk dismiss"},
+        json={"ids": [str(review_c.id)], "note": "bulk dismiss"},
     )
     assert dismiss_resp.status_code == 200
 
@@ -107,7 +122,7 @@ def test_bulk_mutations_create_audit_events(client, db, sample_document):
 
     action_dismiss_resp = client.post(
         "/api/v1/action-items/bulk-dismiss",
-        json={"ids": [str(action_b.id)], "note": "bulk dismiss"},
+        json={"ids": [str(action_c.id)], "note": "bulk dismiss"},
     )
     assert action_dismiss_resp.status_code == 200
 
@@ -116,6 +131,48 @@ def test_bulk_mutations_create_audit_events(client, db, sample_document):
     assert len([event for event in events if event.event_type == "review_item_dismissed"]) >= 1
     assert len([event for event in events if event.event_type == "action_item_completed"]) >= 2
     assert len([event for event in events if event.event_type == "action_item_dismissed"]) >= 1
+
+
+def test_relationship_review_decisions_create_audit_events(client, db, sample_document):
+    target = type(sample_document)(
+        id=uuid.uuid4(),
+        filename="relationship-target.pdf",
+        original_path="/tmp/relationship-target.pdf",
+        file_type="pdf",
+        file_size=1024,
+        mime_type="application/pdf",
+        processing_status="completed",
+        source="upload",
+        user_id=sample_document.user_id,
+    )
+    db.add(target)
+    db.commit()
+
+    confirm_review = DocumentRelationshipReview(
+        source_document_id=sample_document.id,
+        target_document_id=target.id,
+        relationship_type="duplicate",
+        confidence=0.91,
+        status="pending",
+    )
+    dismiss_review = DocumentRelationshipReview(
+        source_document_id=sample_document.id,
+        target_document_id=target.id,
+        relationship_type="similar",
+        confidence=0.72,
+        status="pending",
+    )
+    db.add_all([confirm_review, dismiss_review])
+    db.commit()
+
+    confirm_resp = client.post(f"/api/v1/review/relationships/{confirm_review.id}/confirm", json={})
+    assert confirm_resp.status_code == 200
+
+    dismiss_resp = client.post(f"/api/v1/review/relationships/{dismiss_review.id}/dismiss", json={})
+    assert dismiss_resp.status_code == 200
+
+    assert "relationship_review_confirmed" in _event_types(db)
+    assert "relationship_review_dismissed" in _event_types(db)
 
 
 def test_intelligence_category_mutations_create_audit_events(client, db, sample_document):
