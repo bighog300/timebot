@@ -156,3 +156,73 @@ def test_action_item_endpoints_complete_and_dismiss(client, db, sample_document)
     dismiss_resp = client.post(f"/api/v1/action-items/{action_item.id}/dismiss")
     assert dismiss_resp.status_code == 200
     assert dismiss_resp.json()["state"] == "dismissed"
+
+
+def test_review_item_bulk_resolve_and_bulk_dismiss(client, db, sample_document):
+    open_a = DocumentReviewItem(
+        id=uuid.uuid4(),
+        document_id=sample_document.id,
+        review_type="missing_tags",
+        status="open",
+        reason="needs tags",
+    )
+    open_b = DocumentReviewItem(
+        id=uuid.uuid4(),
+        document_id=sample_document.id,
+        review_type="processing_issues",
+        status="open",
+        reason="needs review",
+    )
+    db.add(open_a)
+    db.add(open_b)
+    db.commit()
+
+    resolve_resp = client.post(
+        "/api/v1/review/items/bulk-resolve",
+        json={"ids": [str(open_a.id), str(uuid.uuid4()), str(open_a.id)], "note": "handled in bulk"},
+    )
+    assert resolve_resp.status_code == 200
+    resolve_payload = resolve_resp.json()
+    assert resolve_payload["updated_count"] == 1
+    assert resolve_payload["skipped_count"] == 2
+    assert resolve_payload["items"][0]["status"] == "resolved"
+
+    dismiss_resp = client.post(
+        "/api/v1/review/items/bulk-dismiss",
+        json={"ids": [str(open_b.id)], "note": "dismissed in bulk"},
+    )
+    assert dismiss_resp.status_code == 200
+    dismiss_payload = dismiss_resp.json()
+    assert dismiss_payload["updated_count"] == 1
+    assert dismiss_payload["skipped_count"] == 0
+    assert dismiss_payload["items"][0]["status"] == "dismissed"
+
+
+def test_action_item_bulk_complete_and_bulk_dismiss(client, db, sample_document):
+    open_a = DocumentActionItem(document_id=sample_document.id, content="Follow up A")
+    open_b = DocumentActionItem(document_id=sample_document.id, content="Follow up B")
+    db.add(open_a)
+    db.add(open_b)
+    db.commit()
+    db.refresh(open_a)
+    db.refresh(open_b)
+
+    complete_resp = client.post(
+        "/api/v1/action-items/bulk-complete",
+        json={"ids": [str(open_a.id), str(uuid.uuid4()), str(open_a.id)], "note": "done in batch"},
+    )
+    assert complete_resp.status_code == 200
+    complete_payload = complete_resp.json()
+    assert complete_payload["updated_count"] == 1
+    assert complete_payload["skipped_count"] == 2
+    assert complete_payload["items"][0]["state"] == "completed"
+
+    dismiss_resp = client.post(
+        "/api/v1/action-items/bulk-dismiss",
+        json={"ids": [str(open_b.id)], "note": "dismissed in batch"},
+    )
+    assert dismiss_resp.status_code == 200
+    dismiss_payload = dismiss_resp.json()
+    assert dismiss_payload["updated_count"] == 1
+    assert dismiss_payload["skipped_count"] == 0
+    assert dismiss_payload["items"][0]["state"] == "dismissed"

@@ -5,7 +5,13 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
 from app.models.user import User
-from app.schemas.review_workflow import DocumentReviewItemResponse, ReviewAuditEventResponse, ReviewResolutionRequest
+from app.schemas.review_workflow import (
+    BulkMutationRequest,
+    BulkReviewItemMutationResponse,
+    DocumentReviewItemResponse,
+    ReviewAuditEventResponse,
+    ReviewResolutionRequest,
+)
 from app.services.review_audit import review_audit_service
 from app.services.review_queue import review_queue_service
 
@@ -53,6 +59,38 @@ def dismiss_review_item(
     if not item:
         raise HTTPException(status_code=404, detail="Review item not found")
     return review_queue_service.dismiss_item(db, item=item, note=request.note, actor_id=current_user.id)
+
+
+@router.post("/items/bulk-resolve", response_model=BulkReviewItemMutationResponse)
+def bulk_resolve_review_items(
+    request: BulkMutationRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    items, skipped_count = review_queue_service.bulk_resolve_items(
+        db,
+        user_id=current_user.id,
+        item_ids=request.ids,
+        note=request.note,
+        actor_id=current_user.id,
+    )
+    return {"updated_count": len(items), "skipped_count": skipped_count, "items": items}
+
+
+@router.post("/items/bulk-dismiss", response_model=BulkReviewItemMutationResponse)
+def bulk_dismiss_review_items(
+    request: BulkMutationRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    items, skipped_count = review_queue_service.bulk_dismiss_items(
+        db,
+        user_id=current_user.id,
+        item_ids=request.ids,
+        note=request.note,
+        actor_id=current_user.id,
+    )
+    return {"updated_count": len(items), "skipped_count": skipped_count, "items": items}
 
 
 @router.get("/audit", response_model=list[ReviewAuditEventResponse])
