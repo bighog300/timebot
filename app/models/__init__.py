@@ -10,6 +10,10 @@ from app.models.relationships import (
 )
 from app.models.source_mapping import (
     ActiveSourceMapping,
+    CrawlDecision,
+    CrawlError,
+    CrawlPage,
+    CrawlRun,
     MappingDraft,
     MappingRule,
     SourceProfile,
@@ -30,4 +34,8 @@ __all__ = [
     "MappingDraft",
     "MappingRule",
     "ActiveSourceMapping",
+    "CrawlRun",
+    "CrawlPage",
+    "CrawlDecision",
+    "CrawlError",
 ]

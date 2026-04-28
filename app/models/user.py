@@ -16,6 +16,7 @@ class User(Base):
     password_hash = Column(String(255), nullable=False)
     display_name = Column(String(255), nullable=False)
     is_active = Column(Boolean, nullable=False, default=True)
+    is_admin = Column(Boolean, nullable=False, default=False)
     created_at = Column(TIMESTAMP(timezone=True), nullable=False, default=func.now())
     updated_at = Column(TIMESTAMP(timezone=True), nullable=False, default=func.now(), onupdate=func.now())
 

@@ -61,3 +61,48 @@ class ActiveSourceMappingResponse(BaseModel):
     activated_by: str | None
 
     model_config = {"from_attributes": True}
+
+
+class CrawlRunCreateResponse(BaseModel):
+    id: UUID
+    source_id: str
+    active_mapping_id: UUID
+    status: str
+    started_at: datetime | None
+    completed_at: datetime | None
+    stats_json: dict[str, Any]
+    created_by: str | None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class CrawlDecisionResponse(BaseModel):
+    id: UUID
+    decision_type: str
+    matched_rule_id: str | None
+    reason_codes_json: list[str]
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class CrawlPageResponse(BaseModel):
+    id: UUID
+    url: str
+    normalized_url: str
+    depth: int
+    parent_url: str | None
+    status: str
+    http_status: int | None
+    content_type: str | None
+    content_hash: str | None
+    extracted_text: str | None
+    created_at: datetime
+    decisions: list[CrawlDecisionResponse] = Field(default_factory=list)
+
+    model_config = {"from_attributes": True}
+
+
+class CrawlRunDetailResponse(CrawlRunCreateResponse):
+    pages: list[CrawlPageResponse] = Field(default_factory=list)

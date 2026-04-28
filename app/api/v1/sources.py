@@ -1,18 +1,21 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, get_db
+from app.api.deps import get_current_admin, get_current_user, get_db
 from app.crud import source_mapping as source_mapping_crud
 from app.models.user import User
 from app.schemas.source_mapping import (
     ActiveSourceMappingResponse,
     BulkRulePatchRequest,
+    CrawlRunCreateResponse,
+    CrawlRunDetailResponse,
     MappingDraftResponse,
     MappingRulePatch,
     MappingRuleResponse,
 )
+from app.services.crawler.runner import crawl_runner
 from app.services.source_mapper import source_mapper_service
 
 router = APIRouter(tags=["source-mapper"])
@@ -115,7 +118,71 @@ def get_active_mapping(
 ):
     active = source_mapping_crud.get_active_mapping(db, source_id)
     if not active:
-        from fastapi import HTTPException, status
-
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Active mapping not found")
     return active
+
+
+@router.post("/api/sources/{source_id}/crawl-runs", response_model=CrawlRunCreateResponse)
+def start_crawl_run(
+    source_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_admin),
+):
+    if not source_mapping_crud.source_exists(db, source_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Source not found")
+
+    active = source_mapping_crud.get_active_mapping(db, source_id)
+    if not active:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Active mapping required before crawl")
+
+    run = source_mapping_crud.create_crawl_run(
+        db,
+        source_id=source_id,
+        active_mapping_id=active.id,
+        created_by=current_user.email,
+    )
+    db.commit()
+    db.refresh(run)
+    crawl_runner.execute(db, source_id=source_id, run_id=run.id)
+    return source_mapping_crud.get_crawl_run_shallow(db, source_id, run.id)
+
+
+@router.get("/api/sources/{source_id}/crawl-runs", response_model=list[CrawlRunCreateResponse])
+def list_crawl_runs(
+    source_id: str,
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(get_current_user),
+):
+    return source_mapping_crud.list_crawl_runs(db, source_id)
+
+
+@router.get("/api/sources/{source_id}/crawl-runs/{run_id}", response_model=CrawlRunDetailResponse)
+def get_crawl_run_detail(
+    source_id: str,
+    run_id: UUID,
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(get_current_user),
+):
+    run = source_mapping_crud.get_crawl_run(db, source_id, run_id)
+    if not run:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Crawl run not found")
+    return run
+
+
+@router.post("/api/sources/{source_id}/crawl-runs/{run_id}/cancel", response_model=CrawlRunCreateResponse)
+def cancel_crawl_run(
+    source_id: str,
+    run_id: UUID,
+    db: Session = Depends(get_db),
+    _current_user: User = Depends(get_current_admin),
+):
+    run = source_mapping_crud.get_crawl_run_shallow(db, source_id, run_id)
+    if not run:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Crawl run not found")
+    if run.status in {"completed", "failed", "cancelled"}:
+        return run
+    run.status = "cancelled"
+    db.add(run)
+    db.commit()
+    db.refresh(run)
+    return run

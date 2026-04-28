@@ -105,6 +105,7 @@ def test_user(db):
         password_hash=auth_service.hash_password("password123"),
         display_name="Test User",
         is_active=True,
+        is_admin=True,
     )
     db.add(user)
     db.commit()
