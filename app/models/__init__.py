@@ -8,6 +8,13 @@ from app.models.relationships import (
     ProcessingQueue,
     SyncLog,
 )
+from app.models.source_mapping import (
+    ActiveSourceMapping,
+    MappingDraft,
+    MappingRule,
+    SourceProfile,
+    UrlFamily,
+)
 
 __all__ = [
     "User",
@@ -18,4 +25,9 @@ __all__ = [
     "DocumentVersion",
     "ProcessingQueue",
     "SyncLog",
+    "SourceProfile",
+    "UrlFamily",
+    "MappingDraft",
+    "MappingRule",
+    "ActiveSourceMapping",
 ]
