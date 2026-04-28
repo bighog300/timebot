@@ -16,7 +16,6 @@ from app.api.v1 import (
     insights,
     queue,
     search,
-    sources,
     upload,
     websocket,
 )
@@ -71,7 +70,6 @@ app.include_router(search.router, prefix="/api/v1")
 app.include_router(insights.router, prefix="/api/v1")
 app.include_router(connections.router, prefix="/api/v1")
 app.include_router(auth.router, prefix="/api/v1")
-app.include_router(sources.router)
 
 
 @app.get("/health", tags=["health"])
