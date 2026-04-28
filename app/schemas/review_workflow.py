@@ -52,6 +52,11 @@ class ReviewResolutionRequest(BaseModel):
     note: str | None = None
 
 
+class BulkMutationRequest(BaseModel):
+    ids: list[UUID] = Field(default_factory=list)
+    note: str | None = None
+
+
 class CategoryOverrideRequest(BaseModel):
     category_id: UUID
 
@@ -74,6 +79,22 @@ class ActionItemResponse(BaseModel):
 class ActionItemUpdate(BaseModel):
     content: str | None = None
     action_metadata: dict[str, Any] | None = None
+
+
+class BulkReviewItemMutationResponse(BaseModel):
+    updated_count: int
+    skipped_count: int = Field(
+        description="Number of input IDs skipped because they were missing, unauthorized, or duplicated in the request."
+    )
+    items: list[DocumentReviewItemResponse] = Field(default_factory=list)
+
+
+class BulkActionItemMutationResponse(BaseModel):
+    updated_count: int
+    skipped_count: int = Field(
+        description="Number of input IDs skipped because they were missing, unauthorized, or duplicated in the request."
+    )
+    items: list[ActionItemResponse] = Field(default_factory=list)
 
 
 class ReviewAuditEventResponse(BaseModel):

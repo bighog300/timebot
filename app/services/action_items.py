@@ -3,7 +3,7 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from app.models.intelligence import DocumentActionItem
+from app.models.intelligence import DocumentActionItem, ReviewAuditEvent
 from app.services.review_audit import review_audit_service
 
 
@@ -128,6 +128,100 @@ class ActionItemsService:
             after_json={"state": item.state, "dismissed_at": item.dismissed_at.isoformat() if item.dismissed_at else None},
         )
         return item
+
+    def bulk_complete_items(
+        self,
+        db: Session,
+        *,
+        user_id: UUID,
+        item_ids: list[UUID],
+        note: str | None = None,
+        actor_id: UUID | None = None,
+    ) -> tuple[list[DocumentActionItem], int]:
+        from app.models.document import Document
+
+        unique_ids: list[UUID] = list(dict.fromkeys(item_ids))
+        if not unique_ids:
+            return [], 0
+
+        now = datetime.now(timezone.utc)
+        items = (
+            db.query(DocumentActionItem)
+            .join(Document, Document.id == DocumentActionItem.document_id)
+            .filter(Document.user_id == user_id, DocumentActionItem.id.in_(unique_ids))
+            .all()
+        )
+        items_by_id = {str(item.id): item for item in items}
+        ordered_items = [items_by_id[str(item_id)] for item_id in unique_ids if str(item_id) in items_by_id]
+        skipped_count = len(item_ids) - len(ordered_items)
+
+        for item in ordered_items:
+            before = {"state": item.state, "completed_at": item.completed_at.isoformat() if item.completed_at else None}
+            item.state = "completed"
+            item.completed_at = now
+            db.add(item)
+            db.add(
+                ReviewAuditEvent(
+                    document_id=item.document_id,
+                    actor_id=actor_id,
+                    event_type="action_item_completed",
+                    note=note,
+                    before_json=before,
+                    after_json={"state": item.state, "completed_at": item.completed_at.isoformat()},
+                )
+            )
+
+        db.commit()
+        for item in ordered_items:
+            db.refresh(item)
+        return ordered_items, skipped_count
+
+    def bulk_dismiss_items(
+        self,
+        db: Session,
+        *,
+        user_id: UUID,
+        item_ids: list[UUID],
+        note: str | None = None,
+        actor_id: UUID | None = None,
+    ) -> tuple[list[DocumentActionItem], int]:
+        from app.models.document import Document
+
+        unique_ids: list[UUID] = list(dict.fromkeys(item_ids))
+        if not unique_ids:
+            return [], 0
+
+        now = datetime.now(timezone.utc)
+        items = (
+            db.query(DocumentActionItem)
+            .join(Document, Document.id == DocumentActionItem.document_id)
+            .filter(Document.user_id == user_id, DocumentActionItem.id.in_(unique_ids))
+            .all()
+        )
+        items_by_id = {str(item.id): item for item in items}
+        ordered_items = [items_by_id[str(item_id)] for item_id in unique_ids if str(item_id) in items_by_id]
+        skipped_count = len(item_ids) - len(ordered_items)
+
+        for item in ordered_items:
+            before = {"state": item.state, "dismissed_at": item.dismissed_at.isoformat() if item.dismissed_at else None}
+            item.state = "dismissed"
+            item.dismissed_at = now
+            db.add(item)
+            db.add(
+                ReviewAuditEvent(
+                    document_id=item.document_id,
+                    actor_id=actor_id,
+                    event_type="action_item_dismissed",
+                    note=note,
+                    before_json=before,
+                    after_json={"state": item.state, "dismissed_at": item.dismissed_at.isoformat()},
+                )
+            )
+
+        db.commit()
+        for item in ordered_items:
+            db.refresh(item)
+        return ordered_items, skipped_count
 
 
 action_items_service = ActionItemsService()

@@ -5,7 +5,12 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
 from app.models.user import User
-from app.schemas.review_workflow import ActionItemResponse, ActionItemUpdate
+from app.schemas.review_workflow import (
+    ActionItemResponse,
+    ActionItemUpdate,
+    BulkActionItemMutationResponse,
+    BulkMutationRequest,
+)
 from app.services.action_items import action_items_service
 
 router = APIRouter(tags=["action-items"])
@@ -70,3 +75,35 @@ def dismiss_action_item(
     if not item:
         raise HTTPException(status_code=404, detail="Action item not found")
     return action_items_service.dismiss_item(db, item, actor_id=current_user.id)
+
+
+@router.post("/action-items/bulk-complete", response_model=BulkActionItemMutationResponse)
+def bulk_complete_action_items(
+    request: BulkMutationRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    items, skipped_count = action_items_service.bulk_complete_items(
+        db,
+        user_id=current_user.id,
+        item_ids=request.ids,
+        note=request.note,
+        actor_id=current_user.id,
+    )
+    return {"updated_count": len(items), "skipped_count": skipped_count, "items": items}
+
+
+@router.post("/action-items/bulk-dismiss", response_model=BulkActionItemMutationResponse)
+def bulk_dismiss_action_items(
+    request: BulkMutationRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    items, skipped_count = action_items_service.bulk_dismiss_items(
+        db,
+        user_id=current_user.id,
+        item_ids=request.ids,
+        note=request.note,
+        actor_id=current_user.id,
+    )
+    return {"updated_count": len(items), "skipped_count": skipped_count, "items": items}

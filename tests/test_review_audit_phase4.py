@@ -65,6 +65,59 @@ def test_action_item_mutations_create_audit_events(client, db, sample_document):
     assert "action_item_dismissed" in _event_types(db)
 
 
+def test_bulk_mutations_create_audit_events(client, db, sample_document):
+    review_a = DocumentReviewItem(
+        id=uuid.uuid4(),
+        document_id=sample_document.id,
+        review_type="missing_tags",
+        status="open",
+        reason="needs tags",
+    )
+    review_b = DocumentReviewItem(
+        id=uuid.uuid4(),
+        document_id=sample_document.id,
+        review_type="processing_issues",
+        status="open",
+        reason="needs review",
+    )
+    action_a = DocumentActionItem(document_id=sample_document.id, content="Action A")
+    action_b = DocumentActionItem(document_id=sample_document.id, content="Action B")
+    db.add_all([review_a, review_b, action_a, action_b])
+    db.commit()
+    db.refresh(action_a)
+    db.refresh(action_b)
+
+    resolve_resp = client.post(
+        "/api/v1/review/items/bulk-resolve",
+        json={"ids": [str(review_a.id), str(review_b.id)], "note": "bulk resolve"},
+    )
+    assert resolve_resp.status_code == 200
+
+    dismiss_resp = client.post(
+        "/api/v1/review/items/bulk-dismiss",
+        json={"ids": [str(review_b.id)], "note": "bulk dismiss"},
+    )
+    assert dismiss_resp.status_code == 200
+
+    complete_resp = client.post(
+        "/api/v1/action-items/bulk-complete",
+        json={"ids": [str(action_a.id), str(action_b.id)], "note": "bulk complete"},
+    )
+    assert complete_resp.status_code == 200
+
+    action_dismiss_resp = client.post(
+        "/api/v1/action-items/bulk-dismiss",
+        json={"ids": [str(action_b.id)], "note": "bulk dismiss"},
+    )
+    assert action_dismiss_resp.status_code == 200
+
+    events = db.query(ReviewAuditEvent).all()
+    assert len([event for event in events if event.event_type == "review_item_resolved"]) >= 2
+    assert len([event for event in events if event.event_type == "review_item_dismissed"]) >= 1
+    assert len([event for event in events if event.event_type == "action_item_completed"]) >= 2
+    assert len([event for event in events if event.event_type == "action_item_dismissed"]) >= 1
+
+
 def test_intelligence_category_mutations_create_audit_events(client, db, sample_document):
     suggested = Category(name="Suggested", slug="suggested-a")
     chosen = Category(name="Chosen", slug="chosen-a")
