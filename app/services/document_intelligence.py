@@ -9,6 +9,7 @@ from app.models.intelligence import DocumentIntelligence
 from app.services.action_items import action_items_service
 from app.services.ai_analyzer import ai_analyzer
 from app.services.categorizer import categorizer
+from app.services.review_audit import review_audit_service
 from app.services.review_queue import review_queue_service
 
 
@@ -75,18 +76,40 @@ class DocumentIntelligenceService:
         db.refresh(intelligence)
         return intelligence
 
-    def update_intelligence(self, db: Session, intelligence: DocumentIntelligence, updates: dict) -> DocumentIntelligence:
+    def update_intelligence(
+        self,
+        db: Session,
+        intelligence: DocumentIntelligence,
+        updates: dict,
+        actor_id: UUID | None = None,
+    ) -> DocumentIntelligence:
+        before = {field: getattr(intelligence, field) for field in updates}
         for field, value in updates.items():
             setattr(intelligence, field, value)
         db.add(intelligence)
         db.commit()
         db.refresh(intelligence)
+        review_audit_service.create_event(
+            db,
+            document_id=intelligence.document_id,
+            event_type="intelligence_updated",
+            actor_id=actor_id,
+            before_json=before,
+            after_json={field: getattr(intelligence, field) for field in updates},
+        )
         return intelligence
 
-    def approve_category(self, db: Session, document: Document, intelligence: DocumentIntelligence) -> Document:
+    def approve_category(
+        self,
+        db: Session,
+        document: Document,
+        intelligence: DocumentIntelligence,
+        actor_id: UUID | None = None,
+    ) -> Document:
         if not intelligence.suggested_category_id:
             raise ValueError("No suggested category to approve")
 
+        before = {"user_category_id": str(document.user_category_id) if document.user_category_id else None, "category_status": intelligence.category_status}
         document.user_category_id = intelligence.suggested_category_id
         intelligence.category_status = "approved"
         review_queue_service.resolve_document_items(db, document.id, "uncategorized")
@@ -94,9 +117,25 @@ class DocumentIntelligenceService:
         db.add(intelligence)
         db.commit()
         db.refresh(document)
+        review_audit_service.create_event(
+            db,
+            document_id=document.id,
+            event_type="category_approved",
+            actor_id=actor_id,
+            before_json=before,
+            after_json={"user_category_id": str(document.user_category_id), "category_status": intelligence.category_status},
+        )
         return document
 
-    def override_category(self, db: Session, document: Document, intelligence: DocumentIntelligence, category_id: UUID) -> Document:
+    def override_category(
+        self,
+        db: Session,
+        document: Document,
+        intelligence: DocumentIntelligence,
+        category_id: UUID,
+        actor_id: UUID | None = None,
+    ) -> Document:
+        before = {"user_category_id": str(document.user_category_id) if document.user_category_id else None, "category_status": intelligence.category_status}
         document.user_category_id = category_id
         intelligence.category_status = "overridden"
         review_queue_service.resolve_document_items(db, document.id, "uncategorized")
@@ -104,6 +143,14 @@ class DocumentIntelligenceService:
         db.add(intelligence)
         db.commit()
         db.refresh(document)
+        review_audit_service.create_event(
+            db,
+            document_id=document.id,
+            event_type="category_overridden",
+            actor_id=actor_id,
+            before_json=before,
+            after_json={"user_category_id": str(document.user_category_id), "category_status": intelligence.category_status},
+        )
         return document
 
     def _refresh_review_items(self, db: Session, document: Document, intelligence: DocumentIntelligence) -> None:

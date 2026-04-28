@@ -94,6 +94,11 @@ class Document(Base):
         back_populates="document",
         cascade="all, delete-orphan",
     )
+    review_audit_events = relationship(
+        "ReviewAuditEvent",
+        back_populates="document",
+        cascade="all, delete-orphan",
+    )
     versions = relationship(
         "DocumentVersion",
         back_populates="document",
