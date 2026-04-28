@@ -110,22 +110,4 @@ class ReviewAuditEventResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class RelationshipReviewResponse(BaseModel):
-    id: UUID
-    source_document_id: UUID
-    target_document_id: UUID
-    relationship_type: str
-    confidence: float | None = None
-    status: str
-    reason_codes_json: list[str] = Field(default_factory=list)
-    metadata_json: dict[str, Any] = Field(default_factory=dict)
-    created_at: datetime
-    reviewed_at: datetime | None = None
-    reviewed_by: UUID | None = None
 
-    model_config = {"from_attributes": True}
-
-
-class RelationshipReviewDecisionRequest(BaseModel):
-    reason_codes_json: list[str] | None = None
-    metadata_json: dict[str, Any] | None = None
