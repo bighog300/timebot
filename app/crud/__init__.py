@@ -1,3 +1,3 @@
-from app.crud import document, category
+from app.crud import category, document, source_mapping
 
-__all__ = ["document", "category"]
+__all__ = ["document", "category", "source_mapping"]

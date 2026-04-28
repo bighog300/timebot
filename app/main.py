@@ -7,7 +7,19 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
 from app.config import settings
-from app.api.v1 import analysis, auth, categories, connections, documents, insights, queue, search, upload, websocket
+from app.api.v1 import (
+    analysis,
+    auth,
+    categories,
+    connections,
+    documents,
+    insights,
+    queue,
+    search,
+    sources,
+    upload,
+    websocket,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +71,7 @@ app.include_router(search.router, prefix="/api/v1")
 app.include_router(insights.router, prefix="/api/v1")
 app.include_router(connections.router, prefix="/api/v1")
 app.include_router(auth.router, prefix="/api/v1")
+app.include_router(sources.router)
 
 
 @app.get("/health", tags=["health"])
