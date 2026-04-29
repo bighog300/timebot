@@ -120,7 +120,9 @@ def test_review_items_list_get_and_resolve(client, db, sample_document):
 
     list_resp = client.get("/api/v1/review/items")
     assert list_resp.status_code == 200
-    assert len(list_resp.json()) == 1
+    list_payload = list_resp.json()
+    assert list_payload["total_count"] == 1
+    assert len(list_payload["items"]) == 1
 
     get_resp = client.get(f"/api/v1/review/items/{review_item.id}")
     assert get_resp.status_code == 200
@@ -142,7 +144,9 @@ def test_action_item_endpoints_complete_and_dismiss(client, db, sample_document)
 
     list_resp = client.get("/api/v1/action-items")
     assert list_resp.status_code == 200
-    assert len(list_resp.json()) == 2
+    list_payload = list_resp.json()
+    assert list_payload["total_count"] == 2
+    assert len(list_payload["items"]) == 2
 
     doc_list_resp = client.get(f"/api/v1/documents/{sample_document.id}/action-items")
     assert doc_list_resp.status_code == 200
@@ -162,6 +166,52 @@ def test_action_item_endpoints_complete_and_dismiss(client, db, sample_document)
 
     invalid_transition = client.post(f"/api/v1/action-items/{dismiss_item.id}/complete")
     assert invalid_transition.status_code == 409
+
+
+def test_review_items_filtering_and_pagination(client, db, sample_document):
+    open_item = DocumentReviewItem(id=uuid.uuid4(), document_id=sample_document.id, review_type="missing_tags", status="open", reason="open", payload={"priority": "high"})
+    resolved_item = DocumentReviewItem(id=uuid.uuid4(), document_id=sample_document.id, review_type="processing_issues", status="resolved", reason="done", payload={"priority": "low"})
+    db.add_all([open_item, resolved_item])
+    db.commit()
+
+    filtered = client.get("/api/v1/review/items", params={"status": "open", "priority": "high"})
+    assert filtered.status_code == 200
+    payload = filtered.json()
+    assert payload["total_count"] == 1
+    assert len(payload["items"]) == 1
+    assert payload["items"][0]["id"] == str(open_item.id)
+
+    paged = client.get("/api/v1/review/items", params={"limit": 1, "offset": 1, "sort_order": "desc"})
+    assert paged.status_code == 200
+    paged_payload = paged.json()
+    assert paged_payload["limit"] == 1
+    assert paged_payload["offset"] == 1
+    assert paged_payload["total_count"] == 2
+    assert len(paged_payload["items"]) == 1
+
+
+def test_action_items_filtering_and_pagination(client, db, sample_document):
+    open_item = DocumentActionItem(document_id=sample_document.id, content="Open task", state="open")
+    completed_item = DocumentActionItem(document_id=sample_document.id, content="Completed task", state="completed")
+    db.add_all([open_item, completed_item])
+    db.commit()
+    db.refresh(open_item)
+    db.refresh(completed_item)
+
+    filtered = client.get("/api/v1/action-items", params={"status": "completed"})
+    assert filtered.status_code == 200
+    payload = filtered.json()
+    assert payload["total_count"] == 1
+    assert len(payload["items"]) == 1
+    assert payload["items"][0]["id"] == str(completed_item.id)
+
+    paged = client.get("/api/v1/action-items", params={"limit": 1, "offset": 1})
+    assert paged.status_code == 200
+    paged_payload = paged.json()
+    assert paged_payload["limit"] == 1
+    assert paged_payload["offset"] == 1
+    assert paged_payload["total_count"] == 2
+    assert len(paged_payload["items"]) == 1
 
 
 def test_review_item_bulk_resolve_and_bulk_dismiss(client, db, sample_document):

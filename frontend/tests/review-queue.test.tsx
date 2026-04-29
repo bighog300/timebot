@@ -9,7 +9,12 @@ const mockDismiss = vi.fn();
 let reviewItems: Array<Record<string, unknown>> = [];
 
 vi.mock('@/hooks/useApi', () => ({
-  useReviewItems: () => ({ data: reviewItems, isLoading: false, isError: false, isSuccess: true }),
+  useReviewItems: () => ({
+    data: { items: reviewItems, total_count: reviewItems.length, limit: 20, offset: 0 },
+    isLoading: false,
+    isError: false,
+    isSuccess: true,
+  }),
   useResolveReviewItem: () => ({ mutate: mockResolve, isPending: false }),
   useDismissReviewItem: () => ({ mutate: mockDismiss, isPending: false }),
   useBulkResolveReviewItems: () => ({ mutateAsync: vi.fn(), isPending: false }),
