@@ -155,7 +155,7 @@ class ReviewQueueService:
                 DocumentReviewItem.review_type == review_type,
                 DocumentReviewItem.status == "open",
             )
-            .order_by(DocumentReviewItem.created_at.asc(), DocumentReviewItem.id.asc())
+            .order_by(DocumentReviewItem.created_at.asc())
             .all()
         )
         item = open_items[0] if open_items else None
@@ -166,6 +166,7 @@ class ReviewQueueService:
             for duplicate in open_items[1:]:
                 duplicate.status = "dismissed"
                 duplicate.dismissed_at = self._now()
+                duplicate.created_at = duplicate.dismissed_at
                 duplicate_payload = dict(duplicate.payload or {})
                 duplicate_payload["deduplicated_to"] = str(item.id)
                 duplicate.payload = duplicate_payload
