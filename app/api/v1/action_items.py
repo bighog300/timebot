@@ -24,6 +24,7 @@ router = APIRouter(tags=["action-items"])
 @router.get("/action-items", response_model=PaginatedActionItemsResponse)
 def list_action_items(
     status: ActionItemState | None = Query(default=None),
+    state: ActionItemState | None = Query(default=None),
     document_id: UUID | None = Query(default=None),
     date_from: datetime | None = Query(default=None),
     date_to: datetime | None = Query(default=None),
@@ -34,7 +35,8 @@ def list_action_items(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    items, total_count = action_items_service.list_items(db, user_id=current_user.id, state=status.value if status else None, document_id=document_id, date_from=date_from, date_to=date_to, sort_by=sort_by, sort_order=sort_order, limit=limit, offset=offset)
+    state_filter = status or state
+    items, total_count = action_items_service.list_items(db, user_id=current_user.id, state=state_filter.value if state_filter else None, document_id=document_id, date_from=date_from, date_to=date_to, sort_by=sort_by, sort_order=sort_order, limit=limit, offset=offset)
     return {"items": items, "total_count": total_count, "limit": limit, "offset": offset}
 
 

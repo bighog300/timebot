@@ -48,6 +48,9 @@ def _seed_relationship_review(db, sample_document):
 
 
 def test_viewer_cannot_mutate_review_action_or_relationship(test_user, db, sample_document):
+    test_user.role = "viewer"
+    db.add(test_user)
+    db.commit()
     review_item = DocumentReviewItem(id=uuid.uuid4(), document_id=sample_document.id, review_type='missing_tags', status='open', reason='needs review')
     action_item = DocumentActionItem(document_id=sample_document.id, content='Follow up')
     db.add_all([review_item, action_item])
