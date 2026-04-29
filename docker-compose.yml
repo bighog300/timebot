@@ -38,21 +38,19 @@ services:
       - doc-network
 
   qdrant:
-    image: qdrant/qdrant:latest
-    container_name: doc-qdrant
-    ports:
-      - "6335:6333"
-      - "6336:6334"
-    volumes:
-      - qdrant_data:/qdrant/storage
-    healthcheck:
-      healthcheck:
-      test: ["CMD-SHELL", "bash -c '</dev/tcp/localhost/6333'"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 20s
-      restart: unless-stopped
+  image: qdrant/qdrant:latest
+  container_name: doc-qdrant
+  ports:
+    - "6335:6333"
+    - "6336:6334"
+  volumes:
+    - qdrant_data:/qdrant/storage
+  healthcheck:
+    test: ["CMD-SHELL", "timeout 3 bash -c '</dev/tcp/localhost/6333' || exit 1"]
+    interval: 10s
+    timeout: 5s
+    retries: 5
+    start_period: 20s
     networks:
       - doc-network
 
