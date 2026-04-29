@@ -23,7 +23,14 @@ export function useLiveEvents() {
   const qc = useQueryClient();
 
   useEffect(() => {
-    const ws = new WebSocket(`${env.wsBaseUrl}/api/v1/ws/all`);
+    let ws: WebSocket | null = null;
+
+    try {
+      ws = new WebSocket(`${env.wsBaseUrl}/api/v1/ws/all`);
+    } catch {
+      return () => {};
+    }
+
     ws.onmessage = (message) => {
       let payload: LiveEventPayload | null = null;
       if (typeof message.data === 'string' && message.data.length > 0) {
@@ -53,6 +60,11 @@ export function useLiveEvents() {
       qc.invalidateQueries({ queryKey: keys.queueItems });
       qc.invalidateQueries({ queryKey: keys.connections });
     };
-    return () => ws.close();
+
+    ws.onerror = () => {
+      // Optional in dev. Fail silently so auth/login flows are unaffected.
+    };
+
+    return () => ws?.close();
   }, [qc]);
 }
