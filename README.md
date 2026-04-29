@@ -30,8 +30,8 @@ AI-assisted document intelligence platform with upload/search, review workflow, 
    alembic upgrade head
    ```
 
-API: `http://localhost:8000`  
-Frontend (dev): `http://localhost:5173`
+API: `http://localhost:8001`  
+Frontend (dev): `http://localhost:5174`
 
 ## Local development
 
@@ -57,8 +57,11 @@ python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 cd frontend
 cp .env.example .env
 npm install
-npm run dev
+npm run dev -- --host 0.0.0.0 --port 5174
 ```
+
+
+Detailed Docker + frontend + LAN setup steps: see `docs/LOCAL_DEV.md`.
 
 ## Environment variables
 
