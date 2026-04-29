@@ -58,6 +58,10 @@ class Settings(BaseSettings):
     AUTH_ALGORITHM: str = "HS256"
     AUTH_ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
 
+    INITIAL_ADMIN_EMAIL: str = ""
+    INITIAL_ADMIN_PASSWORD: str = ""
+    INITIAL_ADMIN_NAME: str = "Timebot Admin"
+
     model_config = {"env_file": ".env", "extra": "ignore"}
 
     @property
@@ -67,6 +71,12 @@ class Settings(BaseSettings):
     @property
     def google_oauth_scopes(self) -> list[str]:
         return [item.strip() for item in self.GOOGLE_OAUTH_SCOPES.split(",") if item.strip()]
+
+    @property
+    def allowed_origins(self) -> list[str]:
+        if self.ALLOWED_ORIGINS.strip() == "*":
+            return ["*"]
+        return [origin.strip() for origin in self.ALLOWED_ORIGINS.split(",") if origin.strip()]
 
 
 settings = Settings()

@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
 from app.config import settings
+from app.db.base import SessionLocal
 from app.api.v1 import (
     action_items,
     analysis,
@@ -36,6 +37,15 @@ async def lifespan(app: FastAPI):
         logger.warning("AUTH_SECRET_KEY is using the insecure development default. Set a unique secret for shared/prod environments.")
 
     init_db()
+
+    from app.services.admin_seed import seed_initial_admin
+
+    db = SessionLocal()
+    try:
+        seed_initial_admin(db)
+    finally:
+        db.close()
+
     yield
 
 
@@ -46,13 +56,13 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-origins = [o.strip() for o in settings.ALLOWED_ORIGINS.split(",") if o.strip()] if settings.ALLOWED_ORIGINS != "*" else ["*"]
+origins = settings.allowed_origins
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With"],
 )
 
 

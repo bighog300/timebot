@@ -45,6 +45,11 @@ services:
       - "6336:6334" # host:container (gRPC)
     volumes:
       - qdrant_data:/qdrant/storage
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://localhost:6333/healthz >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
     restart: unless-stopped
     networks:
       - doc-network
@@ -56,9 +61,9 @@ services:
     container_name: doc-organizer
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000
     ports:
-      - "8001:8000" # host:container (8001 avoids common local 8000 conflicts)
+      - "8001:8000" # host:container (8001 avoids common local 8000 conflicts; frontend should call :8001)
     environment:
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - DATABASE_URL=postgresql://docuser:docpass@db:5432/documents
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/0
@@ -70,6 +75,9 @@ services:
       - QDRANT_PORT=6333
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:5174,http://127.0.0.1:5174}
       - AUTH_SECRET_KEY=${AUTH_SECRET_KEY:-dev-insecure-change-me}
+      - INITIAL_ADMIN_EMAIL=${INITIAL_ADMIN_EMAIL:-}
+      - INITIAL_ADMIN_PASSWORD=${INITIAL_ADMIN_PASSWORD:-}
+      - INITIAL_ADMIN_NAME=${INITIAL_ADMIN_NAME:-Timebot Admin}
     volumes:
       - ./data:/app/data
     depends_on:
@@ -78,7 +86,7 @@ services:
       redis:
         condition: service_healthy
       qdrant:
-        condition: service_started
+        condition: service_healthy
     restart: unless-stopped
     networks:
       - doc-network
@@ -90,7 +98,7 @@ services:
     container_name: doc-celery-worker
     command: celery -A app.workers.celery_app worker --loglevel=info -Q documents,maintenance
     environment:
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - DATABASE_URL=postgresql://docuser:docpass@db:5432/documents
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/0
@@ -109,7 +117,7 @@ services:
       redis:
         condition: service_healthy
       qdrant:
-        condition: service_started
+        condition: service_healthy
     restart: unless-stopped
     networks:
       - doc-network
