@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useAuth } from '@/auth/AuthContext';
 import { api } from '@/services/api';
 
 export const keys = {
@@ -18,8 +19,14 @@ export const keys = {
   connections: ['connections'] as const,
 };
 
+function useAuthReady() {
+  const { token, loading } = useAuth();
+  return Boolean(token) && !loading;
+}
+
 export function useDocuments() {
-  return useQuery({ queryKey: keys.documents, queryFn: () => api.listDocuments(false) });
+  const authReady = useAuthReady();
+  return useQuery({ queryKey: keys.documents, queryFn: () => api.listDocuments(false), enabled: authReady });
 }
 
 export function useUploadDocument() {
@@ -33,15 +40,18 @@ export function useUploadDocument() {
 }
 
 export function useQueueStats() {
-  return useQuery({ queryKey: keys.queueStats, queryFn: api.getQueueStats, refetchInterval: 5000 });
+  const authReady = useAuthReady();
+  return useQuery({ queryKey: keys.queueStats, queryFn: api.getQueueStats, refetchInterval: 5000, enabled: authReady });
 }
 
 export function useQueueItems() {
-  return useQuery({ queryKey: keys.queueItems, queryFn: api.getQueueItems, refetchInterval: 5000 });
+  const authReady = useAuthReady();
+  return useQuery({ queryKey: keys.queueItems, queryFn: api.getQueueItems, refetchInterval: 5000, enabled: authReady });
 }
 
 export function useReviewQueue() {
-  return useQuery({ queryKey: keys.reviewQueue, queryFn: api.getReviewQueue, refetchInterval: 5000 });
+  const authReady = useAuthReady();
+  return useQuery({ queryKey: keys.reviewQueue, queryFn: api.getReviewQueue, refetchInterval: 5000, enabled: authReady });
 }
 
 export function useReviewDocument() {
@@ -58,11 +68,13 @@ export function useReviewDocument() {
 }
 
 export function useCategories() {
-  return useQuery({ queryKey: keys.categories, queryFn: api.listCategories });
+  const authReady = useAuthReady();
+  return useQuery({ queryKey: keys.categories, queryFn: api.listCategories, enabled: authReady });
 }
 
 export function useReviewItems(status: 'open' | 'resolved' | 'dismissed', page = 0, limit = 20) {
-  return useQuery({ queryKey: [...keys.reviewItems(status), page, limit], queryFn: () => api.listReviewItems(status, limit, page * limit) });
+  const authReady = useAuthReady();
+  return useQuery({ queryKey: [...keys.reviewItems(status), page, limit], queryFn: () => api.listReviewItems(status, limit, page * limit), enabled: authReady });
 }
 
 export function useResolveReviewItem() {
@@ -110,11 +122,13 @@ export function useBulkDismissReviewItems() {
 }
 
 export function useReviewMetrics() {
-  return useQuery({ queryKey: keys.reviewMetrics, queryFn: api.getReviewMetrics });
+  const authReady = useAuthReady();
+  return useQuery({ queryKey: keys.reviewMetrics, queryFn: api.getReviewMetrics, enabled: authReady });
 }
 
 export function useRelationshipReviews(status: 'pending' | 'confirmed' | 'dismissed') {
-  return useQuery({ queryKey: keys.relationshipReviews(status), queryFn: () => api.listRelationshipReviews(status) });
+  const authReady = useAuthReady();
+  return useQuery({ queryKey: keys.relationshipReviews(status), queryFn: () => api.listRelationshipReviews(status), enabled: authReady });
 }
 
 export function useConfirmRelationshipReview() {
@@ -134,9 +148,11 @@ export function useDismissRelationshipReview() {
 }
 
 export function useActionItems(state: 'open' | 'completed' | 'dismissed' | '', page = 0, limit = 20) {
+  const authReady = useAuthReady();
   return useQuery({
     queryKey: [...keys.actionItems(state || 'all'), page, limit],
     queryFn: () => api.listActionItems(state || undefined, limit, page * limit),
+    enabled: authReady,
   });
 }
 
@@ -185,11 +201,13 @@ export function useBulkDismissActionItems() {
 }
 
 export function useActionItemMetrics() {
-  return useQuery({ queryKey: keys.actionItemMetrics, queryFn: api.getActionItemMetrics });
+  const authReady = useAuthReady();
+  return useQuery({ queryKey: keys.actionItemMetrics, queryFn: api.getActionItemMetrics, enabled: authReady });
 }
 
 export function useDocumentIntelligence(documentId: string) {
-  return useQuery({ queryKey: keys.documentIntelligence(documentId), queryFn: () => api.getDocumentIntelligence(documentId), enabled: !!documentId });
+  const authReady = useAuthReady();
+  return useQuery({ queryKey: keys.documentIntelligence(documentId), queryFn: () => api.getDocumentIntelligence(documentId), enabled: authReady && !!documentId });
 }
 
 export function usePatchDocumentIntelligence(documentId: string) {
@@ -225,25 +243,29 @@ export function useOverrideDocumentCategory(documentId: string) {
 }
 
 export function useDocumentActionItems(documentId: string) {
+  const authReady = useAuthReady();
   return useQuery({
     queryKey: keys.documentActionItems(documentId),
     queryFn: () => api.listDocumentActionItems(documentId),
-    enabled: !!documentId,
+    enabled: authReady && !!documentId,
   });
 }
 
 export function useDocumentAuditHistory(documentId: string) {
+  const authReady = useAuthReady();
   return useQuery({
     queryKey: keys.documentAuditHistory(documentId),
     queryFn: () => api.getDocumentAuditHistory(documentId),
-    enabled: !!documentId,
+    enabled: authReady && !!documentId,
   });
 }
 
 export function useInsightsOverview() {
-  return useQuery({ queryKey: ['insights-overview'], queryFn: api.getInsightsOverview });
+  const authReady = useAuthReady();
+  return useQuery({ queryKey: ['insights-overview'], queryFn: api.getInsightsOverview, enabled: authReady });
 }
 
 export function useConnections() {
-  return useQuery({ queryKey: keys.connections, queryFn: api.listConnections });
+  const authReady = useAuthReady();
+  return useQuery({ queryKey: keys.connections, queryFn: api.listConnections, enabled: authReady });
 }
