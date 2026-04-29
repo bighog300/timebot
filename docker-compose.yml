@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.8"
 
 services:
   db:
@@ -38,19 +38,14 @@ services:
       - doc-network
 
   qdrant:
-  image: qdrant/qdrant:latest
-  container_name: doc-qdrant
-  ports:
-    - "6335:6333"
-    - "6336:6334"
-  volumes:
-    - qdrant_data:/qdrant/storage
-  healthcheck:
-    test: ["CMD-SHELL", "timeout 3 bash -c '</dev/tcp/localhost/6333' || exit 1"]
-    interval: 10s
-    timeout: 5s
-    retries: 5
-    start_period: 20s
+    image: qdrant/qdrant:latest
+    container_name: doc-qdrant
+    ports:
+      - "6335:6333"
+      - "6336:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    restart: unless-stopped
     networks:
       - doc-network
 
@@ -83,7 +78,7 @@ services:
       redis:
         condition: service_healthy
       qdrant:
-        condition: service_healthy
+        condition: service_started
     restart: unless-stopped
     networks:
       - doc-network
@@ -114,7 +109,7 @@ services:
       redis:
         condition: service_healthy
       qdrant:
-        condition: service_healthy
+        condition: service_started
     restart: unless-stopped
     networks:
       - doc-network
@@ -131,7 +126,8 @@ services:
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
     depends_on:
-      - redis
+      redis:
+        condition: service_healthy
     restart: unless-stopped
     networks:
       - doc-network
@@ -148,7 +144,8 @@ services:
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
     depends_on:
-      - redis
+      redis:
+        condition: service_healthy
     restart: unless-stopped
     networks:
       - doc-network
