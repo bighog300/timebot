@@ -45,11 +45,6 @@ services:
       - "6336:6334" # host:container (gRPC)
     volumes:
       - qdrant_data:/qdrant/storage
-    healthcheck:
-      test: ["CMD-SHELL", "wget -q -O- http://localhost:6333/healthz >/dev/null || exit 1"]
-      interval: 15s
-      timeout: 5s
-      retries: 10
     restart: unless-stopped
     networks:
       - doc-network
@@ -86,7 +81,7 @@ services:
       redis:
         condition: service_healthy
       qdrant:
-        condition: service_healthy
+        condition: service_started
     restart: unless-stopped
     networks:
       - doc-network
@@ -117,7 +112,7 @@ services:
       redis:
         condition: service_healthy
       qdrant:
-        condition: service_healthy
+        condition: service_started
     restart: unless-stopped
     networks:
       - doc-network

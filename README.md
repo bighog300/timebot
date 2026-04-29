@@ -26,6 +26,7 @@ AI-assisted document intelligence platform with upload/search, review workflow, 
    docker compose up --build
    ```
 4. Migrations run automatically on app startup in Docker (`alembic upgrade head` via `scripts/start-app.sh`).
+5. Qdrant is started by Compose, but app/worker dependencies use `service_started` so API startup is not blocked by Qdrant healthcheck fragility.
 
 API: `http://localhost:8001`  
 Frontend (dev): `http://localhost:5174`
@@ -59,6 +60,12 @@ npm run dev -- --host 0.0.0.0 --port 5174
 
 
 Detailed Docker + frontend + LAN setup steps: see `docs/LOCAL_DEV.md`.
+
+CORS example for local + LAN dev:
+
+```env
+ALLOWED_ORIGINS=http://localhost:5174,http://127.0.0.1:5174,http://192.168.1.50:5174
+```
 
 ## Environment variables
 
