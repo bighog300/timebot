@@ -61,8 +61,8 @@ export function useCategories() {
   return useQuery({ queryKey: keys.categories, queryFn: api.listCategories });
 }
 
-export function useReviewItems(status: 'open' | 'resolved' | 'dismissed') {
-  return useQuery({ queryKey: keys.reviewItems(status), queryFn: () => api.listReviewItems(status) });
+export function useReviewItems(status: 'open' | 'resolved' | 'dismissed', page = 0, limit = 20) {
+  return useQuery({ queryKey: [...keys.reviewItems(status), page, limit], queryFn: () => api.listReviewItems(status, limit, page * limit) });
 }
 
 export function useResolveReviewItem() {
@@ -133,10 +133,10 @@ export function useDismissRelationshipReview() {
   });
 }
 
-export function useActionItems(state: 'open' | 'completed' | 'dismissed' | '') {
+export function useActionItems(state: 'open' | 'completed' | 'dismissed' | '', page = 0, limit = 20) {
   return useQuery({
-    queryKey: keys.actionItems(state || 'all'),
-    queryFn: () => api.listActionItems(state || undefined),
+    queryKey: [...keys.actionItems(state || 'all'), page, limit],
+    queryFn: () => api.listActionItems(state || undefined, limit, page * limit),
   });
 }
 

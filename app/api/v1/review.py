@@ -3,12 +3,15 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, get_db
+from datetime import datetime
+
+from app.api.deps import get_current_user, get_db, require_editor_or_admin
 from app.models.user import User
 from app.schemas.review_workflow import (
     BulkMutationRequest,
     BulkReviewItemMutationResponse,
     DocumentReviewItemResponse,
+    PaginatedReviewItemsResponse,
     RelationshipReviewDecisionRequest,
     RelationshipReviewResponse,
     RelationshipReviewStatus,
@@ -24,13 +27,23 @@ from app.services.review_queue import review_queue_service
 router = APIRouter(prefix="/review", tags=["review"])
 
 
-@router.get("/items", response_model=list[DocumentReviewItemResponse])
+@router.get("/items", response_model=PaginatedReviewItemsResponse)
 def list_review_items(
-    status: ReviewItemStatus = Query(ReviewItemStatus.OPEN),
+    status: ReviewItemStatus | None = Query(default=None),
+    review_type: str | None = Query(default=None),
+    priority: str | None = Query(default=None),
+    document_id: UUID | None = Query(default=None),
+    date_from: datetime | None = Query(default=None),
+    date_to: datetime | None = Query(default=None),
+    sort_by: str = Query(default="created_at"),
+    sort_order: str = Query(default="asc"),
+    limit: int = Query(default=20, ge=1, le=50),
+    offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    return review_queue_service.list_items(db, current_user.id, status=status)
+    items, total_count = review_queue_service.list_items(db, current_user.id, status=status.value if status else None, review_type=review_type, priority=priority, document_id=document_id, date_from=date_from, date_to=date_to, sort_by=sort_by, sort_order=sort_order, limit=limit, offset=offset)
+    return {"items": items, "total_count": total_count, "limit": limit, "offset": offset}
 
 
 @router.get("/metrics", response_model=ReviewMetricsResponse)
@@ -53,6 +66,7 @@ def get_review_item(item_id: UUID, db: Session = Depends(get_db), current_user: 
 def resolve_review_item(
     item_id: UUID,
     request: ReviewResolutionRequest,
+    _: str = Depends(require_editor_or_admin),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -69,6 +83,7 @@ def resolve_review_item(
 def dismiss_review_item(
     item_id: UUID,
     request: ReviewResolutionRequest,
+    _: str = Depends(require_editor_or_admin),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -84,6 +99,7 @@ def dismiss_review_item(
 @router.post("/items/bulk-resolve", response_model=BulkReviewItemMutationResponse)
 def bulk_resolve_review_items(
     request: BulkMutationRequest,
+    _: str = Depends(require_editor_or_admin),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -100,6 +116,7 @@ def bulk_resolve_review_items(
 @router.post("/items/bulk-dismiss", response_model=BulkReviewItemMutationResponse)
 def bulk_dismiss_review_items(
     request: BulkMutationRequest,
+    _: str = Depends(require_editor_or_admin),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -157,6 +174,7 @@ def get_relationship_review(
 def confirm_relationship_review(
     relationship_id: UUID,
     request: RelationshipReviewDecisionRequest,
+    _: str = Depends(require_editor_or_admin),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -179,6 +197,7 @@ def confirm_relationship_review(
 def dismiss_relationship_review(
     relationship_id: UUID,
     request: RelationshipReviewDecisionRequest,
+    _: str = Depends(require_editor_or_admin),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):

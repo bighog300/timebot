@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
-from sqlalchemy import func
+from sqlalchemy import asc, desc, func
 from sqlalchemy.orm import Session
 
 from app.models.intelligence import DocumentReviewItem, ReviewAuditEvent
@@ -30,16 +30,30 @@ class ReviewQueueService:
             return dt.replace(tzinfo=timezone.utc)
         return dt.astimezone(timezone.utc)
 
-    def list_items(self, db: Session, user_id: UUID, status: str = "open") -> list[DocumentReviewItem]:
+    def list_items(self, db: Session, user_id: UUID, **filters) -> tuple[list[DocumentReviewItem], int]:
         from app.models.document import Document
 
-        return (
-            db.query(DocumentReviewItem)
-            .join(Document, Document.id == DocumentReviewItem.document_id)
-            .filter(Document.user_id == user_id, DocumentReviewItem.status == status)
-            .order_by(DocumentReviewItem.created_at.asc())
-            .all()
-        )
+        query = db.query(DocumentReviewItem).join(Document, Document.id == DocumentReviewItem.document_id).filter(Document.user_id == user_id)
+        if filters.get("status"):
+            query = query.filter(DocumentReviewItem.status == filters["status"])
+        if filters.get("review_type"):
+            query = query.filter(DocumentReviewItem.review_type == filters["review_type"])
+        if filters.get("document_id"):
+            query = query.filter(DocumentReviewItem.document_id == filters["document_id"])
+        if filters.get("priority"):
+            query = query.filter(DocumentReviewItem.payload["priority"].astext == filters["priority"])
+        if filters.get("date_from"):
+            query = query.filter(DocumentReviewItem.created_at >= filters["date_from"])
+        if filters.get("date_to"):
+            query = query.filter(DocumentReviewItem.created_at <= filters["date_to"])
+
+        total_count = query.count()
+        sort_by = filters.get("sort_by", "created_at")
+        sort_order = filters.get("sort_order", "asc")
+        col = DocumentReviewItem.created_at if sort_by == "created_at" else DocumentReviewItem.payload["priority"].astext
+        order_fn = asc if sort_order == "asc" else desc
+        items = query.order_by(order_fn(col), DocumentReviewItem.id.asc()).limit(filters.get("limit", 20)).offset(filters.get("offset", 0)).all()
+        return items, total_count
 
     def get_metrics(
         self,

@@ -3,13 +3,16 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, get_db
+from datetime import datetime
+
+from app.api.deps import get_current_user, get_db, require_editor_or_admin
 from app.models.user import User
 from app.schemas.review_workflow import (
     ActionItemMetricsResponse,
     ActionItemResponse,
     ActionItemState,
     ActionItemUpdate,
+    PaginatedActionItemsResponse,
     BulkActionItemMutationResponse,
     BulkMutationRequest,
 )
@@ -18,13 +21,21 @@ from app.services.action_items import action_items_service
 router = APIRouter(tags=["action-items"])
 
 
-@router.get("/action-items", response_model=list[ActionItemResponse])
+@router.get("/action-items", response_model=PaginatedActionItemsResponse)
 def list_action_items(
-    state: ActionItemState | None = Query(default=None),
+    status: ActionItemState | None = Query(default=None),
+    document_id: UUID | None = Query(default=None),
+    date_from: datetime | None = Query(default=None),
+    date_to: datetime | None = Query(default=None),
+    sort_by: str = Query(default="created_at"),
+    sort_order: str = Query(default="desc"),
+    limit: int = Query(default=20, ge=1, le=50),
+    offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    return action_items_service.list_items(db, user_id=current_user.id, state=state)
+    items, total_count = action_items_service.list_items(db, user_id=current_user.id, state=status.value if status else None, document_id=document_id, date_from=date_from, date_to=date_to, sort_by=sort_by, sort_order=sort_order, limit=limit, offset=offset)
+    return {"items": items, "total_count": total_count, "limit": limit, "offset": offset}
 
 
 @router.get("/action-items/metrics", response_model=ActionItemMetricsResponse)
@@ -48,6 +59,7 @@ def list_document_action_items(
 def update_action_item(
     action_item_id: UUID,
     action_in: ActionItemUpdate,
+    _: str = Depends(require_editor_or_admin),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -66,6 +78,7 @@ def update_action_item(
 @router.post("/action-items/{action_item_id}/complete", response_model=ActionItemResponse)
 def complete_action_item(
     action_item_id: UUID,
+    _: str = Depends(require_editor_or_admin),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -81,6 +94,7 @@ def complete_action_item(
 @router.post("/action-items/{action_item_id}/dismiss", response_model=ActionItemResponse)
 def dismiss_action_item(
     action_item_id: UUID,
+    _: str = Depends(require_editor_or_admin),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -96,6 +110,7 @@ def dismiss_action_item(
 @router.post("/action-items/bulk-complete", response_model=BulkActionItemMutationResponse)
 def bulk_complete_action_items(
     request: BulkMutationRequest,
+    _: str = Depends(require_editor_or_admin),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -112,6 +127,7 @@ def bulk_complete_action_items(
 @router.post("/action-items/bulk-dismiss", response_model=BulkActionItemMutationResponse)
 def bulk_dismiss_action_items(
     request: BulkMutationRequest,
+    _: str = Depends(require_editor_or_admin),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):

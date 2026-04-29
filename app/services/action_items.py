@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
-from sqlalchemy import func
+from sqlalchemy import asc, desc, func
 from sqlalchemy.orm import Session
 
 from app.models.intelligence import DocumentActionItem, ReviewAuditEvent
@@ -37,17 +37,25 @@ class ActionItemsService:
             return dt.replace(tzinfo=timezone.utc)
         return dt.astimezone(timezone.utc)
 
-    def list_items(self, db: Session, user_id: UUID, state: str | None = None) -> list[DocumentActionItem]:
+    def list_items(self, db: Session, user_id: UUID, **filters) -> tuple[list[DocumentActionItem], int]:
         from app.models.document import Document
 
-        query = (
-            db.query(DocumentActionItem)
-            .join(Document, Document.id == DocumentActionItem.document_id)
-            .filter(Document.user_id == user_id)
-        )
-        if state:
-            query = query.filter(DocumentActionItem.state == state)
-        return query.order_by(DocumentActionItem.created_at.desc()).all()
+        query = db.query(DocumentActionItem).join(Document, Document.id == DocumentActionItem.document_id).filter(Document.user_id == user_id)
+        if filters.get("state"):
+            query = query.filter(DocumentActionItem.state == filters["state"])
+        if filters.get("document_id"):
+            query = query.filter(DocumentActionItem.document_id == filters["document_id"])
+        if filters.get("date_from"):
+            query = query.filter(DocumentActionItem.created_at >= filters["date_from"])
+        if filters.get("date_to"):
+            query = query.filter(DocumentActionItem.created_at <= filters["date_to"])
+        total_count = query.count()
+        sort_by = filters.get("sort_by", "created_at")
+        sort_order = filters.get("sort_order", "desc")
+        col = DocumentActionItem.created_at if sort_by == "created_at" else DocumentActionItem.state
+        order_fn = asc if sort_order == "asc" else desc
+        items = query.order_by(order_fn(col), DocumentActionItem.id.asc()).limit(filters.get("limit", 20)).offset(filters.get("offset", 0)).all()
+        return items, total_count
 
     def list_document_items(self, db: Session, user_id: UUID, document_id: UUID) -> list[DocumentActionItem]:
         from app.models.document import Document
