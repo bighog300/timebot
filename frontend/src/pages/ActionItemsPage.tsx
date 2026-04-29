@@ -46,10 +46,10 @@ export function ActionItemsPage() {
 
       {items.isLoading && <LoadingState label="Loading action items..." />}
       {items.isError && <ErrorState message="Failed to load action items" />}
-      {items.isSuccess && (items.data?.length ?? 0) === 0 && <EmptyState label="No action items available." />}
+      {items.isSuccess && (items.data?.items?.length ?? 0) === 0 && <EmptyState label="No action items available." />}
 
       <div className="space-y-2">
-        {(items.data ?? []).map((item) => (
+        {(items.data?.items ?? []).map((item) => (
           <Card key={item.id}>
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div className="space-y-1">

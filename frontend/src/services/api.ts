@@ -53,8 +53,8 @@ export const api = {
   getQueueStats: async (): Promise<QueueStats> => (await http.get('/queue/stats')).data,
   getQueueItems: async (): Promise<QueueItem[]> => (await http.get('/queue/items')).data,
   getReviewQueue: async (): Promise<Document[]> => (await http.get('/documents/review-queue')).data,
-  listReviewItems: async (status: 'open' | 'resolved' | 'dismissed' = 'open'): Promise<ReviewItem[]> =>
-    (await http.get('/review/items', { params: { status } })).data,
+  listReviewItems: async (status: 'open' | 'resolved' | 'dismissed' = 'open', limit = 20, offset = 0): Promise<{items: ReviewItem[]; total_count:number; limit:number; offset:number}> =>
+    (await http.get('/review/items', { params: { status, limit, offset } })).data,
   resolveReviewItem: async (id: string, note?: string): Promise<ReviewItem> =>
     (await http.post(`/review/items/${id}/resolve`, { note })).data,
   dismissReviewItem: async (id: string, note?: string): Promise<ReviewItem> =>
@@ -81,8 +81,8 @@ export const api = {
   overrideDocumentCategory: async (id: string, categoryId: string): Promise<Document> =>
     (await http.post(`/documents/${id}/category/override`, { category_id: categoryId })).data,
   getDocumentAuditHistory: async (id: string): Promise<ReviewAuditEvent[]> => (await http.get(`/documents/${id}/review-audit`)).data,
-  listActionItems: async (state?: 'open' | 'completed' | 'dismissed'): Promise<ActionItem[]> =>
-    (await http.get('/action-items', { params: state ? { state } : undefined })).data,
+  listActionItems: async (status?: 'open' | 'completed' | 'dismissed', limit = 20, offset = 0): Promise<{items: ActionItem[]; total_count:number; limit:number; offset:number}> =>
+    (await http.get('/action-items', { params: { status, limit, offset } })).data,
   completeActionItem: async (id: string): Promise<ActionItem> => (await http.post(`/action-items/${id}/complete`)).data,
   dismissActionItem: async (id: string): Promise<ActionItem> => (await http.post(`/action-items/${id}/dismiss`)).data,
   bulkCompleteActionItems: async (ids: string[], note?: string): Promise<{ updated_count: number; skipped_count: number; items: ActionItem[] }> =>

@@ -26,7 +26,7 @@ export function ReviewQueuePage() {
   const bulkDismiss = useBulkDismissReviewItems();
 
   const filtered = useMemo(() => {
-    return (items.data ?? []).filter((item) => {
+    return (items.data?.items ?? []).filter((item) => {
       const matchesType = reviewType === 'all' || item.review_type === reviewType;
       const itemPriority = String(item.payload?.priority ?? 'normal');
       const matchesPriority = priority === 'all' || itemPriority === priority;

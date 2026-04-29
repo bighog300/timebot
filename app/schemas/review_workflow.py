@@ -94,6 +94,21 @@ class DocumentReviewItemResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+
+
+class PaginatedReviewItemsResponse(BaseModel):
+    items: list[DocumentReviewItemResponse] = Field(default_factory=list)
+    total_count: int
+    limit: int
+    offset: int
+
+
+class PaginatedActionItemsResponse(BaseModel):
+    items: list[ActionItemResponse] = Field(default_factory=list)
+    total_count: int
+    limit: int
+    offset: int
+
 class ReviewResolutionRequest(BaseModel):
     note: str | None = None
 
