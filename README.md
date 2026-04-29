@@ -20,15 +20,12 @@ AI-assisted document intelligence platform with upload/search, review workflow, 
    ```bash
    cp .env.example .env
    ```
-2. Set required secrets in `.env` (at minimum `OPENAI_API_KEY`, `AUTH_SECRET_KEY`).
+2. Set required secrets in `.env` (at minimum `AUTH_SECRET_KEY`). `OPENAI_API_KEY` can be blank for boot/auth.
 3. Start stack:
    ```bash
    docker compose up --build
    ```
-4. Run migrations (from app container shell or local environment):
-   ```bash
-   alembic upgrade head
-   ```
+4. Migrations run automatically on app startup in Docker (`alembic upgrade head` via `scripts/start-app.sh`).
 
 API: `http://localhost:8001`  
 Frontend (dev): `http://localhost:5174`

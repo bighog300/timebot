@@ -59,7 +59,7 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: doc-organizer
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    command: ./scripts/start-app.sh
     ports:
       - "8001:8000" # host:container (8001 avoids common local 8000 conflicts; frontend should call :8001)
     environment:
