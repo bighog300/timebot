@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     DEBUG: bool = False
     API_HOST: str = "0.0.0.0"
     API_PORT: int = 8000
-    ALLOWED_ORIGINS: str = "http://localhost:5173,http://localhost:3000"
+    ALLOWED_ORIGINS: str = "http://localhost:5174,http://127.0.0.1:5174"
 
     DATABASE_URL: str = "postgresql://docuser:docpass@localhost:5432/documents"
     SQL_ECHO: bool = False

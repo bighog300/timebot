@@ -23,6 +23,6 @@ describe('env config resolution', () => {
 
   test('preserves legacy defaults', () => {
     expect(resolveApiBaseUrl({})).toBe('/api/v1');
-    expect(resolveWsBaseUrl({})).toBe('ws://localhost:8000');
+    expect(resolveWsBaseUrl({})).toBe('ws://localhost:8001');
   });
 });

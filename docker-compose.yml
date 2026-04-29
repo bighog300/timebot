@@ -11,7 +11,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
-      - "5433:5432"
+      - "5433:5432" # host:container (5433 avoids common local Postgres 5432 conflicts)
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U docuser -d documents"]
       interval: 10s
@@ -25,7 +25,7 @@ services:
     image: redis:7-alpine
     container_name: doc-redis
     ports:
-      - "6379:6379"
+      - "6379:6379" # host:container
     volumes:
       - redis_data:/data
     healthcheck:
@@ -41,8 +41,8 @@ services:
     image: qdrant/qdrant:latest
     container_name: doc-qdrant
     ports:
-      - "6335:6333"
-      - "6336:6334"
+      - "6335:6333" # host:container (6335 avoids local 6333 conflicts)
+      - "6336:6334" # host:container (gRPC)
     volumes:
       - qdrant_data:/qdrant/storage
     restart: unless-stopped
@@ -56,7 +56,7 @@ services:
     container_name: doc-organizer
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000
     ports:
-      - "8001:8000"
+      - "8001:8000" # host:container (8001 avoids common local 8000 conflicts)
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - DATABASE_URL=postgresql://docuser:docpass@db:5432/documents
@@ -68,7 +68,7 @@ services:
       - STORAGE_PATH=/app/data
       - QDRANT_HOST=qdrant
       - QDRANT_PORT=6333
-      - ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:5174,http://127.0.0.1:5174}
       - AUTH_SECRET_KEY=${AUTH_SECRET_KEY:-dev-insecure-change-me}
     volumes:
       - ./data:/app/data
@@ -139,7 +139,7 @@ services:
     container_name: doc-flower
     command: celery -A app.workers.celery_app flower --port=5555
     ports:
-      - "5555:5555"
+      - "5555:5555" # host:container
     environment:
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0

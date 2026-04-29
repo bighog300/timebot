@@ -32,7 +32,7 @@ export function resolveWsBaseUrl(envInput: EnvInput): string {
   if (envInput.VITE_API_BASE_URL?.startsWith('http')) {
     return deriveWsOriginFromHttp(envInput.VITE_API_BASE_URL);
   }
-  return 'ws://localhost:8000';
+  return 'ws://localhost:8001';
 }
 
 const viteEnv = import.meta.env as EnvInput;
