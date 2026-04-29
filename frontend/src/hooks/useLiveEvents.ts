@@ -23,7 +23,7 @@ export function useLiveEvents() {
   const qc = useQueryClient();
 
   useEffect(() => {
-    const ws = new WebSocket(`${env.wsBaseUrl}/all`);
+    const ws = new WebSocket(`${env.wsBaseUrl}/api/v1/ws/all`);
     ws.onmessage = (message) => {
       let payload: LiveEventPayload | null = null;
       if (typeof message.data === 'string' && message.data.length > 0) {
