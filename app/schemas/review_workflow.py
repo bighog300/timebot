@@ -103,6 +103,21 @@ class PaginatedReviewItemsResponse(BaseModel):
     offset: int
 
 
+class ActionItemResponse(BaseModel):
+    id: UUID
+    document_id: UUID
+    content: str
+    state: ActionItemState
+    source: str
+    action_metadata: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime
+    updated_at: datetime
+    completed_at: datetime | None = None
+    dismissed_at: datetime | None = None
+
+    model_config = {"from_attributes": True}
+
+
 class PaginatedActionItemsResponse(BaseModel):
     items: list[ActionItemResponse] = Field(default_factory=list)
     total_count: int
@@ -120,21 +135,6 @@ class BulkMutationRequest(BaseModel):
 
 class CategoryOverrideRequest(BaseModel):
     category_id: UUID
-
-
-class ActionItemResponse(BaseModel):
-    id: UUID
-    document_id: UUID
-    content: str
-    state: ActionItemState
-    source: str
-    action_metadata: dict[str, Any] = Field(default_factory=dict)
-    created_at: datetime
-    updated_at: datetime
-    completed_at: datetime | None = None
-    dismissed_at: datetime | None = None
-
-    model_config = {"from_attributes": True}
 
 
 class ActionItemUpdate(BaseModel):
