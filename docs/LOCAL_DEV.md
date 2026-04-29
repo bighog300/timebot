@@ -14,6 +14,7 @@ docker compose up --build
 
 > Migrations run automatically before API startup in Docker (`alembic upgrade head`).
 > `OPENAI_API_KEY` can stay blank for boot, register, and login. Add it later for AI enrichment/embeddings.
+> Qdrant is started by Docker Compose, but the API/worker now wait only for Qdrant container start (not a healthcheck gate) to avoid blocked startup loops.
 
 ### Frontend
 
@@ -71,3 +72,28 @@ Port notes:
 
 - Backend host port is `8001` (container still listens on `8000`) to avoid local conflicts.
 - Frontend dev port is `5174` to avoid conflicts with common `5173` usage.
+
+
+Backend unreachable on 8001:
+
+```bash
+curl -i http://localhost:8001/health
+docker compose ps
+```
+
+If backend is not reachable, confirm container startup logs:
+
+```bash
+docker compose logs app --tail=200
+```
+
+Frontend dev port mismatch (5174 expected):
+
+```bash
+npm --prefix frontend run dev -- --host 0.0.0.0 --port 5174
+```
+
+Qdrant dashboard:
+
+- Open `http://localhost:6335/dashboard` in browser.
+- API root check: `curl http://localhost:6335/`.
