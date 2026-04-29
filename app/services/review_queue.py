@@ -41,7 +41,7 @@ class ReviewQueueService:
         if filters.get("document_id"):
             query = query.filter(DocumentReviewItem.document_id == filters["document_id"])
         if filters.get("priority"):
-            query = query.filter(DocumentReviewItem.payload["priority"].astext == filters["priority"])
+            query = query.filter(DocumentReviewItem.payload["priority"].as_string() == filters["priority"])
         if filters.get("date_from"):
             query = query.filter(DocumentReviewItem.created_at >= filters["date_from"])
         if filters.get("date_to"):
@@ -50,7 +50,7 @@ class ReviewQueueService:
         total_count = query.count()
         sort_by = filters.get("sort_by", "created_at")
         sort_order = filters.get("sort_order", "asc")
-        col = DocumentReviewItem.created_at if sort_by == "created_at" else DocumentReviewItem.payload["priority"].astext
+        col = DocumentReviewItem.created_at if sort_by == "created_at" else DocumentReviewItem.payload["priority"].as_string()
         order_fn = asc if sort_order == "asc" else desc
         items = query.order_by(order_fn(col), DocumentReviewItem.id.asc()).limit(filters.get("limit", 20)).offset(filters.get("offset", 0)).all()
         return items, total_count

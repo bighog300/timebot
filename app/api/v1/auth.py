@@ -4,6 +4,12 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user, get_db
 from app.models.user import User
 from app.schemas.auth import AuthResponse, LoginRequest, RegisterRequest, UserResponse
+
+
+def _ensure_role(user: User):
+    if not getattr(user, "role", None):
+        user.role = "viewer"
+    return user
 from app.services.auth import auth_service
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -25,7 +31,7 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(user)
     token = auth_service.create_access_token(user)
-    return AuthResponse(access_token=token, user=user)
+    return AuthResponse(access_token=token, user=_ensure_role(user))
 
 
 @router.post("/login", response_model=AuthResponse)
@@ -35,9 +41,9 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
 
     token = auth_service.create_access_token(user)
-    return AuthResponse(access_token=token, user=user)
+    return AuthResponse(access_token=token, user=_ensure_role(user))
 
 
 @router.get("/me", response_model=UserResponse)
 def me(current_user: User = Depends(get_current_user)):
-    return current_user
+    return _ensure_role(current_user)
