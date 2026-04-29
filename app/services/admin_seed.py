@@ -1,5 +1,6 @@
 import logging
 
+from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -7,6 +8,14 @@ from app.models.user import User
 from app.services.auth import auth_service
 
 logger = logging.getLogger(__name__)
+
+
+_MIGRATION_WARNING = "Skipping initial admin seed because migrations are not applied. Run alembic upgrade head."
+
+
+def _is_missing_column_error(exc: ProgrammingError) -> bool:
+    message = str(getattr(exc, "orig", exc)).lower()
+    return "undefinedcolumn" in message or "column" in message and "does not exist" in message
 
 
 def seed_initial_admin(db: Session) -> bool:
@@ -17,11 +26,19 @@ def seed_initial_admin(db: Session) -> bool:
     if not email or not password:
         return False
 
-    existing = db.query(User).filter(User.email == email).first()
+    try:
+        existing = db.query(User).filter(User.email == email).first()
+    except ProgrammingError as exc:
+        if _is_missing_column_error(exc):
+            db.rollback()
+            logger.warning(_MIGRATION_WARNING)
+            return False
+        raise
+
     if existing:
         updated = False
-        if existing.role != "editor":
-            existing.role = "editor"
+        if existing.role != "admin":
+            existing.role = "admin"
             updated = True
         if not existing.is_active:
             existing.is_active = True
@@ -37,7 +54,7 @@ def seed_initial_admin(db: Session) -> bool:
         display_name=name,
         password_hash=auth_service.hash_password(password),
         is_active=True,
-        role="editor",
+        role="admin",
     )
     db.add(user)
     db.commit()

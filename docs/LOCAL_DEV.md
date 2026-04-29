@@ -10,9 +10,9 @@ python3 -c "import secrets; print(secrets.token_hex(32))"
 # paste generated value into AUTH_SECRET_KEY in .env
 # set ALLOWED_ORIGINS for your frontend host(s)
 docker compose up --build
-docker compose exec app alembic upgrade head
 ```
 
+> Migrations run automatically before API startup in Docker (`alembic upgrade head`).
 > `OPENAI_API_KEY` can stay blank for boot, register, and login. Add it later for AI enrichment/embeddings.
 
 ### Frontend

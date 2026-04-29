@@ -1,4 +1,7 @@
+from unittest.mock import Mock
+
 from fastapi.testclient import TestClient
+from sqlalchemy.exc import ProgrammingError
 
 from app.config import Settings
 from app.main import app
@@ -43,7 +46,19 @@ def test_register_login_without_openai_key(client, monkeypatch):
     assert login.json().get('access_token')
 
 
-def test_seed_initial_admin_is_idempotent(db, monkeypatch):
+def test_seed_initial_admin_skips_when_migrations_not_applied(monkeypatch, caplog):
+    monkeypatch.setattr('app.services.admin_seed.settings.INITIAL_ADMIN_EMAIL', 'admin@example.com')
+    monkeypatch.setattr('app.services.admin_seed.settings.INITIAL_ADMIN_PASSWORD', 'password12345')
+
+    db = Mock()
+    db.query.side_effect = ProgrammingError('SELECT role FROM users', {}, Exception('UndefinedColumn: column users.role does not exist'))
+
+    assert seed_initial_admin(db) is False
+    db.rollback.assert_called_once()
+    assert 'Skipping initial admin seed because migrations are not applied' in caplog.text
+
+
+def test_seed_initial_admin_is_idempotent_and_promotes_admin(db, monkeypatch):
     monkeypatch.setattr('app.services.admin_seed.settings.INITIAL_ADMIN_EMAIL', 'admin@example.com')
     monkeypatch.setattr('app.services.admin_seed.settings.INITIAL_ADMIN_PASSWORD', 'password12345')
     monkeypatch.setattr('app.services.admin_seed.settings.INITIAL_ADMIN_NAME', 'Admin User')
@@ -53,4 +68,4 @@ def test_seed_initial_admin_is_idempotent(db, monkeypatch):
 
     users = db.query(User).filter(User.email == 'admin@example.com').all()
     assert len(users) == 1
-    assert users[0].role == 'editor'
+    assert users[0].role == 'admin'
