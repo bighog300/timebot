@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { useAuth } from '@/auth/AuthContext';
 import { useQueryClient } from '@tanstack/react-query';
 import { env } from '@/lib/env';
 import { keys } from '@/hooks/useApi';
@@ -21,8 +22,12 @@ function isValidTimestamp(value: unknown): boolean {
 
 export function useLiveEvents() {
   const qc = useQueryClient();
+  const { token, loading } = useAuth();
 
   useEffect(() => {
+    if (loading || !token) {
+      return () => {};
+    }
     let ws: WebSocket | null = null;
 
     try {
@@ -66,5 +71,5 @@ export function useLiveEvents() {
     };
 
     return () => ws?.close();
-  }, [qc]);
+  }, [qc, loading, token]);
 }
