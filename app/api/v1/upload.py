@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/upload", tags=["upload"])
 
 
+@router.post("", response_model=DocumentResponse, status_code=202)
 @router.post("/", response_model=DocumentResponse, status_code=202)
 async def upload_document(
     file: UploadFile = File(...),
@@ -23,7 +24,8 @@ async def upload_document(
         document = await document_processor.process_upload(db, file, current_user)
         return document
     except ValueError as e:
+        logger.exception("Upload failed")
         raise HTTPException(status_code=400, detail=str(e))
-    except Exception:
-        logger.exception("Unhandled error during document upload")
-        raise HTTPException(status_code=500, detail="An unexpected error occurred during upload")
+    except Exception as e:
+        logger.exception("Upload failed")
+        raise HTTPException(status_code=500, detail=str(e))

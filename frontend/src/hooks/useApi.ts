@@ -31,8 +31,14 @@ export function useDocuments() {
 
 export function useUploadDocument() {
   const qc = useQueryClient();
+  const { token, loading } = useAuth();
   return useMutation({
-    mutationFn: api.uploadDocument,
+    mutationFn: async (file: File) => {
+      if (loading || !token) {
+        throw new Error('Authentication is still loading. Please try again in a moment.');
+      }
+      return api.uploadDocument({ file, token });
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: keys.documents });
     },
