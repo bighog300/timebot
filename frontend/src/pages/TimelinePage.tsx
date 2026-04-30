@@ -17,9 +17,9 @@ const ROW_HEIGHT = 64;
 const MAX_CHART_WIDTH = 3600;
 const MIN_BAR_WIDTH = 6;
 
-type ZoomMode = 'fit' | 'month' | 'quarter' | 'year';
+type TimelineZoom = 'fit' | 'month' | 'quarter' | 'year';
 
-const ZOOM_OPTIONS: Array<{ mode: ZoomMode; label: string }> = [
+const ZOOM_OPTIONS: Array<{ mode: TimelineZoom; label: string }> = [
   { mode: 'fit', label: 'Fit' },
   { mode: 'month', label: 'Month' },
   { mode: 'quarter', label: 'Quarter' },
@@ -31,7 +31,7 @@ export function TimelinePage() {
   const { data, isLoading, isError } = useQuery({ queryKey: ['timeline'], queryFn: api.getTimeline });
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const [containerWidth, setContainerWidth] = useState<number>(0);
-  const [zoomMode, setZoomMode] = useState<ZoomMode>('fit');
+  const [zoomMode, setZoomMode] = useState<TimelineZoom>('fit');
 
   useEffect(() => {
     const container = scrollContainerRef.current;
@@ -83,18 +83,23 @@ export function TimelinePage() {
 
     const totalDays = Math.max(1, Math.ceil((paddedMax.getTime() - paddedMin.getTime()) / MS_PER_DAY));
     const availableTimelineWidth = Math.max(320, (containerWidth || 0) - LABEL_WIDTH);
-    const defaultPixelsPerDay =
-      totalDays > 365 * 5 ? 0.8 : totalDays > 365 * 2 ? 1.2 : totalDays > 365 ? 2 : totalDays > 180 ? 4 : 8;
-    const pixelsPerDayByZoom: Record<Exclude<ZoomMode, 'fit'>, number> = {
-      month: Math.max(defaultPixelsPerDay, 8),
-      quarter: Math.max(defaultPixelsPerDay, 3),
-      year: Math.max(defaultPixelsPerDay, 1.2),
+    const pixelsPerDayByZoom: Record<Exclude<TimelineZoom, 'fit'>, number> = {
+      month: 8,
+      quarter: 3,
+      year: 1,
     };
+
+    const rawWidthByZoom = {
+      fit: availableTimelineWidth,
+      month: totalDays * pixelsPerDayByZoom.month,
+      quarter: totalDays * pixelsPerDayByZoom.quarter,
+      year: totalDays * pixelsPerDayByZoom.year,
+    } satisfies Record<TimelineZoom, number>;
 
     const width =
       zoomMode === 'fit'
         ? availableTimelineWidth
-        : Math.max(availableTimelineWidth, Math.min(totalDays * pixelsPerDayByZoom[zoomMode], MAX_CHART_WIDTH));
+        : Math.max(availableTimelineWidth, Math.min(rawWidthByZoom[zoomMode], MAX_CHART_WIDTH));
 
     const ticks: Array<{ label: string; x: number }> = [];
     const tickDate = new Date(Date.UTC(paddedMin.getUTCFullYear(), paddedMin.getUTCMonth(), 1));
@@ -106,8 +111,25 @@ export function TimelinePage() {
 
     const dateToX = (date: Date) => ((date.getTime() - paddedMin.getTime()) / (paddedMax.getTime() - paddedMin.getTime())) * width;
 
-    return { width, ticks, dateToX, availableTimelineWidth, isScrollable: width > availableTimelineWidth };
+    return { width, ticks, dateToX, availableTimelineWidth, isScrollable: width > availableTimelineWidth + 8 };
   }, [containerWidth, normalizedEvents, zoomMode]);
+
+  useEffect(() => {
+    const scrollEl = scrollContainerRef.current;
+    if (!scrollEl) return;
+    if (typeof scrollEl.scrollTo === 'function') {
+      scrollEl.scrollTo({ left: 0, behavior: 'smooth' });
+      return;
+    }
+    scrollEl.scrollLeft = 0;
+  }, [zoomMode]);
+
+  const panTimeline = (direction: 'left' | 'right') => {
+    const scrollEl = scrollContainerRef.current;
+    if (!scrollEl) return;
+    const distance = Math.max(180, Math.floor(scrollEl.clientWidth * 0.7));
+    scrollEl.scrollBy({ left: direction === 'left' ? -distance : distance, behavior: 'smooth' });
+  };
 
   if (isLoading) return <div>Loading timeline…</div>;
   if (isError) return <div>Failed to load timeline.</div>;
@@ -115,7 +137,7 @@ export function TimelinePage() {
   if (!chart) return null;
 
   return (
-    <div className="w-full max-w-full min-w-0 space-y-3 overflow-hidden">
+    <div className="w-full min-w-0 max-w-[calc(100vw-2rem)] space-y-3 overflow-hidden">
       <h1 className="text-xl font-semibold">Timeline</h1>
       <div className="flex flex-wrap items-center gap-2">
         {ZOOM_OPTIONS.map((option) => (
@@ -124,13 +146,34 @@ export function TimelinePage() {
             type="button"
             onClick={() => setZoomMode(option.mode)}
             className={`rounded-md border px-3 py-1 text-xs ${zoomMode === option.mode ? 'border-blue-400 bg-blue-500/20 text-blue-200' : 'border-slate-600 text-slate-300 hover:bg-slate-800'}`}
+            aria-pressed={zoomMode === option.mode}
           >
             {option.label}
           </button>
         ))}
+        {chart.isScrollable ? (
+          <>
+            <button
+              type="button"
+              className="rounded-md border border-slate-600 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800"
+              onClick={() => panTimeline('left')}
+              aria-label="Pan timeline left"
+            >
+              ←
+            </button>
+            <button
+              type="button"
+              className="rounded-md border border-slate-600 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800"
+              onClick={() => panTimeline('right')}
+              aria-label="Pan timeline right"
+            >
+              →
+            </button>
+          </>
+        ) : null}
       </div>
       {chart.isScrollable ? <p className="text-xs text-slate-400">Drag or scroll inside the chart to pan timeline.</p> : null}
-      <div className="w-full max-w-full min-w-0 overflow-hidden rounded-2xl border border-slate-700 bg-slate-900 shadow-sm">
+      <div className="w-full max-w-full min-w-0 overflow-hidden rounded-2xl border border-slate-700 bg-slate-900 shadow-sm" data-testid="timeline-card">
         <div
           ref={scrollContainerRef}
           className="timeline-scroll w-full max-w-full min-w-0 max-h-[calc(100vh-240px)] overflow-auto overscroll-contain"
@@ -140,7 +183,7 @@ export function TimelinePage() {
           <div className="relative" style={{ width: LABEL_WIDTH + chart.width, maxWidth: 'none' }} data-testid="timeline-inner-content">
             <div className="sticky top-0 z-20 flex border-b border-slate-700 bg-slate-900/95">
               <div
-                className="sticky left-0 top-0 z-30 shrink-0 border-r border-slate-700 bg-slate-900 p-3 text-xs font-semibold uppercase tracking-wide text-slate-300"
+                className="sticky left-0 top-0 z-40 shrink-0 border-r border-slate-700 bg-slate-900 p-3 text-xs font-semibold uppercase tracking-wide text-slate-300"
                 style={{ width: LABEL_WIDTH }}
               >
               Event / Document
@@ -167,7 +210,7 @@ export function TimelinePage() {
                   onClick={() => navigate(`/documents/${item.event.document_id}`)}
                   title={`${item.event.title} • ${item.event.document_title} • ${item.event.start_date || item.event.date}${item.event.end_date ? ` → ${item.event.end_date}` : ''}${item.event.source_quote ? ` • ${item.event.source_quote}` : ''}`}
                 >
-                  <div className="sticky left-0 z-10 shrink-0 border-r border-slate-700 bg-slate-900 p-3" style={{ width: LABEL_WIDTH }}>
+                  <div className="sticky left-0 z-30 shrink-0 border-r border-slate-700 bg-slate-900 p-3" style={{ width: LABEL_WIDTH }}>
                     <div className="truncate text-sm font-medium">{item.event.title}</div>
                     <div className="truncate text-xs text-slate-400">{item.event.document_title}</div>
                     <div className="text-xs text-slate-500">confidence: {Math.round(item.event.confidence * 100)}%</div>

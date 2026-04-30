@@ -70,28 +70,56 @@ describe('TimelinePage', () => {
     const { container } = renderPage();
     await screen.findByTestId('timeline-scroll-container');
 
-    const root = container.querySelector('div.w-full.max-w-full.min-w-0.space-y-3.overflow-hidden') as HTMLElement;
-    expect(root.className).toContain('w-full');
+    const root = container.querySelector('div.w-full.min-w-0.max-w-\\[calc\\(100vw-2rem\\)\\].space-y-3.overflow-hidden') as HTMLElement;
+    expect(root.className).toContain('max-w-[calc(100vw-2rem)]');
     expect(root.className).not.toContain('min-w-max');
+    expect(screen.getByTestId('timeline-card').className).toContain('max-w-full');
     expect(container.querySelectorAll('.overflow-auto').length).toBe(1);
     expect(container.querySelectorAll('.overflow-x-auto').length).toBe(0);
     expect(container.querySelector('.min-w-max')).toBeNull();
   });
 
-  it('uses Fit mode by default and only shows pan hint when zoomed wider', async () => {
+  it('updates zoom state and width scaling and only shows pan hint when scrollable', async () => {
     vi.mocked(api.getTimeline).mockResolvedValue({
       total_documents: 1,
       total_events: 1,
-      events: [{ title: 'Long Program', start_date: '2016-01-01', end_date: '2026-01-01', confidence: 0.95, document_id: 'd1', document_title: 'doc', source_quote: 'Long range', date: null }],
+      events: [{ title: 'Long Program', start_date: '2025-01-01', end_date: '2025-10-01', confidence: 0.95, document_id: 'd1', document_title: 'doc', source_quote: 'Long range', date: null }],
     } as any);
     renderPage();
 
-    expect(await screen.findByTestId('timeline-axis')).toBeTruthy();
+    const axis = await screen.findByTestId('timeline-axis');
     expect(screen.queryByText('Drag or scroll inside the chart to pan timeline.')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Fit' }).getAttribute('aria-pressed')).toBe('true');
+
+    const fitWidth = Number((axis as HTMLElement).style.width.replace('px', ''));
 
     const controls = screen.getByText('Fit').parentElement as HTMLElement;
     fireEvent.click(within(controls).getByRole('button', { name: 'Month' }));
+    expect(screen.getByRole('button', { name: 'Month' }).getAttribute('aria-pressed')).toBe('true');
     expect(await screen.findByText('Drag or scroll inside the chart to pan timeline.')).toBeTruthy();
+
+    const monthWidth = Number((screen.getByTestId('timeline-axis') as HTMLElement).style.width.replace('px', ''));
+    expect(monthWidth).toBeGreaterThan(fitWidth);
+
+    fireEvent.click(within(controls).getByRole('button', { name: 'Year' }));
+    const yearWidth = Number((screen.getByTestId('timeline-axis') as HTMLElement).style.width.replace('px', ''));
+    expect(yearWidth).toBeLessThan(monthWidth);
+  });
+
+  it('pan buttons scroll the timeline container when chart is scrollable', async () => {
+    vi.mocked(api.getTimeline).mockResolvedValue({
+      total_documents: 1,
+      total_events: 1,
+      events: [{ title: 'Long Program', start_date: '2025-01-01', end_date: '2025-10-01', confidence: 0.95, document_id: 'd1', document_title: 'doc', source_quote: 'Long range', date: null }],
+    } as any);
+    renderPage();
+    const scrollContainer = await screen.findByTestId('timeline-scroll-container');
+    const scrollByMock = vi.fn();
+    (scrollContainer as HTMLDivElement).scrollBy = scrollByMock;
+
+    fireEvent.click(screen.getByRole('button', { name: 'Month' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Pan timeline right' }));
+    expect(scrollByMock).toHaveBeenCalled();
   });
 
   it('does not show empty state when events exist', async () => {
