@@ -7,6 +7,9 @@ from app.models.admin_audit import AdminAuditEvent
 from app.models.document import Document
 from app.models.intelligence import DocumentActionItem, DocumentRelationshipReview, DocumentReviewItem
 from app.models.user import User
+
+from app.models.chat import ChatbotSettings
+from app.schemas.chatbot import ChatbotSettingsPayload, ChatbotSettingsResponse
 from app.schemas.admin import (
     AdminAuditEventResponse,
     AdminAuditPageResponse,
@@ -109,3 +112,60 @@ def admin_metrics(_: str = Depends(require_admin), db: Session = Depends(get_db)
         open_action_items=db.query(func.count(DocumentActionItem.id)).filter(DocumentActionItem.state == "open").scalar() or 0,
         pending_relationship_reviews=db.query(func.count(DocumentRelationshipReview.id)).filter(DocumentRelationshipReview.status == "pending").scalar() or 0,
     )
+
+
+DEFAULT_CHATBOT_SETTINGS = {
+    "system_prompt": "You are Timebot. Use only uploaded and processed Timebot documents and persisted intelligence. If not found, say so.",
+    "retrieval_prompt": "Retrieve timeline events, summaries, relationships, and excerpts.",
+    "report_prompt": "Generate a markdown report grounded in sources.",
+    "citation_prompt": "Cite document title and id for every factual claim.",
+    "default_report_template": "# Report\n\n## Summary\n\n## Details\n\n## Sources",
+    "model": "gpt-4.1-mini",
+    "temperature": 0.2,
+    "max_tokens": 1200,
+    "max_documents": 8,
+    "allow_full_text_retrieval": True,
+}
+
+
+def _get_or_create_chatbot_settings(db: Session) -> ChatbotSettings:
+    settings = db.query(ChatbotSettings).order_by(ChatbotSettings.created_at.asc()).first()
+    if settings:
+        return settings
+    settings = ChatbotSettings(**DEFAULT_CHATBOT_SETTINGS)
+    db.add(settings)
+    db.commit()
+    db.refresh(settings)
+    return settings
+
+
+@router.get("/chatbot-settings", response_model=ChatbotSettingsResponse)
+def get_chatbot_settings(_: str = Depends(require_admin), db: Session = Depends(get_db)):
+    return _get_or_create_chatbot_settings(db)
+
+
+@router.put("/chatbot-settings", response_model=ChatbotSettingsResponse)
+def update_chatbot_settings(payload: ChatbotSettingsPayload, _: str = Depends(require_admin), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    settings = _get_or_create_chatbot_settings(db)
+    before = {k: getattr(settings, k) for k in DEFAULT_CHATBOT_SETTINGS.keys()}
+    for k, v in payload.model_dump().items():
+        setattr(settings, k, v)
+    settings.updated_by_id = current_user.id
+    db.add(settings)
+    db.add(AdminAuditEvent(actor_id=current_user.id, entity_type="chatbot_settings", entity_id=str(settings.id), action="chatbot_settings_updated", details={"before": before, "after": payload.model_dump()}))
+    db.commit()
+    db.refresh(settings)
+    return settings
+
+
+@router.post("/chatbot-settings/reset", response_model=ChatbotSettingsResponse)
+def reset_chatbot_settings(_: str = Depends(require_admin), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    settings = _get_or_create_chatbot_settings(db)
+    for k, v in DEFAULT_CHATBOT_SETTINGS.items():
+        setattr(settings, k, v)
+    settings.updated_by_id = current_user.id
+    db.add(settings)
+    db.add(AdminAuditEvent(actor_id=current_user.id, entity_type="chatbot_settings", entity_id=str(settings.id), action="chatbot_settings_reset", details={}))
+    db.commit()
+    db.refresh(settings)
+    return settings

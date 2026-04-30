@@ -9,6 +9,7 @@ from app.models.intelligence import (
     ReviewAuditEvent,
 )
 from app.models.admin_audit import AdminAuditEvent
+from app.models.chat import ChatbotSettings, ChatMessage, ChatSession, GeneratedReport
 from app.models.relationships import (
     Connection,
     DocumentRelationship,
@@ -20,6 +21,10 @@ from app.models.relationships import (
 __all__ = [
     "User",
     "AdminAuditEvent",
+    "ChatbotSettings",
+    "ChatSession",
+    "ChatMessage",
+    "GeneratedReport",
     "Category",
     "Connection",
     "Document",
