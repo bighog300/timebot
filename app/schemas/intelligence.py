@@ -1,34 +1,42 @@
-from typing import Any, Dict, List
+from typing import List, Optional
 
 from pydantic import BaseModel
 
 
-class TimelineBucket(BaseModel):
-    period: str
-    count: int
-    events: List[Dict[str, Any]]
+class TimelineEvent(BaseModel):
+    title: str
+    description: Optional[str] = None
+    date: Optional[str] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    confidence: float
+    source_quote: Optional[str] = None
+    page_number: Optional[int] = None
+    document_id: str
+    document_title: str
+    category: Optional[str] = None
+    source: Optional[str] = "extracted"
 
 
 class TimelineResponse(BaseModel):
-    group_by: str
     total_documents: int
     total_events: int
-    buckets: List[TimelineBucket]
+    events: List[TimelineEvent]
 
 
 class InsightsResponse(BaseModel):
     generated_at: str
     lookback_days: int
-    volume_trends: List[Dict[str, Any]]
-    category_distribution: List[Dict[str, Any]]
-    source_distribution: Dict[str, int]
-    action_item_summary: Dict[str, Any]
+    volume_trends: List[dict]
+    category_distribution: List[dict]
+    source_distribution: dict
+    action_item_summary: dict
     duplicate_clusters: List[List[str]]
-    relationship_summary: Dict[str, int]
-    recent_activity: List[Dict[str, Any]]
+    relationship_summary: dict
+    recent_activity: List[dict]
 
 
 class CategoryIntelligenceResponse(BaseModel):
-    analytics: List[Dict[str, Any]]
-    merge_recommendations: List[Dict[str, Any]]
-    refinement_suggestions: List[Dict[str, Any]]
+    analytics: List[dict]
+    merge_recommendations: List[dict]
+    refinement_suggestions: List[dict]

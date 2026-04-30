@@ -210,19 +210,27 @@ async def backfill_relationships(limit: Optional[int] = Query(None, ge=1, le=200
 
 @router.get("/timeline", response_model=TimelineResponse)
 async def get_timeline(
-    group_by: str = Query("day", pattern="^(day|week|month)$"),
     categories: Optional[List[str]] = Query(None),
     sources: Optional[List[str]] = Query(None),
     file_types: Optional[List[str]] = Query(None),
+    document_id: Optional[str] = Query(None),
+    start_date: Optional[str] = Query(None),
+    end_date: Optional[str] = Query(None),
+    category: Optional[str] = Query(None),
+    min_confidence: float = Query(0.0, ge=0.0, le=1.0),
     limit: int = Query(500, ge=1, le=5000),
     db: Session = Depends(get_db),
 ):
     return timeline_service.build_timeline(
         db=db,
-        group_by=group_by,
         category_ids=categories,
         sources=sources,
         file_types=file_types,
+        document_id=document_id,
+        start_date=start_date,
+        end_date=end_date,
+        category=category,
+        min_confidence=min_confidence,
         limit=limit,
     )
 

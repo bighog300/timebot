@@ -32,7 +32,21 @@ Return exactly this JSON structure:
     "document_type": "contract|invoice|report|email|meeting_notes|presentation|spreadsheet|other",
     "sentiment": "positive|neutral|negative",
     "is_time_sensitive": false,
-    "estimated_importance": 0.7
+    "estimated_importance": 0.7,
+    "timeline_events": [
+        {
+            "title": "Contract term",
+            "description": "Optional detail",
+            "date": "2026-05-15",
+            "start_date": "2026-01-01",
+            "end_date": "2026-12-31",
+            "confidence": 0.88,
+            "source_quote": "Optional supporting quote from the document",
+            "page_number": 2,
+            "category": "contract_period",
+            "source": "extracted"
+        }
+    ]
 }}
 
 Rules:
@@ -42,3 +56,11 @@ Rules:
 - suggested_category: choose from available categories or propose a new descriptive one
 - category_confidence: float 0.0-1.0 indicating confidence in the category
 - estimated_importance: float 0.0-1.0"""
+
+
+# Timeline extraction rules
+# - Extract explicit dates and date ranges for: effective dates, contract periods, project periods, deadlines, invoice dates, due dates, meeting/review/renewal/termination/delivery dates.
+# - Prefer ISO-8601 dates (YYYY-MM-DD).
+# - Use date for milestones; use start_date/end_date for ranges.
+# - Include confidence 0.0-1.0 and source_quote/page_number when available.
+# - If nothing is found, return an empty timeline_events array.

@@ -54,6 +54,11 @@ class DocumentIntelligenceService:
         intelligence.key_points = analysis.get("key_points", [])
         intelligence.suggested_tags = analysis.get("tags", [])
         intelligence.entities = analysis.get("entities", {})
+
+        timeline_events = analysis.get("timeline_events", []) or []
+        if isinstance(timeline_events, list):
+            intelligence.entities = dict(intelligence.entities or {})
+            intelligence.entities["timeline_events"] = timeline_events
         intelligence.confidence = confidence_label
         intelligence.model_name = settings.OPENAI_MODEL
         intelligence.model_version = analysis.get("model_version")
