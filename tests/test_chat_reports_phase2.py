@@ -1,0 +1,115 @@
+import uuid
+from pathlib import Path
+
+from app.api.v1.admin import _get_or_create_chatbot_settings
+from app.services.chat_retrieval import retrieve_chat_context
+from app.config import settings
+from app.models.document import Document
+
+
+def _mk_doc(db, user_id, filename, summary, entities=None):
+    doc = Document(
+        id=uuid.uuid4(), filename=filename, original_path=f"/tmp/{filename}", file_type="txt", file_size=10,
+        mime_type="text/plain", processing_status="completed", source="upload", summary=summary,
+        entities=entities or {}, action_items=[], key_points=[], ai_tags=[], user_id=user_id
+    )
+    db.add(doc)
+    db.commit()
+    db.refresh(doc)
+    return doc
+
+
+def test_retrieval_summary_and_filter(db, test_user):
+    d1 = _mk_doc(db, test_user.id, "alpha.txt", "Project alpha budget and scope")
+    _mk_doc(db, test_user.id, "beta.txt", "Completely unrelated")
+    out = retrieve_chat_context(db, "alpha budget", test_user.id, [str(d1.id)], True, False, 5)
+    assert out["documents"]
+    assert out["documents"][0]["document_id"] == str(d1.id)
+
+
+def test_retrieval_timeline_and_access_control(db, test_user):
+    doc = _mk_doc(db, test_user.id, "timeline.txt", "Roadmap", {"timeline_events": [{"title": "Kickoff", "date": "2025-01-01", "description": "Project kickoff"}]})
+    other = _mk_doc(db, uuid.uuid4(), "hidden.txt", "secret alpha")
+    out = retrieve_chat_context(db, "kickoff", test_user.id, None, True, False, 5)
+    assert any(d["document_id"] == str(doc.id) for d in out["documents"])
+    assert all(d["document_id"] != str(other.id) for d in out["documents"])
+    assert any(r["kind"] == "timeline_event" for r in out["source_refs"])
+
+
+def test_retrieval_full_text_gate(db, test_user):
+    doc = _mk_doc(db, test_user.id, "full.txt", "tiny")
+    p = Path(settings.effective_artifact_dir) / "extracted_text" / "2026/04/30"
+    p.mkdir(parents=True, exist_ok=True)
+    (p / f"{doc.id}.txt").write_text("Important contract clause payment due now", encoding="utf-8")
+    out = retrieve_chat_context(db, "payment", test_user.id, None, True, False, 5)
+    assert not any(r["kind"] == "full_text_excerpt" for r in out["source_refs"])
+    out2 = retrieve_chat_context(db, "payment", test_user.id, None, True, True, 5)
+    assert any(r["kind"] == "full_text_excerpt" for r in out2["source_refs"])
+
+
+def test_chat_endpoint_503_when_openai_missing(client, monkeypatch):
+    monkeypatch.setattr("app.config.settings.OPENAI_API_KEY", "")
+    s = client.post("/api/v1/chat/sessions", json={"title": "s"}).json()
+    r = client.post(f"/api/v1/chat/sessions/{s['id']}/messages", json={"message": "hello"})
+    assert r.status_code == 503
+
+
+def test_chat_persists_and_returns_grounded(client, monkeypatch, db):
+    from app.models.user import User
+    user = db.query(User).first()
+    _mk_doc(db, user.id, "alpha.txt", "Alpha summary with milestone")
+
+    class DummyChoice:
+        message = type("M", (), {"content": "According to \"alpha.txt\" details."})
+
+    class DummyResp:
+        choices = [DummyChoice()]
+
+    class DummyComp:
+        def create(self, **kwargs):
+            return DummyResp()
+
+    class DummyChat:
+        completions = DummyComp()
+
+    monkeypatch.setattr("app.config.settings.OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr("app.api.v1.chat.openai_client_service._client", type("C", (), {"chat": DummyChat()})())
+    s = client.post("/api/v1/chat/sessions", json={"title": "s"}).json()
+    r = client.post(f"/api/v1/chat/sessions/{s['id']}/messages", json={"message": "alpha"})
+    assert r.status_code == 200
+    body = r.json()
+    assert "Sources:" in body["message"]
+    assert isinstance(body["source_refs"], list)
+
+
+def test_report_create_and_download_rebuild(client, monkeypatch, db):
+    from app.models.user import User
+    user = db.query(User).first()
+    _mk_doc(db, user.id, "report_doc.txt", "Report source summary")
+
+    class DummyChoice:
+        message = type("M", (), {"content": "# Report\n\nGrounded text"})
+
+    class DummyResp:
+        choices = [DummyChoice()]
+
+    class DummyComp:
+        def create(self, **kwargs):
+            return DummyResp()
+
+    class DummyChat:
+        completions = DummyComp()
+
+    monkeypatch.setattr("app.config.settings.OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr("app.api.v1.reports.openai_client_service._client", type("C", (), {"chat": DummyChat()})())
+    res = client.post("/api/v1/reports", json={"title": "My Report", "prompt": "summarize", "document_ids": []})
+    assert res.status_code == 200
+    data = res.json()
+    get_res = client.get(data["download_url"])
+    assert get_res.status_code == 200
+    # remove file then ensure recreated
+    from app.models.chat import GeneratedReport
+    rep = db.query(GeneratedReport).first()
+    Path(rep.file_path).unlink(missing_ok=True)
+    get_res2 = client.get(data["download_url"])
+    assert get_res2.status_code == 200
