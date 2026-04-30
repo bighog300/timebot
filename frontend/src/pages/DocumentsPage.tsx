@@ -1,3 +1,4 @@
+import axios from 'axios';
 import { Link } from 'react-router-dom';
 import { useDocuments, useUploadDocument } from '@/hooks/useApi';
 import { Button } from '@/components/ui/Button';
@@ -15,7 +16,14 @@ export function DocumentsPage() {
     try {
       await upload.mutateAsync(file);
       pushToast('Upload queued');
-    } catch {
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        const detail = typeof error.response?.data?.detail === 'string' ? error.response.data.detail : 'Upload failed';
+        console.error('Upload failed:', error.response?.data ?? error.message);
+        pushToast(detail);
+        return;
+      }
+      console.error('Upload failed:', error);
       pushToast('Upload failed');
     }
   };
