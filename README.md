@@ -25,6 +25,7 @@ AI-assisted document intelligence platform with upload/search, review workflow, 
    ```bash
    docker compose up -d --build
    ```
+   > This command builds and runs locally; it does **not** push images to any remote registry by itself.
 4. Migrations run automatically on app startup in Docker (`alembic upgrade head` via `scripts/start-app.sh`).
 5. Qdrant is started by Compose, but app/worker dependencies use `service_started` so API startup is not blocked by Qdrant healthcheck fragility.
 
@@ -221,3 +222,14 @@ MIT
 - Known limitations:
   - Admin audit currently tracks admin role-management actions only.
   - Admin panel pagination is basic next/prev only.
+
+
+## Intentional image push (disabled by default)
+
+Image pushing is disabled unless explicitly enabled. For any deploy/push scripts or CI workflows, require:
+
+```bash
+ALLOW_IMAGE_PUSH=1
+```
+
+Only set this in intentional release/deploy contexts.

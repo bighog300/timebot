@@ -125,3 +125,14 @@ Qdrant dashboard:
 
 - Open `http://localhost:6335/dashboard` in browser.
 - API root check: `curl http://localhost:6335/`.
+
+
+## Intentional image push (disabled by default)
+
+Image pushing is disabled unless explicitly enabled. For any deploy/push scripts or CI workflows, require:
+
+```bash
+ALLOW_IMAGE_PUSH=1
+```
+
+Only set this in intentional release/deploy contexts.
