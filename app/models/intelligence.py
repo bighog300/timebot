@@ -145,3 +145,59 @@ class DocumentRelationshipReview(Base):
             name="valid_relationship_review_confidence",
         ),
     )
+
+    @staticmethod
+    def _document_title(document) -> str:
+        if not document:
+            return ""
+        for field in ("title", "filename", "original_filename", "name"):
+            value = getattr(document, field, None)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+        return str(document.id)
+
+    @staticmethod
+    def _document_snippet(document) -> str:
+        if not document:
+            return ""
+        if isinstance(document.summary, str) and document.summary.strip():
+            return document.summary.strip()
+        intelligence_summary = getattr(getattr(document, "intelligence", None), "summary", None)
+        if isinstance(intelligence_summary, str) and intelligence_summary.strip():
+            return intelligence_summary.strip()
+        raw_text = getattr(document, "raw_text", None)
+        if isinstance(raw_text, str) and raw_text.strip():
+            return raw_text.strip()[:200]
+        return ""
+
+    @property
+    def source_document_title(self) -> str:
+        return self._document_title(self.source_document)
+
+    @property
+    def target_document_title(self) -> str:
+        return self._document_title(self.target_document)
+
+    @property
+    def source_document_name(self) -> str:
+        return self.source_document_title
+
+    @property
+    def target_document_name(self) -> str:
+        return self.target_document_title
+
+    @property
+    def source_document_snippet(self) -> str:
+        return self._document_snippet(self.source_document)
+
+    @property
+    def target_document_snippet(self) -> str:
+        return self._document_snippet(self.target_document)
+
+    @property
+    def source_snippet(self) -> str:
+        return self.source_document_snippet
+
+    @property
+    def target_snippet(self) -> str:
+        return self.target_document_snippet

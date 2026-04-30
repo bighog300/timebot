@@ -268,7 +268,11 @@ export interface RelationshipReviewItem {
   relationship_type: 'duplicate' | 'similar' | 'related';
   confidence: number | null;
   source_document_title?: string | null;
+  source_document_name?: string | null;
+  source_document_snippet?: string | null;
   target_document_title?: string | null;
+  target_document_name?: string | null;
+  target_document_snippet?: string | null;
   source_snippet?: string | null;
   target_snippet?: string | null;
   status: 'pending' | 'confirmed' | 'dismissed';

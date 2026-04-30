@@ -38,6 +38,8 @@ describe('RelationshipReviewPage', () => {
           target_document_id: 'doc-b',
           source_document_title: 'Source Doc',
           target_document_title: 'Target Doc',
+          source_document_snippet: 'Source snippet text',
+          target_document_snippet: 'Target snippet text',
           relationship_type: 'related',
           confidence: 0.88,
           status: 'pending',
@@ -49,6 +51,8 @@ describe('RelationshipReviewPage', () => {
 
     expect(screen.getByText('Source Doc')).toBeInTheDocument();
     expect(screen.getByText('Target Doc')).toBeInTheDocument();
+    expect(screen.getByText('Source snippet text')).toBeInTheDocument();
+    expect(screen.getByText('Target snippet text')).toBeInTheDocument();
     expect(screen.queryByText('No relationships to review')).not.toBeInTheDocument();
   });
 

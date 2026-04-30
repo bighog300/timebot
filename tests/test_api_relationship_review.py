@@ -1,6 +1,7 @@
 import uuid
 
 from app.models.intelligence import DocumentRelationshipReview, ReviewAuditEvent
+from app.models.intelligence import DocumentIntelligence
 from app.services.relationship_review import relationship_review_service
 
 
@@ -108,3 +109,69 @@ def test_create_or_refresh_pending_relationship_review_prevents_duplicates(db, s
     assert len(reviews) == 1
     assert reviews[0].confidence == 0.88
     assert reviews[0].reason_codes_json == ["rescored"]
+
+
+def test_relationship_review_list_includes_titles_and_snippets(client, db, sample_document):
+    sample_document.summary = "Source summary"
+    target = type(sample_document)(
+        id=uuid.uuid4(),
+        filename="target-snippet.pdf",
+        original_path="/tmp/target-snippet.pdf",
+        file_type="pdf",
+        file_size=100,
+        mime_type="application/pdf",
+        processing_status="completed",
+        source="upload",
+        user_id=sample_document.user_id,
+    )
+    db.add(target)
+    db.flush()
+    db.add(DocumentIntelligence(document_id=target.id, summary="Target intelligence summary"))
+    db.add(
+        DocumentRelationshipReview(
+            source_document_id=sample_document.id,
+            target_document_id=target.id,
+            relationship_type="related",
+            status="pending",
+        )
+    )
+    db.commit()
+
+    resp = client.get("/api/v1/review/relationships")
+    assert resp.status_code == 200
+    item = resp.json()[0]
+    assert item["source_document_title"] == sample_document.filename
+    assert item["target_document_title"] == target.filename
+    assert item["source_document_snippet"] == "Source summary"
+    assert item["target_document_snippet"] == "Target intelligence summary"
+
+
+def test_relationship_review_list_falls_back_to_document_id_when_no_title_fields(client, db, sample_document):
+    sample_document.filename = ""
+    target = type(sample_document)(
+        id=uuid.uuid4(),
+        filename="",
+        original_path="/tmp/no-name.pdf",
+        file_type="pdf",
+        file_size=100,
+        mime_type="application/pdf",
+        processing_status="completed",
+        source="upload",
+        user_id=sample_document.user_id,
+    )
+    db.add(target)
+    db.add(
+        DocumentRelationshipReview(
+            source_document_id=sample_document.id,
+            target_document_id=target.id,
+            relationship_type="related",
+            status="pending",
+        )
+    )
+    db.commit()
+
+    resp = client.get("/api/v1/review/relationships")
+    assert resp.status_code == 200
+    item = resp.json()[0]
+    assert item["source_document_title"] == str(sample_document.id)
+    assert item["target_document_title"] == str(target.id)
