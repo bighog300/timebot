@@ -81,3 +81,11 @@ def test_reprocess_updates_blank_document_and_intelligence_summary(db, sample_do
     refreshed_intel = db.query(DocumentIntelligence).filter(DocumentIntelligence.document_id == sample_document.id).first()
     assert refreshed_doc.summary == "Expected non-empty summary"
     assert refreshed_intel.summary == "Expected non-empty summary"
+
+
+def test_process_task_registered():
+    from app.workers.celery_app import celery_app
+
+    registered = celery_app.tasks.keys()
+    assert "app.workers.tasks.process_document_task" in registered
+    assert "app.workers.tasks.reprocess_document_task" in registered

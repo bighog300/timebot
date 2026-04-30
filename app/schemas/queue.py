@@ -22,6 +22,10 @@ class QueueItemResponse(BaseModel):
 
 
 class QueueStatsResponse(BaseModel):
+    broker_reachable: bool = False
+    worker_online: bool = False
+    worker_count: int = 0
+    worker_error: Optional[str] = None
     queued: int
     processing: int
     completed: int

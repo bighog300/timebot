@@ -107,7 +107,7 @@ def reprocess_document(document_id: UUID, db: Session = Depends(get_db), current
 
     from app.workers.tasks import reprocess_document_task
     task_result = reprocess_document_task.apply_async(args=[str(document_id)])
-    logger.info("Reprocess queued document_id=%s actor_id=%s task_id=%s", document_id, current_user.id, task_result.id)
+    logger.info("Reprocess queued document_id=%s actor_id=%s task_id=%s queue=documents", document_id, current_user.id, task_result.id)
     return {"message": "Reprocessing queued", "document_id": str(document_id), "task_id": task_result.id}
 
 

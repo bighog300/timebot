@@ -37,3 +37,15 @@ def test_upload_unsupported_file_type_returns_400(client):
     files = {'file': ('malware.exe', io.BytesIO(b'fake'), 'application/octet-stream')}
     response = client.post('/api/v1/upload/', files=files)
     assert response.status_code == 400
+
+
+def test_upload_enqueues_expected_task_payload(client):
+    with patch('app.services.storage.storage.save_upload', return_value=(Path('/tmp/test.pdf'), 22)), patch(
+        'app.workers.tasks.process_document_task.apply_async'
+    ) as apply_async:
+        response = _upload(client)
+
+    assert response.status_code == 202
+    doc_id = response.json()['id']
+    apply_async.assert_called_once()
+    assert apply_async.call_args.kwargs['args'] == [doc_id]

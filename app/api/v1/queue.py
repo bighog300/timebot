@@ -37,6 +37,9 @@ def queue_stats(db: Session = Depends(get_db), current_user: User = Depends(get_
     )
 
     stats = QueueStatsResponse(
+        broker_reachable=False,
+        worker_online=False,
+        worker_count=0,
         queued=status_counts.get("queued", 0),
         processing=status_counts.get("processing", 0),
         completed=status_counts.get("completed", 0),
@@ -52,10 +55,13 @@ def queue_stats(db: Session = Depends(get_db), current_user: User = Depends(get_
 
     try:
         worker_stats = inspect_workers(timeout=2)
+        stats.broker_reachable = True
+        stats.worker_online = worker_stats["worker_count"] > 0
+        stats.worker_count = worker_stats["worker_count"]
         stats.celery_active = worker_stats["active_tasks"]
         stats.celery_reserved = worker_stats["reserved_tasks"]
-    except Exception:
-        pass
+    except Exception as exc:
+        stats.worker_error = str(exc)
 
     return stats
 
