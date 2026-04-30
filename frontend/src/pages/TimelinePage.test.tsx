@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import { TimelinePage } from './TimelinePage';
 import { api } from '@/services/api';
+import type { TimelineResponse } from '@/types/api';
 
 const navigateMock = vi.fn();
 
@@ -13,6 +14,8 @@ vi.mock('react-router-dom', async () => {
 });
 
 vi.mock('@/services/api', () => ({ api: { getTimeline: vi.fn() } }));
+
+type ResizeObserverCallback = ConstructorParameters<typeof ResizeObserver>[0];
 
 function renderPage() {
   const qc = new QueryClient();
@@ -27,9 +30,20 @@ function renderPage() {
 
 describe('TimelinePage', () => {
   class ResizeObserverMock {
+    constructor(_: ResizeObserverCallback) {}
     observe() {}
     disconnect() {}
+    unobserve() {}
+    takeRecords(): ResizeObserverEntry[] {
+      return [];
+    }
   }
+
+  const makeTimelineResponse = (events: TimelineResponse['events']): TimelineResponse => ({
+    total_documents: 1,
+    total_events: events.length,
+    events,
+  });
 
   beforeEach(() => {
     vi.stubGlobal('ResizeObserver', ResizeObserverMock);
@@ -42,14 +56,12 @@ describe('TimelinePage', () => {
   });
 
   it('renders timeline axis ticks and both event types', async () => {
-    vi.mocked(api.getTimeline).mockResolvedValue({
-      total_documents: 1,
-      total_events: 2,
-      events: [
+    vi.mocked(api.getTimeline).mockResolvedValue(
+      makeTimelineResponse([
         { title: 'Due', date: '2025-02-15', confidence: 0.9, document_id: 'd1', document_title: 'doc', source_quote: 'Payment due date', start_date: null, end_date: null },
         { title: 'Term', start_date: '2025-01-01', end_date: '2025-12-31', confidence: 0.8, document_id: 'd1', document_title: 'doc', source_quote: 'term runs from', date: null },
-      ],
-    } as any);
+      ]),
+    );
 
     renderPage();
 
@@ -62,11 +74,9 @@ describe('TimelinePage', () => {
   });
 
   it('keeps overflow classes constrained to scroll container and avoids min-w-max', async () => {
-    vi.mocked(api.getTimeline).mockResolvedValue({
-      total_documents: 1,
-      total_events: 1,
-      events: [{ title: 'Due', date: '2025-02-15', confidence: 0.9, document_id: 'd1', document_title: 'doc', source_quote: 'Payment due date', start_date: null, end_date: null }],
-    } as any);
+    vi.mocked(api.getTimeline).mockResolvedValue(
+      makeTimelineResponse([{ title: 'Due', date: '2025-02-15', confidence: 0.9, document_id: 'd1', document_title: 'doc', source_quote: 'Payment due date', start_date: null, end_date: null }]),
+    );
     const { container } = renderPage();
     await screen.findByTestId('timeline-scroll-container');
 
@@ -80,11 +90,9 @@ describe('TimelinePage', () => {
   });
 
   it('updates zoom state and width scaling and only shows pan hint when scrollable', async () => {
-    vi.mocked(api.getTimeline).mockResolvedValue({
-      total_documents: 1,
-      total_events: 1,
-      events: [{ title: 'Long Program', start_date: '2025-01-01', end_date: '2025-10-01', confidence: 0.95, document_id: 'd1', document_title: 'doc', source_quote: 'Long range', date: null }],
-    } as any);
+    vi.mocked(api.getTimeline).mockResolvedValue(
+      makeTimelineResponse([{ title: 'Long Program', start_date: '2025-01-01', end_date: '2025-10-01', confidence: 0.95, document_id: 'd1', document_title: 'doc', source_quote: 'Long range', date: null }]),
+    );
     renderPage();
 
     const axis = await screen.findByTestId('timeline-axis');
@@ -107,11 +115,9 @@ describe('TimelinePage', () => {
   });
 
   it('pan buttons scroll the timeline container when chart is scrollable', async () => {
-    vi.mocked(api.getTimeline).mockResolvedValue({
-      total_documents: 1,
-      total_events: 1,
-      events: [{ title: 'Long Program', start_date: '2025-01-01', end_date: '2025-10-01', confidence: 0.95, document_id: 'd1', document_title: 'doc', source_quote: 'Long range', date: null }],
-    } as any);
+    vi.mocked(api.getTimeline).mockResolvedValue(
+      makeTimelineResponse([{ title: 'Long Program', start_date: '2025-01-01', end_date: '2025-10-01', confidence: 0.95, document_id: 'd1', document_title: 'doc', source_quote: 'Long range', date: null }]),
+    );
     renderPage();
     const scrollContainer = await screen.findByTestId('timeline-scroll-container');
     const scrollByMock = vi.fn();
@@ -123,22 +129,18 @@ describe('TimelinePage', () => {
   });
 
   it('does not show empty state when events exist', async () => {
-    vi.mocked(api.getTimeline).mockResolvedValue({
-      total_documents: 1,
-      total_events: 1,
-      events: [{ title: 'Due', date: '2025-02-15', confidence: 0.9, document_id: 'd1', document_title: 'doc', source_quote: 'Payment due date', start_date: null, end_date: null }],
-    } as any);
+    vi.mocked(api.getTimeline).mockResolvedValue(
+      makeTimelineResponse([{ title: 'Due', date: '2025-02-15', confidence: 0.9, document_id: 'd1', document_title: 'doc', source_quote: 'Payment due date', start_date: null, end_date: null }]),
+    );
     renderPage();
     await screen.findByText('Due');
     expect(screen.queryByText(/No extracted timeline events yet/)).toBeNull();
   });
 
   it('clicking event navigates to document detail', async () => {
-    vi.mocked(api.getTimeline).mockResolvedValue({
-      total_documents: 1,
-      total_events: 1,
-      events: [{ title: 'Due', date: '2025-02-15', confidence: 0.9, document_id: 'doc-123', document_title: 'doc', source_quote: 'Payment due date', start_date: null, end_date: null }],
-    } as any);
+    vi.mocked(api.getTimeline).mockResolvedValue(
+      makeTimelineResponse([{ title: 'Due', date: '2025-02-15', confidence: 0.9, document_id: 'doc-123', document_title: 'doc', source_quote: 'Payment due date', start_date: null, end_date: null }]),
+    );
     renderPage();
     fireEvent.click(await screen.findByRole('button', { name: /Due/i }));
     expect(navigateMock).toHaveBeenCalledWith(expect.stringMatching(/^\/documents\/.+/));
