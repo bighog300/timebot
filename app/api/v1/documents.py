@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime, timezone
 from typing import List
 from uuid import UUID
@@ -25,6 +26,7 @@ from app.services.openai_client import openai_client_service
 from app.services.review_audit import review_audit_service
 
 router = APIRouter(prefix="/documents", tags=["documents"])
+logger = logging.getLogger(__name__)
 
 
 @router.get("/", response_model=List[DocumentResponse])
@@ -97,9 +99,16 @@ def reprocess_document(document_id: UUID, db: Session = Depends(get_db), current
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
 
+    logger.info("Reprocess requested document_id=%s actor_id=%s", document_id, current_user.id)
+    document.processing_status = "queued"
+    document.processing_error = None
+    db.add(document)
+    db.commit()
+
     from app.workers.tasks import reprocess_document_task
-    reprocess_document_task.apply_async(args=[str(document_id)])
-    return {"message": "Reprocessing queued", "document_id": str(document_id)}
+    task_result = reprocess_document_task.apply_async(args=[str(document_id)])
+    logger.info("Reprocess queued document_id=%s actor_id=%s task_id=%s", document_id, current_user.id, task_result.id)
+    return {"message": "Reprocessing queued", "document_id": str(document_id), "task_id": task_result.id}
 
 
 @router.post("/{document_id}/review", response_model=DocumentResponse)

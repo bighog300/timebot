@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor, renderHook } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, renderHook, fireEvent } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, expect, test, vi } from 'vitest';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
@@ -23,6 +23,7 @@ vi.mock('@/services/api', async () => {
       listCategories: vi.fn().mockResolvedValue([]),
       listDocumentActionItems: vi.fn().mockResolvedValue([]),
       getDocumentAuditHistory: vi.fn().mockResolvedValue([]),
+      reprocessDocument: vi.fn().mockResolvedValue(undefined),
     },
   };
 });
@@ -34,6 +35,7 @@ function wrapper(children: ReactNode) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  cleanup();
 });
 
 test('document detail shows pending state when intelligence is null', async () => {
@@ -85,4 +87,27 @@ test('document detail does not fetch intelligence while processing', async () =>
 
   expect(await screen.findByText('Document is still processing. Intelligence is not available yet.')).toBeInTheDocument();
   expect(api.getDocumentIntelligence).not.toHaveBeenCalled();
+});
+
+
+test('reprocess click calls API endpoint', async () => {
+  vi.mocked(api.getDocument).mockResolvedValue({
+    id: 'doc-3', filename: 'c.pdf', file_type: 'pdf', file_size: 1, source: 'upload', upload_date: new Date().toISOString(), processing_status: 'completed',
+    ai_tags: [], user_tags: [], is_favorite: false, is_archived: false,
+  } as never);
+  vi.mocked(api.findSimilar).mockResolvedValue({ query: '', total: 0, results: [] });
+  vi.mocked(api.getDocumentIntelligence).mockResolvedValue(null);
+
+  const qc = new QueryClient();
+  render(
+    <MemoryRouter initialEntries={['/documents/doc-3']}>
+      <QueryClientProvider client={qc}>
+        <Routes><Route path="/documents/:id" element={<DocumentDetailPage />} /></Routes>
+      </QueryClientProvider>
+    </MemoryRouter>,
+  );
+
+  const btn = (await screen.findAllByText('Reprocess'))[0];
+  fireEvent.click(btn);
+  await waitFor(() => expect(api.reprocessDocument).toHaveBeenCalledWith('doc-3'));
 });

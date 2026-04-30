@@ -1,6 +1,7 @@
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
+from uuid import UUID
 
 from fastapi import UploadFile
 from sqlalchemy.orm import Session
@@ -85,9 +86,18 @@ class DocumentProcessor:
         try:
             file_path = Path(document.original_path)
 
+            text = self._load_or_extract_text(document.id, file_path, document.file_type)
+            if not text:
+                raise ValueError("Cannot reprocess: original uploaded file is missing from storage" if not file_path.exists() else "Cannot process document: extracted text is empty")
+
+            document.raw_text = text
+            document.page_count = None
+            document.word_count = len(text.split())
+
             # Step 1: extract text
-            text, page_count, word_count = text_extractor.extract(file_path, document.file_type)
-            if text:
+            extracted_text, page_count, word_count = text_extractor.extract(file_path, document.file_type)
+            if extracted_text:
+                text = extracted_text
                 document.raw_text = text
                 document.page_count = page_count
                 document.word_count = word_count
@@ -99,7 +109,7 @@ class DocumentProcessor:
                 storage.save_thumbnail(str(document.id), thumb)
 
             # Step 3: AI analysis
-            if text and settings.ENABLE_AUTO_CATEGORIZATION:
+            if settings.ENABLE_AUTO_CATEGORIZATION:
                 self._run_ai_analysis(db, document, text)
 
             document.processing_status = "completed"
@@ -115,6 +125,7 @@ class DocumentProcessor:
         db.refresh(document)
 
     def _run_ai_analysis(self, db: Session, document: Document, text: str):
+        logger.info("AI analysis started doc_id=%s text_length=%s model=%s", document.id, len(text), settings.OPENAI_MODEL)
         from app.models.category import Category
         from app.services.ai_analyzer import AIAnalysisError, ai_analyzer
         from app.services.document_intelligence import document_intelligence_service
@@ -129,6 +140,7 @@ class DocumentProcessor:
                 existing_categories=[c.name for c in categories],
             )
             confidence = ai_analyzer.compute_confidence(analysis)
+            logger.info("AI analysis succeeded doc_id=%s summary_length=%s timeline_events=%s action_items=%s", document.id, len(analysis.get("summary") or ""), len(analysis.get("timeline_events") or []), len(analysis.get("action_items") or []))
             document.review_status = (
                 "pending"
                 if confidence < settings.REVIEW_CONFIDENCE_THRESHOLD
@@ -156,7 +168,18 @@ class DocumentProcessor:
                 )
         except AIAnalysisError as exc:
             self._append_processing_warning(document, str(exc))
-            logger.warning("AI enrichment unavailable for %s: %s", document.id, exc)
+            logger.warning("AI analysis failed doc_id=%s error=%s", document.id, exc)
+
+    def _load_or_extract_text(self, document_id: UUID, file_path: Path, file_type: str) -> str:
+        if file_path.exists():
+            text, _page_count, _word_count = text_extractor.extract(file_path, file_type)
+            if text:
+                storage.save_text(str(document_id), text)
+                return text
+        text_file = next(storage.text_path.rglob(f"{document_id}.txt"), None)
+        if text_file and text_file.exists():
+            return text_file.read_text(encoding="utf-8")
+        return ""
 
     def _append_processing_warning(self, document: Document, message: str) -> None:
         if not message:
