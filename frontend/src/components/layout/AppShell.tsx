@@ -61,7 +61,7 @@ export function AppShell() {
           <button
             key={toast.id}
             onClick={() => dismissToast(toast.id)}
-            className="rounded bg-slate-800 px-3 py-2 text-sm text-slate-100 shadow"
+            className={`rounded px-3 py-2 text-sm text-white shadow ${toast.type === 'error' ? 'bg-red-700' : 'bg-emerald-700'}`}
           >
             {toast.message}
           </button>

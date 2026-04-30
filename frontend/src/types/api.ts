@@ -253,6 +253,10 @@ export interface RelationshipReviewItem {
   target_document_id: string;
   relationship_type: 'duplicate' | 'similar' | 'related';
   confidence: number | null;
+  source_document_title?: string | null;
+  target_document_title?: string | null;
+  source_snippet?: string | null;
+  target_snippet?: string | null;
   status: 'pending' | 'confirmed' | 'dismissed';
   reason_codes_json: string[];
   metadata_json: Record<string, unknown>;
