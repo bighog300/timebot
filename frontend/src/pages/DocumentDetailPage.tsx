@@ -5,6 +5,7 @@ import { api } from '@/services/api';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { ErrorState, LoadingState, EmptyState } from '@/components/ui/States';
+import { ProcessingStatusIndicator } from '@/components/documents/ProcessingStatusIndicator';
 import { useUIStore } from '@/store/uiStore';
 import {
   useApproveDocumentCategory,
@@ -20,7 +21,15 @@ export function DocumentDetailPage() {
   const { id = '' } = useParams();
   const qc = useQueryClient();
   const pushToast = useUIStore((s) => s.pushToast);
-  const documentQuery = useQuery({ queryKey: ['document', id], queryFn: () => api.getDocument(id), enabled: !!id });
+  const documentQuery = useQuery({
+    queryKey: ['document', id],
+    queryFn: () => api.getDocument(id),
+    enabled: !!id,
+    refetchInterval: (query) => {
+      const status = (query.state.data as { processing_status?: string } | undefined)?.processing_status;
+      return status === 'uploading' || status === 'processing' ? 3000 : false;
+    },
+  });
   const similarQuery = useQuery({ queryKey: ['similar', id], queryFn: () => api.findSimilar(id), enabled: !!id });
 
   const intelligenceQuery = useDocumentIntelligence(id);
@@ -80,6 +89,7 @@ export function DocumentDetailPage() {
   return (
     <div className="space-y-4">
       <h1 className="text-xl font-semibold">{doc.filename}</h1>
+      <ProcessingStatusIndicator status={doc.processing_status} processingError={doc.processing_error} showErrorBanner />
       <div className="flex flex-wrap gap-2">
         <Button onClick={() => updateMutation.mutate({ is_favorite: !doc.is_favorite })}>{doc.is_favorite ? 'Unfavorite' : 'Favorite'}</Button>
         <Button onClick={() => updateMutation.mutate({ is_archived: !doc.is_archived })}>{doc.is_archived ? 'Unarchive' : 'Archive'}</Button>

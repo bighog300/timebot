@@ -6,6 +6,7 @@ import { useDocuments, useUploadDocument } from '@/hooks/useApi';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui/States';
+import { ProcessingStatusIndicator } from '@/components/documents/ProcessingStatusIndicator';
 import { useUIStore } from '@/store/uiStore';
 
 export function DocumentsPage() {
@@ -82,8 +83,11 @@ export function DocumentsPage() {
                 <Link className="font-medium text-blue-300 hover:underline" to={`/documents/${doc.id}`}>
                   {doc.filename}
                 </Link>
-                <span className="text-xs text-slate-400">{doc.processing_status}</span>
+                <ProcessingStatusIndicator status={doc.processing_status} processingError={doc.processing_error} />
               </div>
+              {doc.processing_status === 'failed' && doc.processing_error && (
+                <div className="rounded border border-red-700 bg-red-950/40 px-3 py-2 text-xs text-red-200">{doc.processing_error}</div>
+              )}
               <p className="line-clamp-2 text-sm text-slate-300">{doc.summary ?? 'No summary yet.'}</p>
               <div className="text-xs text-slate-500">{new Date(doc.upload_date).toLocaleString()}</div>
             </div>
