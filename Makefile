@@ -1,4 +1,4 @@
-.PHONY: backend-install migrate backend frontend bootstrap test-backend test-frontend ci-backend ci-frontend ci-integrated-smoke
+.PHONY: backend-install migrate backend frontend bootstrap test-backend test-frontend ci-backend ci-frontend ci-integrated-smoke deploy-push
 
 backend-install:
 	python -m pip install --upgrade pip
@@ -36,3 +36,12 @@ ci-frontend:
 
 ci-integrated-smoke:
 	bash frontend/tests/e2e/smoke.sh
+
+
+deploy-push:
+	@if [ "${ALLOW_IMAGE_PUSH}" != "1" ]; then \
+		echo "Image push disabled. Set ALLOW_IMAGE_PUSH=1 only for intentional deploys."; \
+		exit 1; \
+	fi
+	@if [ -z "${IMAGE}" ]; then echo "Set IMAGE=<image:tag>"; exit 1; fi
+	./scripts/deploy-push.sh "${IMAGE}"
