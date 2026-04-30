@@ -125,7 +125,7 @@ export function useResolveReviewItem() {
     mutationFn: ({ id, note }: { id: string; note?: string }) => api.resolveReviewItem(id, note),
     onMutate: async ({ id }) => {
       await qc.cancelQueries({ queryKey: ['review-items'] });
-      const previous = updatePaginatedQueries<ReviewItem>(qc, ['review-items'], (item) => (item.id === id ? null : item));
+      const previous = updatePaginatedQueries<ReviewItem>(qc, keys.reviewItems('open'), (item) => (item.id === id ? null : item));
       return { previous };
     },
     onError: (_err, _vars, context) => {
@@ -144,7 +144,7 @@ export function useDismissReviewItem() {
     mutationFn: ({ id, note }: { id: string; note?: string }) => api.dismissReviewItem(id, note),
     onMutate: async ({ id }) => {
       await qc.cancelQueries({ queryKey: ['review-items'] });
-      const previous = updatePaginatedQueries<ReviewItem>(qc, ['review-items'], (item) => (item.id === id ? null : item));
+      const previous = updatePaginatedQueries<ReviewItem>(qc, keys.reviewItems('open'), (item) => (item.id === id ? null : item));
       return { previous };
     },
     onError: (_err, _vars, context) => {
@@ -194,8 +194,8 @@ export function useConfirmRelationshipReview() {
   return useMutation({
     mutationFn: (id: string) => api.confirmRelationshipReview(id),
     onMutate: async (id) => {
-      await qc.cancelQueries({ queryKey: ['relationship-reviews'] });
-      const previous = qc.getQueriesData<RelationshipReviewItem[]>({ queryKey: ['relationship-reviews'] });
+      await qc.cancelQueries({ queryKey: keys.relationshipReviews('pending') });
+      const previous = qc.getQueriesData<RelationshipReviewItem[]>({ queryKey: keys.relationshipReviews('pending') });
       previous.forEach(([queryKey, data]) => {
         if (!data) return;
         qc.setQueryData(queryKey, data.filter((item) => item.id !== id));
@@ -212,8 +212,8 @@ export function useDismissRelationshipReview() {
   return useMutation({
     mutationFn: (id: string) => api.dismissRelationshipReview(id),
     onMutate: async (id) => {
-      await qc.cancelQueries({ queryKey: ['relationship-reviews'] });
-      const previous = qc.getQueriesData<RelationshipReviewItem[]>({ queryKey: ['relationship-reviews'] });
+      await qc.cancelQueries({ queryKey: keys.relationshipReviews('pending') });
+      const previous = qc.getQueriesData<RelationshipReviewItem[]>({ queryKey: keys.relationshipReviews('pending') });
       previous.forEach(([queryKey, data]) => {
         if (!data) return;
         qc.setQueryData(queryKey, data.filter((item) => item.id !== id));
@@ -240,7 +240,7 @@ export function useCompleteActionItem() {
     mutationFn: (id: string) => api.completeActionItem(id),
     onMutate: async (id) => {
       await qc.cancelQueries({ queryKey: ['action-items'] });
-      const previous = updatePaginatedQueries<ActionItem>(qc, ['action-items'], (item) => (item.id === id ? null : item));
+      const previous = updatePaginatedQueries<ActionItem>(qc, keys.actionItems('open'), (item) => (item.id === id ? null : item));
       return { previous };
     },
     onError: (_err, _vars, context) => {
@@ -259,7 +259,7 @@ export function useDismissActionItem() {
     mutationFn: (id: string) => api.dismissActionItem(id),
     onMutate: async (id) => {
       await qc.cancelQueries({ queryKey: ['action-items'] });
-      const previous = updatePaginatedQueries<ActionItem>(qc, ['action-items'], (item) => (item.id === id ? null : item));
+      const previous = updatePaginatedQueries<ActionItem>(qc, keys.actionItems('open'), (item) => (item.id === id ? null : item));
       return { previous };
     },
     onError: (_err, _vars, context) => {
