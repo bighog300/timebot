@@ -20,7 +20,14 @@ router = APIRouter(prefix="/connections", tags=["connections"])
 
 @router.get('/', response_model=list[ConnectionResponse])
 def list_connections(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    return connector_service.list_connections(db, current_user)
+    connections = connector_service.list_connections(db, current_user)
+    return [
+        {
+            **ConnectionResponse.model_validate(conn).model_dump(),
+            **connector_service.provider_config_status(conn.type),
+        }
+        for conn in connections
+    ]
 
 
 @router.post('/{provider_type}/connect/start', response_model=OAuthStartResponse)

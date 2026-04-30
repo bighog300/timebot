@@ -1,5 +1,7 @@
 import axios from 'axios';
+import { type ChangeEvent, useRef } from 'react';
 import { Link } from 'react-router-dom';
+import { useAuth } from '@/auth/AuthContext';
 import { useDocuments, useUploadDocument } from '@/hooks/useApi';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -8,8 +10,18 @@ import { useUIStore } from '@/store/uiStore';
 
 export function DocumentsPage() {
   const { data, isLoading, isError } = useDocuments();
+  const { token, loading: authLoading } = useAuth();
   const upload = useUploadDocument();
   const pushToast = useUIStore((s) => s.pushToast);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const uploadDisabledReason = authLoading
+    ? 'Authentication is still loading. Please wait a moment.'
+    : !token
+      ? 'You must be logged in to upload documents.'
+      : upload.isPending
+        ? 'Upload in progress…'
+        : null;
 
   const onFile = async (file?: File) => {
     if (!file) return;
@@ -28,14 +40,34 @@ export function DocumentsPage() {
     }
   };
 
+  const onUploadClick = () => {
+    if (uploadDisabledReason) {
+      pushToast(uploadDisabledReason);
+      return;
+    }
+    inputRef.current?.click();
+  };
+
+  const onInputChange = async (e: ChangeEvent<HTMLInputElement>) => {
+    const selected = e.target.files?.[0];
+    await onFile(selected);
+    e.target.value = '';
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3">
         <h1 className="text-xl font-semibold">Documents</h1>
-        <label className="cursor-pointer">
-          <input type="file" className="hidden" onChange={(e) => onFile(e.target.files?.[0])} />
-          <Button>Upload</Button>
-        </label>
+        <input
+          ref={inputRef}
+          type="file"
+          className="hidden"
+          accept=".pdf,.doc,.docx,.txt,.xlsx,.xls,.ppt,.pptx,.png,.jpg,.jpeg"
+          onChange={onInputChange}
+        />
+        <Button onClick={onUploadClick} disabled={Boolean(uploadDisabledReason)} title={uploadDisabledReason ?? undefined}>
+          Upload
+        </Button>
       </div>
 
       {isLoading && <LoadingState />}

@@ -25,7 +25,7 @@ export const api = {
   listDocuments: async (includeArchived = false): Promise<Document[]> =>
     (await http.get('/documents', { params: { include_archived: includeArchived } })).data,
   getDocument: async (id: string): Promise<Document> => (await http.get(`/documents/${id}`)).data,
-  uploadDocument: async ({ file, token }: { file: File; token: string }): Promise<Document> => {
+  uploadDocument: async (file: File, token: string): Promise<Document> => {
     const body = new FormData();
     body.append('file', file);
     try {

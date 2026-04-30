@@ -33,6 +33,14 @@ class ConnectorService:
             self._get_or_create(db, provider_type, user)
         return db.query(Connection).filter(Connection.user_id == user.id).order_by(Connection.type.asc()).all()
 
+    def provider_config_status(self, provider_type: str) -> dict[str, str | bool | None]:
+        provider = get_provider(provider_type)
+        config_error = getattr(provider, "oauth_configuration_error", None)
+        return {
+            "provider_is_configured": config_error is None,
+            "provider_config_error": config_error,
+        }
+
     def start_oauth(self, db: Session, provider_type: str, user: User) -> dict:
         provider = get_provider(provider_type)
         conn = self._get_or_create(db, provider_type, user)

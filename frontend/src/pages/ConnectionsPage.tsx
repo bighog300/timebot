@@ -1,4 +1,5 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
+import axios from 'axios';
 import { useConnections } from '@/hooks/useApi';
 import { api } from '@/services/api';
 import { Button } from '@/components/ui/Button';
@@ -17,7 +18,14 @@ export function ConnectionsPage() {
     onSuccess: (result) => {
       window.location.assign(result.authorization_url);
     },
-    onError: () => pushToast('Unable to start OAuth flow'),
+    onError: (error) => {
+      if (axios.isAxiosError(error)) {
+        const detail = typeof error.response?.data?.detail === 'string' ? error.response.data.detail : null;
+        pushToast(detail ?? 'Unable to start OAuth flow');
+        return;
+      }
+      pushToast('Unable to start OAuth flow');
+    },
   });
 
   const disconnect = useMutation({
@@ -57,7 +65,13 @@ export function ConnectionsPage() {
             <div className="mb-3 text-xs text-slate-500">Last sync: {conn.last_sync_date ? new Date(conn.last_sync_date).toLocaleString() : 'n/a'}</div>
             {conn.last_error_message && <div className="mb-3 rounded bg-red-950/30 p-2 text-xs text-red-300">{conn.last_error_message}</div>}
             <div className="flex gap-2">
-              <Button onClick={() => connect.mutate(conn.type)} disabled={connect.isPending}>{conn.is_authenticated ? 'Reconnect' : 'Connect'}</Button>
+              <Button
+                onClick={() => connect.mutate(conn.type)}
+                disabled={connect.isPending || conn.provider_is_configured === false}
+                title={conn.provider_is_configured === false ? (conn.provider_config_error ?? undefined) : undefined}
+              >
+                {conn.is_authenticated ? 'Reconnect' : 'Connect'}
+              </Button>
               <Button onClick={() => disconnect.mutate(conn.type)} className="bg-slate-700" disabled={!conn.is_authenticated || disconnect.isPending}>Disconnect</Button>
               <Button onClick={() => sync.mutate(conn.type)} className="bg-emerald-700" disabled={!conn.is_authenticated || sync.isPending}>Sync</Button>
             </div>
