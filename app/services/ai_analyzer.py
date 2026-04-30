@@ -1,5 +1,7 @@
 import json
 import logging
+import re
+from datetime import date, datetime
 from typing import Any, Dict, List, Optional
 
 from app.config import settings
@@ -57,6 +59,7 @@ class AIAnalyzer:
             )
             content = (response.choices[0].message.content or "").strip()
             analysis = self._normalize_analysis(self._parse_json(content))
+            logger.info("ai_analysis_complete filename=%s timeline_event_count=%s", filename, len(analysis.get("timeline_events", [])))
             summary = (analysis.get("summary") or "").strip()
             if not summary:
                 raise AIAnalysisError("AI enrichment failed: summary missing from model response.")
@@ -95,12 +98,100 @@ class AIAnalyzer:
         normalized["key_points"] = normalized.get("key_points") or []
         normalized["tags"] = normalized.get("tags") or []
         normalized["entities"] = normalized.get("entities") or {}
-        timeline_events = normalized.get("timeline_events") or []
-        if not isinstance(timeline_events, list):
-            timeline_events = []
-        normalized["timeline_events"] = timeline_events
+        timeline_events = self._extract_timeline_events(normalized)
+        normalized["timeline_events"] = self._normalize_timeline_events(timeline_events)
         normalized["action_items"] = normalized.get("action_items") or []
         return normalized
+
+    def _extract_timeline_events(self, normalized: Dict[str, Any]) -> List[Dict[str, Any]]:
+        aliases = ["timeline_events", "events", "important_dates", "dates", "milestones", "deadlines"]
+        candidates: List[Any] = []
+        for key in aliases:
+            value = normalized.get(key)
+            if isinstance(value, list):
+                candidates.extend(value)
+        nested = normalized.get("analysis")
+        if isinstance(nested, dict):
+            nested_events = nested.get("timeline_events")
+            if isinstance(nested_events, list):
+                candidates.extend(nested_events)
+        return [item for item in candidates if isinstance(item, dict)]
+
+    def _normalize_timeline_events(self, events: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        output: List[Dict[str, Any]] = []
+        for event in events:
+            title = event.get("title") or event.get("name") or event.get("event_title")
+            description = event.get("description") or event.get("details")
+            source_quote = event.get("source_quote") or event.get("evidence") or event.get("quote")
+            page_number = event.get("page_number") or event.get("page")
+            raw_date = event.get("date") or event.get("event_date") or event.get("due_date") or event.get("effective_date")
+            raw_start = event.get("start_date") or event.get("from") or event.get("start")
+            raw_end = event.get("end_date") or event.get("to") or event.get("end")
+
+            date_value, _ = self._normalize_date(raw_date)
+            start_value, start_approx = self._normalize_date(raw_start)
+            end_value, end_approx = self._normalize_date(raw_end)
+            date_approx = False
+            if not date_value and raw_date and isinstance(raw_date, str):
+                quarter = self._quarter_to_range(raw_date)
+                if quarter:
+                    start_value, end_value = quarter
+                    date_approx = True
+            if not (date_value or start_value or end_value):
+                continue
+            output.append(
+                {
+                    "title": (title or "Untitled event").strip(),
+                    "description": description,
+                    "date": date_value,
+                    "start_date": start_value,
+                    "end_date": end_value,
+                    "approximate": bool(date_approx or start_approx or end_approx),
+                    "confidence": float(event.get("confidence") or 0.4),
+                    "source_quote": source_quote,
+                    "page_number": int(page_number) if isinstance(page_number, (int, float, str)) and str(page_number).isdigit() else None,
+                    "category": event.get("category"),
+                    "source": event.get("source", "extracted"),
+                }
+            )
+        return output
+
+    def _normalize_date(self, value: Any) -> tuple[Optional[str], bool]:
+        if isinstance(value, date):
+            return value.isoformat(), False
+        if not isinstance(value, str) or not value.strip():
+            return None, False
+        s = value.strip()
+        if re.fullmatch(r"\d{4}-\d{2}-\d{2}", s):
+            return s, False
+        formats = ("%B %d, %Y", "%d %B %Y", "%m/%d/%Y", "%d/%m/%Y")
+        for fmt in formats:
+            try:
+                return datetime.strptime(s, fmt).date().isoformat(), False
+            except ValueError:
+                pass
+        month_year = re.fullmatch(r"([A-Za-z]+)\s+(\d{4})", s)
+        if month_year:
+            try:
+                return datetime.strptime(s, "%B %Y").date().replace(day=1).isoformat(), True
+            except ValueError:
+                return None, False
+        return None, False
+
+    def _quarter_to_range(self, value: str) -> Optional[tuple[str, str]]:
+        match = re.fullmatch(r"Q([1-4])\s+(\d{4})", value.strip(), flags=re.IGNORECASE)
+        if not match:
+            return None
+        quarter = int(match.group(1))
+        year = int(match.group(2))
+        start_month = (quarter - 1) * 3 + 1
+        start = date(year, start_month, 1)
+        if quarter == 4:
+            end = date(year, 12, 31)
+        else:
+            next_start = date(year, start_month + 3, 1)
+            end = next_start.fromordinal(next_start.toordinal() - 1)
+        return start.isoformat(), end.isoformat()
 
     def compute_confidence(self, analysis: Dict[str, Any]) -> float:
         confidence = 1.0

@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+import logging
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -43,6 +44,7 @@ class DocumentIntelligenceService:
         return self.create_from_analysis(db, document, analysis)
 
     def _upsert_from_analysis(self, db: Session, document: Document, analysis: dict) -> DocumentIntelligence:
+        logger = logging.getLogger(__name__)
         confidence_score = ai_analyzer.compute_confidence(analysis)
         confidence_label = "high" if confidence_score >= 0.8 else "medium" if confidence_score >= 0.5 else "low"
 
@@ -61,6 +63,16 @@ class DocumentIntelligenceService:
         intelligence.entities = analysis.get("entities", {})
 
         timeline_events = analysis.get("timeline_events", []) or []
+        preview_event = timeline_events[0] if timeline_events and isinstance(timeline_events[0], dict) else {}
+        logger.info(
+            "timeline_pre_persist document_id=%s count=%s first_title=%s first_date=%s first_start=%s first_end=%s",
+            document.id,
+            len(timeline_events) if isinstance(timeline_events, list) else 0,
+            preview_event.get("title"),
+            preview_event.get("date"),
+            preview_event.get("start_date"),
+            preview_event.get("end_date"),
+        )
         if isinstance(timeline_events, list):
             intelligence.entities = dict(intelligence.entities or {})
             intelligence.entities["timeline_events"] = timeline_events
@@ -85,6 +97,8 @@ class DocumentIntelligenceService:
         db.add(intelligence)
         db.commit()
         db.refresh(intelligence)
+        persisted = (intelligence.entities or {}).get("timeline_events", []) if isinstance(intelligence.entities, dict) else []
+        logger.info("timeline_post_persist document_id=%s persisted_count=%s", document.id, len(persisted) if isinstance(persisted, list) else 0)
         return intelligence
 
     def update_intelligence(
