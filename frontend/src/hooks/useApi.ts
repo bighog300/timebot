@@ -50,7 +50,16 @@ function useAuthReady() {
 
 export function useDocuments() {
   const authReady = useAuthReady();
-  return useQuery({ queryKey: keys.documents, queryFn: () => api.listDocuments(false), enabled: authReady });
+  return useQuery({
+    queryKey: keys.documents,
+    queryFn: () => api.listDocuments(false),
+    enabled: authReady,
+    refetchInterval: (query) => {
+      const docs = query.state.data as Array<{ processing_status?: string }> | undefined;
+      const hasInFlight = (docs ?? []).some((doc) => doc.processing_status === 'uploading' || doc.processing_status === 'processing');
+      return hasInFlight ? 3000 : false;
+    },
+  });
 }
 
 export function useUploadDocument() {
