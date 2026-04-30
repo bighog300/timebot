@@ -141,12 +141,28 @@ class DocumentProcessor:
             )
             confidence = ai_analyzer.compute_confidence(analysis)
             logger.info("AI analysis succeeded doc_id=%s summary_length=%s timeline_events=%s action_items=%s", document.id, len(analysis.get("summary") or ""), len(analysis.get("timeline_events") or []), len(analysis.get("action_items") or []))
+            logger.info(
+                "AI summary preview doc_id=%s preview=%s",
+                document.id,
+                (analysis.get("summary") or "")[:80],
+            )
             document.review_status = (
                 "pending"
                 if confidence < settings.REVIEW_CONFIDENCE_THRESHOLD
                 else "approved"
             )
-            document_intelligence_service.create_from_analysis(db, document, analysis)
+            logger.info("Persisting intelligence doc_id=%s", document.id)
+            intelligence = document_intelligence_service.create_from_analysis(db, document, analysis)
+            if hasattr(db, "refresh"):
+                db.refresh(document)
+                if intelligence is not None:
+                    db.refresh(intelligence)
+            logger.info(
+                "Persistence complete doc_id=%s document_summary_length=%s intelligence_summary_length=%s",
+                document.id,
+                len(document.summary or ""),
+                len((getattr(intelligence, "summary", "") or "")),
+            )
             try:
                 logger.info("Starting relationship detection for document %s", document.id)
                 relationship_result = relationship_detection_service.detect_for_document(
@@ -171,11 +187,14 @@ class DocumentProcessor:
             logger.warning("AI analysis failed doc_id=%s error=%s", document.id, exc)
 
     def _load_or_extract_text(self, document_id: UUID, file_path: Path, file_type: str) -> str:
-        if file_path.exists():
+        try:
             text, _page_count, _word_count = text_extractor.extract(file_path, file_type)
             if text:
                 storage.save_text(str(document_id), text)
                 return text
+        except Exception:
+            if file_path.exists():
+                raise
         text_file = next(storage.text_path.rglob(f"{document_id}.txt"), None)
         if text_file and text_file.exists():
             return text_file.read_text(encoding="utf-8")

@@ -132,7 +132,7 @@ export function DocumentDetailPage() {
           />
         )}
         {shouldFetchIntelligence && intelligenceQuery.isSuccess && !intelligenceQuery.data && (
-          <EmptyState label="Intelligence is not available yet." />
+          <EmptyState label={(doc.summary && doc.summary.trim()) ? doc.summary : "Intelligence is not available yet."} />
         )}
         {shouldFetchIntelligence && intelligenceQuery.data && (
           <div className="space-y-3">
@@ -174,6 +174,11 @@ export function DocumentDetailPage() {
               <h3 className="mb-2 font-medium">Entities</h3>
               <pre className="overflow-auto text-xs text-slate-300">{JSON.stringify(intelligenceQuery.data.entities ?? {}, null, 2)}</pre>
             </div>
+          </div>
+        )}
+        {shouldFetchIntelligence && intelligenceQuery.data && !(intelligenceQuery.data.summary?.trim()) && (
+          <div className="text-sm text-slate-300">
+            {doc.summary?.trim() || "No summary available yet"}
           </div>
         )}
       </Card>

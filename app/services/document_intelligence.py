@@ -51,7 +51,11 @@ class DocumentIntelligenceService:
             intelligence = DocumentIntelligence(document_id=document.id)
             db.add(intelligence)
 
-        intelligence.summary = analysis.get("summary")
+        incoming_summary = (analysis.get("summary") or "").strip()
+        if incoming_summary:
+            intelligence.summary = incoming_summary
+        elif not intelligence.summary:
+            intelligence.summary = ""
         intelligence.key_points = analysis.get("key_points", [])
         intelligence.suggested_tags = analysis.get("tags", [])
         intelligence.entities = analysis.get("entities", {})
@@ -69,7 +73,8 @@ class DocumentIntelligenceService:
         categorizer.apply_category(db, document, analysis)
         intelligence.suggested_category_id = document.ai_category_id
 
-        document.summary = intelligence.summary
+        if intelligence.summary:
+            document.summary = intelligence.summary
         document.key_points = intelligence.key_points
         document.entities = intelligence.entities
         document.ai_tags = intelligence.suggested_tags
