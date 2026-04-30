@@ -19,6 +19,9 @@ import { RelationshipReviewPage } from '@/pages/RelationshipReviewPage';
 import { Navigate } from 'react-router-dom';
 import { RequireAdmin } from '@/components/auth/RequireAdmin';
 import { AdminPage } from '@/pages/AdminPage';
+import { AdminChatbotSettingsPage } from '@/pages/AdminChatbotSettingsPage';
+import { ReportsPage } from '@/pages/ReportsPage';
+import { ChatPage } from '@/pages/ChatPage';
 
 export const router = createBrowserRouter([
   { path: '/login', element: <LoginPage /> },
@@ -45,8 +48,11 @@ export const router = createBrowserRouter([
       { path: 'categories', element: <CategoriesPage /> },
       { path: 'insights', element: <InsightsPage /> },
       { path: 'connections', element: <ConnectionsPage /> },
+      { path: 'chat', element: <ChatPage /> },
+      { path: 'reports', element: <ReportsPage /> },
       { path: 'connections/callback', element: <ConnectionCallbackPage /> },
       { path: 'admin', element: <RequireAdmin><AdminPage /></RequireAdmin> },
+      { path: 'admin/chatbot-settings', element: <RequireAdmin><AdminChatbotSettingsPage /></RequireAdmin> },
     ],
   },
 ]);

@@ -22,6 +22,16 @@ describe('AppShell nav active states', () => {
     expect(screen.getByRole('link', { name: 'Review' }).className).not.toContain('bg-slate-700');
   });
 
+  it('highlights Chat for /chat', () => {
+    render(<MemoryRouter initialEntries={['/chat']}><AppShell /></MemoryRouter>);
+    expect(screen.getByRole('link', { name: 'Chat' }).className).toContain('bg-slate-700');
+  });
+
+  it('highlights Reports for /reports', () => {
+    render(<MemoryRouter initialEntries={['/reports']}><AppShell /></MemoryRouter>);
+    expect(screen.getByRole('link', { name: 'Reports' }).className).toContain('bg-slate-700');
+  });
+
   it('relationships nav points to relationship page', () => {
     render(<MemoryRouter><AppShell /></MemoryRouter>);
     expect(screen.getByRole('link', { name: 'Relationships' }).getAttribute('href')).toBe('/review/relationships');

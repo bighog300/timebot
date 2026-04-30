@@ -23,9 +23,38 @@ import type {
   AdminUsersPage,
   AdminMetrics,
   AdminAuditPage,
+  ChatbotSettings,
+  ChatSession,
+  ChatMessageResponse,
+  ChatMessageRequest,
+  GeneratedReport,
+  ReportCreateRequest,
 } from '@/types/api';
 
+
+
+export function getErrorDetail(error: unknown): string {
+  if (axios.isAxiosError(error)) {
+    const detail = error.response?.data?.detail;
+    if (typeof detail === 'string') return detail;
+    return error.message;
+  }
+  return error instanceof Error ? error.message : 'Unexpected error';
+}
+
 export const api = {
+
+  getChatbotSettings: async (): Promise<ChatbotSettings> => (await http.get('/admin/chatbot-settings')).data,
+  updateChatbotSettings: async (payload: ChatbotSettings): Promise<ChatbotSettings> => (await http.put('/admin/chatbot-settings', payload)).data,
+  resetChatbotSettings: async (): Promise<ChatbotSettings> => (await http.post('/admin/chatbot-settings/reset')).data,
+  createChatSession: async (title?: string): Promise<ChatSession> => (await http.post('/chat/sessions', { title })).data,
+  listChatSessions: async (): Promise<ChatSession[]> => (await http.get('/chat/sessions')).data,
+  getChatSession: async (sessionId: string): Promise<ChatSession> => (await http.get(`/chat/sessions/${sessionId}`)).data,
+  sendChatMessage: async (sessionId: string, payload: ChatMessageRequest): Promise<ChatMessageResponse> => (await http.post(`/chat/sessions/${sessionId}/messages`, payload)).data,
+  createReport: async (payload: ReportCreateRequest): Promise<GeneratedReport> => (await http.post('/reports', payload)).data,
+  listReports: async (): Promise<GeneratedReport[]> => (await http.get('/reports')).data,
+  getReport: async (reportId: string): Promise<GeneratedReport> => (await http.get(`/reports/${reportId}`)).data,
+  getReportDownloadUrl: (reportId: string): string => `${http.defaults.baseURL}/reports/${reportId}/download`,
 
   listAdminUsers: async (limit = 20, offset = 0): Promise<AdminUsersPage> => (await http.get('/admin/users', { params: { limit, offset } })).data,
   updateAdminUserRole: async (userId: string, role: string) => (await http.patch(`/admin/users/${userId}/role`, { role })).data,
