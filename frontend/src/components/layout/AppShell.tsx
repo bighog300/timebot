@@ -49,7 +49,7 @@ export function AppShell() {
           <button className="rounded bg-slate-700 px-2 py-1 hover:bg-slate-600" onClick={logout}>Logout</button>
         </div>
       </header>
-      <div className="grid min-h-[calc(100vh-57px)] grid-cols-1 md:grid-cols-[220px_1fr]">
+      <div className="grid min-h-[calc(100vh-57px)] grid-cols-1 md:grid-cols-[220px_minmax(0,1fr)]">
         <aside className="border-r border-slate-800 p-3">
           <nav className="flex flex-col gap-1">
             {[...baseLinks, ...(user?.role === "admin" ? [['/admin', 'Admin'] as const] : [])].map(([to, label]) => (
@@ -70,7 +70,7 @@ export function AppShell() {
             ))}
           </nav>
         </aside>
-        <main className="p-4">
+        <main className="min-w-0 overflow-x-hidden p-4">
           <Outlet />
         </main>
       </div>
