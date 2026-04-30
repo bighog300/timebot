@@ -15,8 +15,6 @@ vi.mock('react-router-dom', async () => {
 
 vi.mock('@/services/api', () => ({ api: { getTimeline: vi.fn() } }));
 
-type ResizeObserverCallback = ConstructorParameters<typeof ResizeObserver>[0];
-
 function renderPage() {
   const qc = new QueryClient();
   return render(
@@ -30,7 +28,7 @@ function renderPage() {
 
 describe('TimelinePage', () => {
   class ResizeObserverMock {
-    constructor(_: ResizeObserverCallback) {}
+    constructor() {}
     observe() {}
     disconnect() {}
     unobserve() {}
