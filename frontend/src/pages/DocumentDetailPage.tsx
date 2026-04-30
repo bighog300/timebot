@@ -102,6 +102,24 @@ export function DocumentDetailPage() {
   if (documentQuery.isError || !documentQuery.data) return <ErrorState message="Document not found" />;
 
   const doc = documentQuery.data;
+  const relationshipGroups = {
+    thread: (relationshipsQuery.data ?? []).filter((item) => item.relationship_type === 'thread'),
+    attachment: (relationshipsQuery.data ?? []).filter((item) => item.relationship_type === 'attachment'),
+    related: (relationshipsQuery.data ?? []).filter((item) => item.relationship_type !== 'thread' && item.relationship_type !== 'attachment'),
+  };
+  const renderRelationshipItem = (item: (typeof relationshipGroups)['related'][number]) => (
+    <li key={item.id} className="rounded border border-slate-800 p-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <Link className="font-medium text-blue-300 hover:text-blue-200" to={`/documents/${item.related_document_id}`}>
+          {item.related_document_title || item.related_document_name || item.related_document_id}
+        </Link>
+        <span className="rounded bg-slate-800 px-2 py-1 text-xs">{item.relationship_type}</span>
+        <span className="rounded bg-slate-800 px-2 py-1 text-xs">{item.status}</span>
+        <span className="text-xs text-slate-400">{item.confidence != null ? `${Math.round(item.confidence * 100)}% confidence` : 'n/a confidence'}</span>
+      </div>
+      <p className="mt-2 text-slate-300">{item.related_document_snippet || 'No summary/snippet available.'}</p>
+    </li>
+  );
   return (
     <div className="space-y-4">
       <h1 className="text-xl font-semibold">{doc.filename}</h1>
@@ -214,24 +232,22 @@ export function DocumentDetailPage() {
         {relationshipsQuery.isLoading && <LoadingState label="Loading related documents..." />}
         {relationshipsQuery.isError && <ErrorState message={`Failed to load related documents: ${relationshipsQuery.error.message}`} />}
         {relationshipsQuery.isSuccess && (relationshipsQuery.data?.length ?? 0) === 0 && <EmptyState label="No related documents yet." />}
-        <ul className="space-y-2 text-sm">
-          {(relationshipsQuery.data ?? [])
-            .slice()
-            .sort((a, b) => (a.status === b.status ? 0 : a.status === 'confirmed' ? -1 : 1))
-            .map((item) => (
-              <li key={item.id} className="rounded border border-slate-800 p-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Link className="font-medium text-blue-300 hover:text-blue-200" to={`/documents/${item.related_document_id}`}>
-                    {item.related_document_title || item.related_document_name || item.related_document_id}
-                  </Link>
-                  <span className="rounded bg-slate-800 px-2 py-1 text-xs">{item.relationship_type}</span>
-                  <span className="rounded bg-slate-800 px-2 py-1 text-xs">{item.status}</span>
-                  <span className="text-xs text-slate-400">{item.confidence != null ? `${Math.round(item.confidence * 100)}% confidence` : 'n/a confidence'}</span>
-                </div>
-                <p className="mt-2 text-slate-300">{item.related_document_snippet || 'No summary/snippet available.'}</p>
-              </li>
-            ))}
-        </ul>
+        {relationshipsQuery.isSuccess && (relationshipsQuery.data?.length ?? 0) > 0 && (
+          <div className="space-y-4 text-sm">
+            <div>
+              <h4 className="mb-2 font-medium">Email Thread</h4>
+              {relationshipGroups.thread.length === 0 ? <EmptyState label="No email thread relationships." /> : <ul className="space-y-2">{relationshipGroups.thread.map(renderRelationshipItem)}</ul>}
+            </div>
+            <div>
+              <h4 className="mb-2 font-medium">Attachments</h4>
+              {relationshipGroups.attachment.length === 0 ? <EmptyState label="No attachment relationships." /> : <ul className="space-y-2">{relationshipGroups.attachment.map(renderRelationshipItem)}</ul>}
+            </div>
+            <div>
+              <h4 className="mb-2 font-medium">Related Documents</h4>
+              {relationshipGroups.related.length === 0 ? <EmptyState label="No AI-detected related documents." /> : <ul className="space-y-2">{relationshipGroups.related.map(renderRelationshipItem)}</ul>}
+            </div>
+          </div>
+        )}
         <div className="mt-2 text-xs text-slate-400">Need to review or update relationships? Visit the <Link to="/review/relationships" className="text-blue-300 hover:text-blue-200">Relationships review page</Link>.</div>
       </Card>
 

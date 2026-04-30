@@ -67,3 +67,23 @@ def test_pending_review_created_from_raw_relationship(db, test_user):
     review = db.query(DocumentRelationshipReview).filter(DocumentRelationshipReview.source_document_id == rel.source_doc_id).first()
     assert review is not None
     assert review.status == "pending"
+
+
+def test_detection_skips_when_thread_relationship_exists(db, test_user):
+    a = _mk(db, test_user.id, "alpha-thread-1.pdf", summary="Alpha project roadmap launch")
+    b = _mk(db, test_user.id, "alpha-thread-2.pdf", summary="Alpha project launch roadmap update")
+    db.add(DocumentRelationship(
+        source_doc_id=min(a.id, b.id, key=str),
+        target_doc_id=max(a.id, b.id, key=str),
+        relationship_type="thread",
+        confidence=0.99,
+        relationship_metadata={"gmail_thread_id": "t1"},
+    ))
+    db.commit()
+    relationship_detection_service.detect_for_document(db, a.id)
+    generic = db.query(DocumentRelationship).filter(
+        DocumentRelationship.source_doc_id == min(a.id, b.id, key=str),
+        DocumentRelationship.target_doc_id == max(a.id, b.id, key=str),
+        DocumentRelationship.relationship_type.in_(("related_to", "similar_to", "follows_up", "duplicates")),
+    ).all()
+    assert generic == []

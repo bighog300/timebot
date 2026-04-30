@@ -12,7 +12,8 @@ import httpx
 from sqlalchemy.orm import Session
 
 from app.models.document import Document
-from app.models.relationships import Connection, GmailImportedAttachment, GmailImportedMessage
+from app.models.intelligence import DocumentRelationshipReview
+from app.models.relationships import Connection, DocumentRelationship, GmailImportedAttachment, GmailImportedMessage
 from app.models.user import User
 from app.services.connectors.token_crypto import connector_token_crypto
 from app.services.document_processor import document_processor
@@ -51,6 +52,37 @@ class _HTMLToTextParser(HTMLParser):
 class GmailImportService:
     scope = "https://www.googleapis.com/auth/gmail.readonly"
     SUPPORTED_ATTACHMENT_EXTS = {"pdf", "doc", "docx", "txt", "xls", "xlsx", "ppt", "pptx", "png", "jpg", "jpeg"}
+
+    def _ensure_relationship(self, db: Session, *, source_doc_id, target_doc_id, relationship_type: str, confidence: float, metadata: dict) -> None:
+        existing = db.query(DocumentRelationship).filter(
+            DocumentRelationship.source_doc_id == source_doc_id,
+            DocumentRelationship.target_doc_id == target_doc_id,
+            DocumentRelationship.relationship_type == relationship_type,
+        ).first()
+        if not existing:
+            db.add(DocumentRelationship(
+                source_doc_id=source_doc_id,
+                target_doc_id=target_doc_id,
+                relationship_type=relationship_type,
+                confidence=confidence,
+                relationship_metadata=metadata,
+            ))
+
+        review = db.query(DocumentRelationshipReview).filter(
+            DocumentRelationshipReview.source_document_id == source_doc_id,
+            DocumentRelationshipReview.target_document_id == target_doc_id,
+            DocumentRelationshipReview.relationship_type == relationship_type,
+        ).first()
+        if not review:
+            db.add(DocumentRelationshipReview(
+                source_document_id=source_doc_id,
+                target_document_id=target_doc_id,
+                relationship_type=relationship_type,
+                confidence=confidence,
+                status="confirmed",
+                reason_codes_json=["gmail_import_linkage"],
+                metadata_json=metadata,
+            ))
 
     def _conn(self, db: Session, user: User) -> Connection:
         conn = db.query(Connection).filter(Connection.user_id == user.id, Connection.type == "gmail").first()
@@ -167,6 +199,23 @@ class GmailImportService:
                 db.refresh(doc)
                 document_processor._process_sync(db, doc)
                 db.add(GmailImportedMessage(user_id=user.id, gmail_message_id=mid, gmail_thread_id=payload.get("threadId"), sender=hdr.get("from", sender_email), subject=subject, received_at=datetime.now(timezone.utc), document_id=doc.id))
+                thread_id = payload.get("threadId")
+                if thread_id:
+                    peers = db.query(GmailImportedMessage).filter(
+                        GmailImportedMessage.user_id == user.id,
+                        GmailImportedMessage.gmail_thread_id == thread_id,
+                        GmailImportedMessage.document_id != doc.id,
+                    ).all()
+                    for peer in peers:
+                        source_id, target_id = (doc.id, peer.document_id) if str(doc.id) < str(peer.document_id) else (peer.document_id, doc.id)
+                        self._ensure_relationship(
+                            db,
+                            source_doc_id=source_id,
+                            target_doc_id=target_id,
+                            relationship_type="thread",
+                            confidence=0.99,
+                            metadata={"gmail_thread_id": thread_id},
+                        )
                 db.commit()
                 imported_email_count += 1
                 created_document_ids.append(str(doc.id))
@@ -199,6 +248,14 @@ class GmailImportService:
                         db.refresh(att_doc)
                         document_processor._process_sync(db, att_doc)
                         db.add(GmailImportedAttachment(user_id=user.id, gmail_message_id=mid, attachment_id=attachment_id, filename=filename, document_id=att_doc.id))
+                        self._ensure_relationship(
+                            db,
+                            source_doc_id=doc.id,
+                            target_doc_id=att_doc.id,
+                            relationship_type="attachment",
+                            confidence=1.0,
+                            metadata={"filename": filename, "gmail_message_id": mid},
+                        )
                         db.commit()
                         imported_attachment_count += 1
                         created_document_ids.append(str(att_doc.id))

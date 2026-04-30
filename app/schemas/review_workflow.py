@@ -43,6 +43,8 @@ class RelationshipReviewType(str, Enum):
     DUPLICATE = "duplicate"
     SIMILAR = "similar"
     RELATED = "related"
+    THREAD = "thread"
+    ATTACHMENT = "attachment"
 
 
 class RelationshipReviewStatus(str, Enum):

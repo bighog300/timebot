@@ -265,7 +265,7 @@ export interface RelationshipReviewItem {
   id: string;
   source_document_id: string;
   target_document_id: string;
-  relationship_type: 'duplicate' | 'similar' | 'related';
+  relationship_type: 'duplicate' | 'similar' | 'related' | 'thread' | 'attachment';
   confidence: number | null;
   source_document_title?: string | null;
   source_document_name?: string | null;
@@ -286,7 +286,7 @@ export interface RelationshipReviewItem {
 export interface DocumentRelationshipListItem {
   id: string;
   status: 'pending' | 'confirmed' | 'dismissed';
-  relationship_type: 'duplicate' | 'similar' | 'related';
+  relationship_type: 'duplicate' | 'similar' | 'related' | 'thread' | 'attachment';
   confidence: number | null;
   related_document_id: string;
   related_document_title: string;
