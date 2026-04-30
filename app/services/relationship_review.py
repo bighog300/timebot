@@ -15,7 +15,7 @@ class RelationshipReviewService:
     def list_items(self, db: Session, *, user_id: UUID, status: str = "pending") -> list[DocumentRelationshipReview]:
         source_doc = aliased(Document)
         target_doc = aliased(Document)
-        return (
+        items = (
             db.query(DocumentRelationshipReview)
             .join(source_doc, source_doc.id == DocumentRelationshipReview.source_document_id)
             .join(target_doc, target_doc.id == DocumentRelationshipReview.target_document_id)
@@ -23,6 +23,8 @@ class RelationshipReviewService:
             .order_by(DocumentRelationshipReview.created_at.asc())
             .all()
         )
+        logger.info("Returning %d relationship items user_id=%s status=%s", len(items), user_id, status)
+        return items
 
     def get_item(self, db: Session, *, relationship_id: UUID, user_id: UUID) -> DocumentRelationshipReview | None:
         source_doc = aliased(Document)

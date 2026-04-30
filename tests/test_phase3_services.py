@@ -128,6 +128,43 @@ def test_relationship_persistence_idempotent():
     assert second["created"] == 0
 
 
+
+
+def test_relationship_follows_up_creates_review_item(db, sample_document):
+    from app.models.document import Document
+    from app.models.intelligence import DocumentRelationshipReview
+
+    source = sample_document
+    target = Document(
+        filename="incident-follow-up.pdf",
+        original_path="/tmp/incident-follow-up.pdf",
+        file_type="pdf",
+        file_size=100,
+        user_id=source.user_id,
+        processing_status="completed",
+        source="upload",
+        is_archived=False,
+        entities=source.entities,
+        upload_date=source.upload_date,
+    )
+    db.add(target)
+    db.commit()
+    db.refresh(target)
+
+    candidate = RelationshipCandidate(
+        source_doc_id=source.id,
+        target_doc_id=target.id,
+        relationship_type="follows_up",
+        confidence=0.7,
+        metadata={"signals": {"date_adjacency": 1.0}},
+    )
+
+    relationship_detection_service._persist_candidates(db, [candidate])
+
+    review = db.query(DocumentRelationshipReview).filter(DocumentRelationshipReview.source_document_id == candidate.source_doc_id).first()
+    assert review is not None
+    assert review.relationship_type == "related"
+    assert review.status == "pending"
 def test_timeline_response_shape():
     docs = [_doc("d1.pdf", entities={"dates": ["2026-01-01"]}), _doc("d2.pdf", days=3)]
     db = FakeDB(docs=docs)
