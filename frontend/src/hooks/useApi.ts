@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import axios from 'axios';
 import { useAuth } from '@/auth/AuthContext';
 import { api } from '@/services/api';
 import type { ActionItem, RelationshipReviewItem, ReviewItem } from '@/types/api';
@@ -299,9 +300,17 @@ export function useActionItemMetrics() {
   return useQuery({ queryKey: keys.actionItemMetrics, queryFn: api.getActionItemMetrics, enabled: authReady });
 }
 
-export function useDocumentIntelligence(documentId: string) {
+export function useDocumentIntelligence(documentId: string, enabled = true) {
   const authReady = useAuthReady();
-  return useQuery({ queryKey: keys.documentIntelligence(documentId), queryFn: () => api.getDocumentIntelligence(documentId), enabled: authReady && !!documentId });
+  return useQuery({
+    queryKey: keys.documentIntelligence(documentId),
+    queryFn: () => api.getDocumentIntelligence(documentId),
+    enabled: authReady && !!documentId && enabled,
+    retry: (failureCount, error) => {
+      if (axios.isAxiosError(error) && error.response?.status === 404) return false;
+      return failureCount < 2;
+    },
+  });
 }
 
 export function usePatchDocumentIntelligence(documentId: string) {

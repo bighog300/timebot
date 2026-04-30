@@ -96,7 +96,7 @@ export const api = {
     (await http.post(`/review/relationships/${id}/confirm`, { reason_codes_json: [], metadata_json: {} })).data,
   dismissRelationshipReview: async (id: string): Promise<RelationshipReviewItem> =>
     (await http.post(`/review/relationships/${id}/dismiss`, { reason_codes_json: [], metadata_json: {} })).data,
-  getDocumentIntelligence: async (id: string): Promise<DocumentIntelligence> => (await http.get(`/documents/${id}/intelligence`)).data,
+  getDocumentIntelligence: async (id: string): Promise<DocumentIntelligence | null> => (await http.get(`/documents/${id}/intelligence`)).data,
   patchDocumentIntelligence: async (
     id: string,
     patch: Partial<Pick<DocumentIntelligence, 'summary' | 'key_points' | 'suggested_tags' | 'entities' | 'model_metadata'>>,
