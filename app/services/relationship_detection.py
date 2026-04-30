@@ -62,8 +62,10 @@ class RelationshipDetectionService:
     """Deterministic relationship detection with optional semantic boost."""
 
     def detect_for_document(self, db: Session, document_id: UUID, limit: int = 50) -> Dict[str, int]:
+        logger.info("Relationship detection started doc_id=%s", document_id)
         doc = db.query(Document).filter(Document.id == document_id).first()
         if not doc:
+            logger.warning("Relationship detection skipped; source document missing doc_id=%s", document_id)
             return {"created": 0, "updated": 0, "scanned": 0}
 
         candidates = (
@@ -75,7 +77,9 @@ class RelationshipDetectionService:
         )
 
         matches = [self._score_pair(doc, other) for other in candidates]
-        persisted = self._persist_candidates(db, [m for m in matches if m is not None])
+        detected = [m for m in matches if m is not None]
+        logger.info("Relationship candidates found=%d doc_id=%s", len(detected), document_id)
+        persisted = self._persist_candidates(db, detected)
         persisted["scanned"] = len(candidates)
         return persisted
 
@@ -128,6 +132,13 @@ class RelationshipDetectionService:
             relationship_type = "similar_to"
 
         if score < 0.45:
+            logger.debug(
+                "Relationship skipped low-score left=%s right=%s score=%.5f signals=%s",
+                left.id,
+                right.id,
+                score,
+                {k: round(v, 5) for k, v in weighted.items()},
+            )
             return None
 
         source_id, target_id = (left.id, right.id) if str(left.id) < str(right.id) else (right.id, left.id)
@@ -220,6 +231,7 @@ class RelationshipDetectionService:
             "duplicates": "duplicate",
             "similar_to": "similar",
             "related_to": "related",
+            "follows_up": "related",
         }.get(relationship_type)
 
 
