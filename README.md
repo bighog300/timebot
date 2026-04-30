@@ -143,6 +143,26 @@ npm run test
 npm run build
 ```
 
+## AI Pipeline Validation
+
+- **No-key mode (`OPENAI_API_KEY=`)**:
+  - Backend and auth flows should still boot/work.
+  - Upload + text extraction still run.
+  - Document processing completes, but `processing_error` is populated with an AI-unavailable message and intelligence endpoints can remain empty.
+  - Regenerate intelligence endpoint returns `503` with actionable guidance to configure `OPENAI_API_KEY`.
+  - Semantic search degrades gracefully to empty semantic results; keyword search remains available.
+- **With-key mode**:
+  - Upload should produce summary, key points/tags/entities, suggested category, review items, and action items.
+  - Relationship detection/review queue endpoints should function based on available source documents.
+- **Manual validation checklist**:
+  1. Upload a small PDF.
+  2. Confirm summary/category/intelligence appear on the document detail view.
+  3. Confirm review queue + action item lifecycle actions work.
+  4. Confirm relationship review empty/success states.
+  5. Confirm search returns uploaded docs (keyword; semantic when embeddings are enabled).
+  6. Confirm dashboard/review/action metrics load and update.
+  7. Repeat with blank `OPENAI_API_KEY` and confirm graceful AI-unavailable behavior.
+
 ## Architecture
 
 ```text

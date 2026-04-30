@@ -99,7 +99,11 @@ export function DocumentDetailPage() {
       <Card>
         <h2 className="mb-2 text-lg">Document intelligence</h2>
         {intelligenceQuery.isLoading && <LoadingState label="Loading intelligence..." />}
-        {intelligenceQuery.isError && <ErrorState message="Failed to load intelligence." />}
+        {intelligenceQuery.isError && (
+          <ErrorState
+            message={doc.processing_error ?? 'AI enrichment is unavailable for this document. Configure OPENAI_API_KEY and reprocess to generate intelligence.'}
+          />
+        )}
         {intelligenceQuery.data && (
           <div className="space-y-3">
             <div className="text-sm text-slate-300">Confidence: <span className="font-medium">{intelligenceQuery.data.confidence}</span></div>
