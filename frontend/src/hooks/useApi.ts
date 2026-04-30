@@ -1,6 +1,27 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/auth/AuthContext';
 import { api } from '@/services/api';
+import type { ActionItem, RelationshipReviewItem, ReviewItem } from '@/types/api';
+
+type PaginatedData<T> = { items: T[]; total_count: number; limit: number; offset: number };
+
+function updatePaginatedQueries<T>(
+  qc: ReturnType<typeof useQueryClient>,
+  baseKey: readonly unknown[],
+  updater: (item: T) => T | null,
+) {
+  const entries = qc.getQueriesData<PaginatedData<T>>({ queryKey: baseKey });
+  const previous = entries.map(([queryKey, data]) => [queryKey, data] as const);
+
+  entries.forEach(([queryKey, data]) => {
+    if (!data) return;
+    const nextItems = data.items.map(updater).filter((item): item is T => item !== null);
+    const nextTotal = Math.max(0, data.total_count - (data.items.length - nextItems.length));
+    qc.setQueryData(queryKey, { ...data, items: nextItems, total_count: nextTotal });
+  });
+
+  return previous;
+}
 
 export const keys = {
   documents: ['documents'] as const,
@@ -93,7 +114,15 @@ export function useResolveReviewItem() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, note }: { id: string; note?: string }) => api.resolveReviewItem(id, note),
-    onSuccess: () => {
+    onMutate: async ({ id }) => {
+      await qc.cancelQueries({ queryKey: ['review-items'] });
+      const previous = updatePaginatedQueries<ReviewItem>(qc, ['review-items'], (item) => (item.id === id ? null : item));
+      return { previous };
+    },
+    onError: (_err, _vars, context) => {
+      context?.previous?.forEach(([queryKey, data]) => qc.setQueryData(queryKey, data));
+    },
+    onSettled: () => {
       qc.invalidateQueries({ queryKey: ['review-items'] });
       qc.invalidateQueries({ queryKey: keys.reviewMetrics });
     },
@@ -104,7 +133,15 @@ export function useDismissReviewItem() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, note }: { id: string; note?: string }) => api.dismissReviewItem(id, note),
-    onSuccess: () => {
+    onMutate: async ({ id }) => {
+      await qc.cancelQueries({ queryKey: ['review-items'] });
+      const previous = updatePaginatedQueries<ReviewItem>(qc, ['review-items'], (item) => (item.id === id ? null : item));
+      return { previous };
+    },
+    onError: (_err, _vars, context) => {
+      context?.previous?.forEach(([queryKey, data]) => qc.setQueryData(queryKey, data));
+    },
+    onSettled: () => {
       qc.invalidateQueries({ queryKey: ['review-items'] });
       qc.invalidateQueries({ queryKey: keys.reviewMetrics });
     },
@@ -147,7 +184,17 @@ export function useConfirmRelationshipReview() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => api.confirmRelationshipReview(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['relationship-reviews'] }),
+    onMutate: async (id) => {
+      await qc.cancelQueries({ queryKey: ['relationship-reviews'] });
+      const previous = qc.getQueriesData<RelationshipReviewItem[]>({ queryKey: ['relationship-reviews'] });
+      previous.forEach(([queryKey, data]) => {
+        if (!data) return;
+        qc.setQueryData(queryKey, data.filter((item) => item.id !== id));
+      });
+      return { previous };
+    },
+    onError: (_err, _vars, context) => context?.previous?.forEach(([queryKey, data]) => qc.setQueryData(queryKey, data)),
+    onSettled: () => qc.invalidateQueries({ queryKey: ['relationship-reviews'] }),
   });
 }
 
@@ -155,7 +202,17 @@ export function useDismissRelationshipReview() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => api.dismissRelationshipReview(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['relationship-reviews'] }),
+    onMutate: async (id) => {
+      await qc.cancelQueries({ queryKey: ['relationship-reviews'] });
+      const previous = qc.getQueriesData<RelationshipReviewItem[]>({ queryKey: ['relationship-reviews'] });
+      previous.forEach(([queryKey, data]) => {
+        if (!data) return;
+        qc.setQueryData(queryKey, data.filter((item) => item.id !== id));
+      });
+      return { previous };
+    },
+    onError: (_err, _vars, context) => context?.previous?.forEach(([queryKey, data]) => qc.setQueryData(queryKey, data)),
+    onSettled: () => qc.invalidateQueries({ queryKey: ['relationship-reviews'] }),
   });
 }
 
@@ -172,7 +229,15 @@ export function useCompleteActionItem() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => api.completeActionItem(id),
-    onSuccess: () => {
+    onMutate: async (id) => {
+      await qc.cancelQueries({ queryKey: ['action-items'] });
+      const previous = updatePaginatedQueries<ActionItem>(qc, ['action-items'], (item) => (item.id === id ? null : item));
+      return { previous };
+    },
+    onError: (_err, _vars, context) => {
+      context?.previous?.forEach(([queryKey, data]) => qc.setQueryData(queryKey, data));
+    },
+    onSettled: () => {
       qc.invalidateQueries({ queryKey: ['action-items'] });
       qc.invalidateQueries({ queryKey: keys.actionItemMetrics });
     },
@@ -183,7 +248,15 @@ export function useDismissActionItem() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => api.dismissActionItem(id),
-    onSuccess: () => {
+    onMutate: async (id) => {
+      await qc.cancelQueries({ queryKey: ['action-items'] });
+      const previous = updatePaginatedQueries<ActionItem>(qc, ['action-items'], (item) => (item.id === id ? null : item));
+      return { previous };
+    },
+    onError: (_err, _vars, context) => {
+      context?.previous?.forEach(([queryKey, data]) => qc.setQueryData(queryKey, data));
+    },
+    onSettled: () => {
       qc.invalidateQueries({ queryKey: ['action-items'] });
       qc.invalidateQueries({ queryKey: keys.actionItemMetrics });
     },
@@ -286,4 +359,27 @@ export function useConnections() {
 export function useAdminUsers(page=0, limit=20) { const authReady = useAuthReady(); return useQuery({queryKey: keys.adminUsers(page, limit), queryFn: () => api.listAdminUsers(limit, page*limit), enabled: authReady}); }
 export function useAdminMetrics() { const authReady = useAuthReady(); return useQuery({queryKey: keys.adminMetrics, queryFn: api.getAdminMetrics, enabled: authReady}); }
 export function useAdminAudit(page=0, limit=20) { const authReady = useAuthReady(); return useQuery({queryKey: keys.adminAudit(page, limit), queryFn: () => api.listAdminAudit(limit, page*limit), enabled: authReady}); }
-export function useUpdateUserRole() { const qc = useQueryClient(); return useMutation({ mutationFn: ({userId, role}:{userId:string; role:string}) => api.updateAdminUserRole(userId, role), onSuccess: ()=>{qc.invalidateQueries({queryKey:['admin-users']}); qc.invalidateQueries({queryKey:['admin-audit']}); qc.invalidateQueries({queryKey:keys.adminMetrics}); }}); }
+export function useUpdateUserRole() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ userId, role }: { userId: string; role: string }) => api.updateAdminUserRole(userId, role),
+    onMutate: async ({ userId, role }) => {
+      await qc.cancelQueries({ queryKey: ['admin-users'] });
+      const previous = qc.getQueriesData<{ items: Array<{ id: string; role: string }>; total_count: number; limit: number; offset: number }>({ queryKey: ['admin-users'] });
+      previous.forEach(([queryKey, data]) => {
+        if (!data) return;
+        qc.setQueryData(queryKey, {
+          ...data,
+          items: data.items.map((item) => (item.id === userId ? { ...item, role } : item)),
+        });
+      });
+      return { previous };
+    },
+    onError: (_err, _vars, context) => context?.previous?.forEach(([queryKey, data]) => qc.setQueryData(queryKey, data)),
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: ['admin-users'] });
+      qc.invalidateQueries({ queryKey: ['admin-audit'] });
+      qc.invalidateQueries({ queryKey: keys.adminMetrics });
+    },
+  });
+}
