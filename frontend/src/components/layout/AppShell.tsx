@@ -16,7 +16,11 @@ const baseLinks = [
   ['/categories', 'Categories'],
   ['/insights', 'Insights'],
   ['/connections', 'Connections'],
+  ['/chat', 'Chat'],
+  ['/reports', 'Reports'],
 ] as const;
+
+const adminLinks = [['/admin', 'Admin'], ['/admin/chatbot-settings', 'Chatbot Settings']] as const;
 
 export function AppShell() {
   const { toasts, dismissToast } = useUIStore();
@@ -52,7 +56,7 @@ export function AppShell() {
       <div className="grid min-h-[calc(100vh-57px)] grid-cols-1 md:grid-cols-[220px_minmax(0,1fr)]">
         <aside className="border-r border-slate-800 p-3">
           <nav className="flex flex-col gap-1">
-            {[...baseLinks, ...(user?.role === "admin" ? [['/admin', 'Admin'] as const] : [])].map(([to, label]) => (
+            {[...baseLinks, ...(user?.role === "admin" ? adminLinks : [])].map(([to, label]) => (
               <NavLink
                 key={to}
                 to={to}

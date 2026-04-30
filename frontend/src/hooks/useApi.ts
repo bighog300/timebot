@@ -44,6 +44,11 @@ export const keys = {
   adminUsers: (page:number,limit:number)=>['admin-users',page,limit] as const,
   adminMetrics: ['admin-metrics'] as const,
   adminAudit: (page:number,limit:number)=>['admin-audit',page,limit] as const,
+  chatbotSettings: ['chatbot-settings'] as const,
+  chatSessions: ['chat-sessions'] as const,
+  chatSession: (sessionId: string) => ['chat-session', sessionId] as const,
+  reports: ['reports'] as const,
+  report: (reportId: string) => ['report', reportId] as const,
 };
 
 function useAuthReady() {
@@ -422,3 +427,15 @@ export function useUpdateUserRole() {
     },
   });
 }
+
+
+export function useChatbotSettings() { const authReady = useAuthReady(); return useQuery({ queryKey: keys.chatbotSettings, queryFn: api.getChatbotSettings, enabled: authReady }); }
+export function useUpdateChatbotSettings() { const qc = useQueryClient(); return useMutation({ mutationFn: api.updateChatbotSettings, onSuccess: () => qc.invalidateQueries({ queryKey: keys.chatbotSettings }) }); }
+export function useResetChatbotSettings() { const qc = useQueryClient(); return useMutation({ mutationFn: api.resetChatbotSettings, onSuccess: () => qc.invalidateQueries({ queryKey: keys.chatbotSettings }) }); }
+export function useCreateChatSession() { const qc = useQueryClient(); return useMutation({ mutationFn: (title?: string) => api.createChatSession(title), onSuccess: () => qc.invalidateQueries({ queryKey: keys.chatSessions }) }); }
+export function useChatSessions() { const authReady = useAuthReady(); return useQuery({ queryKey: keys.chatSessions, queryFn: api.listChatSessions, enabled: authReady }); }
+export function useChatSession(sessionId: string) { const authReady = useAuthReady(); return useQuery({ queryKey: keys.chatSession(sessionId), queryFn: () => api.getChatSession(sessionId), enabled: authReady && Boolean(sessionId) }); }
+export function useSendChatMessage(sessionId: string) { const qc = useQueryClient(); return useMutation({ mutationFn: (payload: Parameters<typeof api.sendChatMessage>[1]) => api.sendChatMessage(sessionId, payload), onSuccess: () => { qc.invalidateQueries({ queryKey: keys.chatSessions }); qc.invalidateQueries({ queryKey: keys.chatSession(sessionId) }); } }); }
+export function useReports() { const authReady = useAuthReady(); return useQuery({ queryKey: keys.reports, queryFn: api.listReports, enabled: authReady }); }
+export function useReport(reportId: string) { const authReady = useAuthReady(); return useQuery({ queryKey: keys.report(reportId), queryFn: () => api.getReport(reportId), enabled: authReady && Boolean(reportId) }); }
+export function useCreateReport() { const qc = useQueryClient(); return useMutation({ mutationFn: api.createReport, onSuccess: () => qc.invalidateQueries({ queryKey: keys.reports }) }); }

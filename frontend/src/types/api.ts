@@ -303,3 +303,72 @@ export interface AdminUsersPage { items: AdminUser[]; total_count: number; limit
 export interface AdminAuditEvent { id: string; actor_id: string | null; actor_email: string | null; entity_type: string; entity_id: string; action: string; details: Record<string, unknown>; created_at: string; }
 export interface AdminAuditPage { items: AdminAuditEvent[]; total_count: number; limit: number; offset: number; }
 export interface AdminMetrics { total_users: number; total_documents: number; documents_processed: number; documents_failed: number; pending_review_items: number; open_action_items: number; pending_relationship_reviews: number; }
+
+
+export interface ChatbotSettings {
+  system_prompt: string;
+  retrieval_prompt: string;
+  report_prompt: string;
+  citation_prompt: string;
+  default_report_template: string;
+  model: string;
+  temperature: number;
+  max_tokens: number;
+  max_documents: number;
+  allow_full_text_retrieval: boolean;
+}
+
+export interface SourceRef {
+  document_id: string;
+  document_title: string;
+  snippet?: string | null;
+}
+
+export interface ChatMessage {
+  id: string;
+  session_id: string;
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  source_refs?: SourceRef[];
+  created_at: string;
+}
+
+export interface ChatSession {
+  id: string;
+  title?: string | null;
+  created_at: string;
+  updated_at?: string | null;
+  messages?: ChatMessage[];
+}
+
+export interface ChatMessageRequest {
+  message: string;
+  document_ids?: string[];
+  include_timeline?: boolean;
+  include_full_text?: boolean;
+}
+
+export interface ChatMessageResponse {
+  session_id: string;
+  answer: string;
+  message: ChatMessage;
+  source_refs: SourceRef[];
+}
+
+export interface ReportCreateRequest {
+  title: string;
+  prompt: string;
+  document_ids?: string[];
+  include_timeline?: boolean;
+  include_relationships?: boolean;
+  include_full_text?: boolean;
+}
+
+export interface GeneratedReport {
+  id: string;
+  title: string;
+  prompt: string;
+  markdown_content?: string;
+  source_refs: SourceRef[];
+  created_at: string;
+}
