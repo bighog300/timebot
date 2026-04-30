@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
 import { SearchPage } from '@/pages/SearchPage';
@@ -22,9 +23,11 @@ function renderPage() {
     },
   });
   render(
-    <QueryClientProvider client={qc}>
-      <SearchPage />
-    </QueryClientProvider>,
+    <MemoryRouter>
+      <QueryClientProvider client={qc}>
+        <SearchPage />
+      </QueryClientProvider>
+    </MemoryRouter>,
   );
 }
 
@@ -39,5 +42,5 @@ test('shows empty state when query has no results', async () => {
   const user = userEvent.setup();
   await user.type(screen.getByPlaceholderText('Search documents'), 'missing');
 
-  expect(await screen.findByText('No matching documents found.')).toBeInTheDocument();
+  expect(await screen.findByText('No results found')).toBeInTheDocument();
 });
