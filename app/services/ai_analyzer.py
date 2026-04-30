@@ -3,7 +3,7 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from app.config import settings
-from app.prompts.document_analysis import DOCUMENT_ANALYSIS_SYSTEM, DOCUMENT_ANALYSIS_TEMPLATE
+from app.prompts.document_analysis import DOCUMENT_ANALYSIS_SYSTEM, build_document_analysis_prompt
 from app.services.openai_client import APIError, openai_client_service
 
 logger = logging.getLogger(__name__)
@@ -30,13 +30,21 @@ class AIAnalyzer:
 
         try:
             categories_str = ", ".join(existing_categories) if existing_categories else "none yet"
-            prompt = DOCUMENT_ANALYSIS_TEMPLATE.format(
-                filename=filename,
-                file_type=file_type,
-                char_limit=MAX_TEXT_CHARS,
-                text=text[:MAX_TEXT_CHARS],
-                categories=categories_str,
-            )
+            try:
+                prompt = build_document_analysis_prompt(
+                    filename=filename,
+                    file_type=file_type,
+                    char_limit=MAX_TEXT_CHARS,
+                    text=text[:MAX_TEXT_CHARS],
+                    categories=categories_str,
+                )
+            except Exception as render_exc:
+                logger.error(
+                    "AI prompt rendering failed: exception_type=%s message=%s",
+                    type(render_exc).__name__,
+                    render_exc,
+                )
+                raise
 
             response = openai_client_service.client.chat.completions.create(
                 model=settings.OPENAI_MODEL,

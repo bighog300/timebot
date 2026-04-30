@@ -58,6 +58,29 @@ Rules:
 - estimated_importance: float 0.0-1.0"""
 
 
+def build_document_analysis_prompt(
+    *,
+    filename: str,
+    file_type: str,
+    char_limit: int,
+    text: str,
+    categories: str,
+) -> str:
+    """Render the AI analysis prompt without using str.format on JSON braces."""
+
+    prompt = DOCUMENT_ANALYSIS_TEMPLATE
+    replacements = {
+        "{filename}": filename,
+        "{file_type}": file_type,
+        "{char_limit}": str(char_limit),
+        "{text}": text,
+        "{categories}": categories,
+    }
+    for token, value in replacements.items():
+        prompt = prompt.replace(token, value)
+    return prompt
+
+
 # Timeline extraction rules
 # - Extract explicit dates and date ranges for: effective dates, contract periods, project periods, deadlines, invoice dates, due dates, meeting/review/renewal/termination/delivery dates.
 # - Prefer ISO-8601 dates (YYYY-MM-DD).

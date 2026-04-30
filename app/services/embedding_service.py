@@ -36,11 +36,20 @@ class EmbeddingService:
 
         try:
             self.qdrant.get_collection(self.collection_name)
+            return
         except Exception:
+            pass
+
+        try:
             self.qdrant.create_collection(
                 collection_name=self.collection_name,
                 vectors_config=VectorParams(size=self.embedding_dim, distance=Distance.COSINE),
             )
+        except Exception as exc:
+            if "already exists" in str(exc).lower():
+                logger.info("Qdrant collection already exists; continuing initialization")
+                return
+            raise
 
     @property
     def enabled(self) -> bool:
