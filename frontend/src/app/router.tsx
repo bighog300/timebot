@@ -17,6 +17,8 @@ import { DashboardPage } from '@/pages/DashboardPage';
 import { ActionItemsPage } from '@/pages/ActionItemsPage';
 import { RelationshipReviewPage } from '@/pages/RelationshipReviewPage';
 import { Navigate } from 'react-router-dom';
+import { RequireAdmin } from '@/components/auth/RequireAdmin';
+import { AdminPage } from '@/pages/AdminPage';
 
 export const router = createBrowserRouter([
   { path: '/login', element: <LoginPage /> },
@@ -44,6 +46,7 @@ export const router = createBrowserRouter([
       { path: 'insights', element: <InsightsPage /> },
       { path: 'connections', element: <ConnectionsPage /> },
       { path: 'connections/callback', element: <ConnectionCallbackPage /> },
+      { path: 'admin', element: <RequireAdmin><AdminPage /></RequireAdmin> },
     ],
   },
 ]);

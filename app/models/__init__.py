@@ -8,6 +8,7 @@ from app.models.intelligence import (
     DocumentReviewItem,
     ReviewAuditEvent,
 )
+from app.models.admin_audit import AdminAuditEvent
 from app.models.relationships import (
     Connection,
     DocumentRelationship,
@@ -18,6 +19,7 @@ from app.models.relationships import (
 
 __all__ = [
     "User",
+    "AdminAuditEvent",
     "Category",
     "Connection",
     "Document",

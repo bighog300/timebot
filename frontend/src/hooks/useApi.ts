@@ -17,6 +17,9 @@ export const keys = {
   documentAuditHistory: (documentId: string) => ['document-audit-history', documentId] as const,
   categories: ['categories'] as const,
   connections: ['connections'] as const,
+  adminUsers: (page:number,limit:number)=>['admin-users',page,limit] as const,
+  adminMetrics: ['admin-metrics'] as const,
+  adminAudit: (page:number,limit:number)=>['admin-audit',page,limit] as const,
 };
 
 function useAuthReady() {
@@ -278,3 +281,9 @@ export function useConnections() {
   const authReady = useAuthReady();
   return useQuery({ queryKey: keys.connections, queryFn: api.listConnections, enabled: authReady });
 }
+
+
+export function useAdminUsers(page=0, limit=20) { const authReady = useAuthReady(); return useQuery({queryKey: keys.adminUsers(page, limit), queryFn: () => api.listAdminUsers(limit, page*limit), enabled: authReady}); }
+export function useAdminMetrics() { const authReady = useAuthReady(); return useQuery({queryKey: keys.adminMetrics, queryFn: api.getAdminMetrics, enabled: authReady}); }
+export function useAdminAudit(page=0, limit=20) { const authReady = useAuthReady(); return useQuery({queryKey: keys.adminAudit(page, limit), queryFn: () => api.listAdminAudit(limit, page*limit), enabled: authReady}); }
+export function useUpdateUserRole() { const qc = useQueryClient(); return useMutation({ mutationFn: ({userId, role}:{userId:string; role:string}) => api.updateAdminUserRole(userId, role), onSuccess: ()=>{qc.invalidateQueries({queryKey:['admin-users']}); qc.invalidateQueries({queryKey:['admin-audit']}); qc.invalidateQueries({queryKey:keys.adminMetrics}); }}); }

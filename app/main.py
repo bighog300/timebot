@@ -10,6 +10,7 @@ from app.config import settings
 from app.db.base import SessionLocal
 from app.api.v1 import (
     action_items,
+    admin,
     analysis,
     auth,
     categories,
@@ -84,6 +85,7 @@ app.include_router(connections.router, prefix="/api/v1")
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(review.router, prefix="/api/v1")
 app.include_router(action_items.router, prefix="/api/v1")
+app.include_router(admin.router, prefix="/api/v1")
 
 
 @app.get("/health", tags=["health"])

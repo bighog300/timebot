@@ -196,3 +196,16 @@ See `docs/RELEASE_READINESS.md` for clear split between complete, partial, and d
 ## License
 
 MIT
+
+## Admin panel (Plan B)
+
+- Seeded initial admin behavior: if `INITIAL_ADMIN_EMAIL` + `INITIAL_ADMIN_PASSWORD` are configured, startup seed ensures that account exists and is promoted to `admin` (idempotent).
+- Access `/admin` after login with an account whose role is `admin`.
+- Current capabilities:
+  - User list with pagination.
+  - Role updates (`viewer` / `editor` / `admin`) with last-admin demotion protection.
+  - Admin audit explorer for role-change events.
+  - System metrics (users, documents, processing, review/action/relationship pending counts).
+- Known limitations:
+  - Admin audit currently tracks admin role-management actions only.
+  - Admin panel pagination is basic next/prev only.
