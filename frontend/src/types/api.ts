@@ -372,3 +372,8 @@ export interface GeneratedReport {
   source_refs: SourceRef[];
   created_at: string;
 }
+
+
+export interface GmailPreviewRequest { sender_email: string; max_results: number; include_attachments: boolean; }
+export interface GmailPreviewMessage { gmail_message_id: string; sender: string; subject: string; received_at: string | null; snippet: string; already_imported: boolean; attachments: string[]; }
+export interface GmailPreviewResponse { messages: GmailPreviewMessage[]; }

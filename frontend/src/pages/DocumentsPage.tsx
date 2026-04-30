@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { type ChangeEvent, useRef } from 'react';
+import { type ChangeEvent, type DragEvent, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/auth/AuthContext';
 import { useDocuments, useUploadDocument } from '@/hooks/useApi';
@@ -15,6 +15,7 @@ export function DocumentsPage() {
   const upload = useUploadDocument();
   const pushToast = useUIStore((s) => s.pushToast);
   const inputRef = useRef<HTMLInputElement>(null);
+  const [isDragging, setIsDragging] = useState(false);
 
   const uploadDisabledReason = authLoading
     ? 'Authentication is still loading. Please wait a moment.'
@@ -41,6 +42,22 @@ export function DocumentsPage() {
     }
   };
 
+
+
+  const acceptedExtensions = new Set(['pdf','doc','docx','txt','xlsx','xls','ppt','pptx','png','jpg','jpeg']);
+
+  const onFiles = async (files: FileList | File[]) => {
+    const items = Array.from(files);
+    for (const file of items) {
+      const ext = file.name.split('.').pop()?.toLowerCase() ?? '';
+      if (!acceptedExtensions.has(ext)) {
+        pushToast(`Unsupported file type: .${ext || 'unknown'}`);
+        continue;
+      }
+      await onFile(file);
+    }
+  };
+
   const onUploadClick = () => {
     if (uploadDisabledReason) {
       pushToast(uploadDisabledReason);
@@ -50,14 +67,29 @@ export function DocumentsPage() {
   };
 
   const onInputChange = async (e: ChangeEvent<HTMLInputElement>) => {
-    const selected = e.target.files?.[0];
-    await onFile(selected);
+    if (e.target.files) await onFiles(e.target.files);
     e.target.value = '';
+  };
+
+  const onDrop = async (e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (uploadDisabledReason) {
+      pushToast(uploadDisabledReason);
+      return;
+    }
+    if (e.dataTransfer.files?.length) await onFiles(e.dataTransfer.files);
   };
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3">
+      <div
+        className={`flex items-center justify-between gap-3 rounded border p-3 ${isDragging ? 'border-blue-400 bg-blue-950/30' : 'border-slate-700'}`}
+        onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+        onDragLeave={() => setIsDragging(false)}
+        onDrop={onDrop}
+        data-testid="documents-dropzone"
+      >
         <h1 className="text-xl font-semibold">Documents</h1>
         <input
           ref={inputRef}

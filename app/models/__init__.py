@@ -16,6 +16,8 @@ from app.models.relationships import (
     DocumentVersion,
     ProcessingQueue,
     SyncLog,
+    GmailImportRule,
+    GmailImportedMessage,
 )
 
 __all__ = [
@@ -37,4 +39,6 @@ __all__ = [
     "DocumentVersion",
     "ProcessingQueue",
     "SyncLog",
+    "GmailImportRule",
+    "GmailImportedMessage",
 ]
