@@ -18,9 +18,26 @@ class GoogleDriveProvider:
     _files_endpoint = "https://www.googleapis.com/drive/v3/files"
     _userinfo_endpoint = "https://www.googleapis.com/oauth2/v2/userinfo"
 
+    @property
+    def is_oauth_configured(self) -> bool:
+        return bool(
+            settings.GOOGLE_OAUTH_CLIENT_ID
+            and settings.GOOGLE_OAUTH_CLIENT_SECRET
+            and settings.GOOGLE_OAUTH_REDIRECT_URI
+        )
+
+    @property
+    def oauth_configuration_error(self) -> str | None:
+        if self.is_oauth_configured:
+            return None
+        return (
+            "Google Drive OAuth is not configured. Set GOOGLE_OAUTH_CLIENT_ID, "
+            "GOOGLE_OAUTH_CLIENT_SECRET, and GOOGLE_OAUTH_REDIRECT_URI."
+        )
+
     def build_authorization_url(self, *, state: str) -> OAuthStartResult:
-        if not settings.GOOGLE_OAUTH_CLIENT_ID or not settings.GOOGLE_OAUTH_REDIRECT_URI:
-            raise ValueError("Google OAuth is not configured")
+        if self.oauth_configuration_error:
+            raise ValueError(self.oauth_configuration_error)
 
         query = urlencode(
             {
@@ -37,8 +54,8 @@ class GoogleDriveProvider:
         return OAuthStartResult(authorization_url=f"{self._auth_endpoint}?{query}", state=state)
 
     def exchange_code_for_tokens(self, *, code: str) -> OAuthTokenResult:
-        if not settings.GOOGLE_OAUTH_CLIENT_ID or not settings.GOOGLE_OAUTH_CLIENT_SECRET:
-            raise ValueError("Google OAuth credentials are not configured")
+        if self.oauth_configuration_error:
+            raise ValueError(self.oauth_configuration_error)
 
         payload = {
             "client_id": settings.GOOGLE_OAUTH_CLIENT_ID,

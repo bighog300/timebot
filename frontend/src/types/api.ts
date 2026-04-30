@@ -123,6 +123,8 @@ export interface Connection {
   auto_sync: boolean;
   sync_interval: number;
   is_authenticated: boolean;
+  provider_is_configured?: boolean;
+  provider_config_error?: string | null;
 }
 
 export interface ConnectStartResponse {

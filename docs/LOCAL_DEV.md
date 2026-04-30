@@ -41,6 +41,17 @@ VITE_API_URL=http://<LAN_IP>:8001
 VITE_WS_URL=ws://<LAN_IP>:8001
 ```
 
+Google Drive OAuth (backend `.env`):
+
+```env
+GOOGLE_OAUTH_CLIENT_ID=<google-client-id>
+GOOGLE_OAUTH_CLIENT_SECRET=<google-client-secret>
+GOOGLE_OAUTH_REDIRECT_URI=http://<LAN_IP>:5174/connections/callback?provider=gdrive
+GOOGLE_OAUTH_SCOPES=openid,email,profile,https://www.googleapis.com/auth/drive.metadata.readonly
+```
+
+The Google Drive connector will return HTTP 400 until these values are configured, and the exact `GOOGLE_OAUTH_REDIRECT_URI` must also be added to your Google Cloud OAuth client.
+
 ## First login
 
 - Option A: Register via UI.

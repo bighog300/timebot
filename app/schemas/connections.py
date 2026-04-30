@@ -22,6 +22,8 @@ class ConnectionResponse(BaseModel):
     auto_sync: bool
     sync_interval: int
     is_authenticated: bool
+    provider_is_configured: bool = True
+    provider_config_error: Optional[str] = None
 
     model_config = {"from_attributes": True}
 
