@@ -18,6 +18,7 @@ from app.models.relationships import (
     SyncLog,
     GmailImportRule,
     GmailImportedMessage,
+    GmailImportedAttachment,
 )
 
 __all__ = [
@@ -41,4 +42,5 @@ __all__ = [
     "SyncLog",
     "GmailImportRule",
     "GmailImportedMessage",
+    "GmailImportedAttachment",
 ]
