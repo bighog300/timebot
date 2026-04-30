@@ -87,11 +87,25 @@ export interface QueueItem {
   completed_at?: string | null;
 }
 
+export interface TimelineEvent {
+  title: string;
+  description?: string | null;
+  date?: string | null;
+  start_date?: string | null;
+  end_date?: string | null;
+  confidence: number;
+  source_quote?: string | null;
+  page_number?: number | null;
+  document_id: string;
+  document_title: string;
+  category?: string | null;
+  source?: string | null;
+}
+
 export interface TimelineResponse {
-  group_by: string;
   total_documents: number;
   total_events: number;
-  buckets: Array<{ period: string; count: number; events: Array<Record<string, unknown>> }>;
+  events: TimelineEvent[];
 }
 
 export interface InsightsResponse {
