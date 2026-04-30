@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import datetime, timedelta
 from difflib import SequenceMatcher
 from itertools import combinations
 import logging
+import re
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
@@ -58,6 +59,9 @@ class RelationshipCandidate:
     metadata: Dict
 
 
+STOPWORDS = {"a", "an", "and", "are", "as", "at", "be", "but", "by", "for", "from", "if", "in", "into", "is", "it", "no", "not", "of", "on", "or", "s", "such", "t", "that", "the", "their", "then", "there", "these", "they", "this", "to", "was", "will", "with", "you", "your"}
+
+
 class RelationshipDetectionService:
     """Deterministic relationship detection with optional semantic boost."""
 
@@ -70,26 +74,37 @@ class RelationshipDetectionService:
 
         candidates = (
             db.query(Document)
-            .filter(Document.id != document_id, Document.is_archived.is_(False))
+            .filter(
+                Document.id != document_id,
+                Document.is_archived.is_(False),
+                Document.processing_status == "completed",
+                Document.user_id == doc.user_id,
+            )
             .order_by(Document.upload_date.desc())
             .limit(limit)
             .all()
         )
 
-        matches = [self._score_pair(doc, other) for other in candidates]
+        logger.info("Relationship detection compare-docs count=%d source_doc_id=%s", len(candidates), document_id)
+        logger.info("Relationship detection source-intelligence entity_keys=%s", sorted((doc.entities or {}).keys()))
+        matches = [self._score_pair(doc, other, log_prefix="detect_for_document") for other in candidates]
         detected = [m for m in matches if m is not None]
+        logger.info("Relationship candidates pre-threshold count=%d doc_id=%s", len(matches), document_id)
         logger.info("Relationship candidates found=%d doc_id=%s", len(detected), document_id)
         persisted = self._persist_candidates(db, detected)
         persisted["scanned"] = len(candidates)
         return persisted
 
     def backfill_relationships(self, db: Session, limit: Optional[int] = None) -> Dict[str, int]:
-        query = db.query(Document).filter(Document.is_archived.is_(False)).order_by(Document.upload_date.desc())
+        query = db.query(Document).filter(Document.is_archived.is_(False), Document.processing_status == "completed").order_by(Document.upload_date.desc())
         docs = query.limit(limit).all() if limit else query.all()
 
         candidates: List[RelationshipCandidate] = []
         for left, right in combinations(docs, 2):
-            result = self._score_pair(left, right)
+            if left.user_id != right.user_id:
+                logger.debug("Relationship skipped permission/user mismatch left=%s right=%s", left.id, right.id)
+                continue
+            result = self._score_pair(left, right, log_prefix="backfill")
             if result:
                 candidates.append(result)
 
@@ -97,12 +112,29 @@ class RelationshipDetectionService:
         persisted["scanned"] = len(docs)
         return persisted
 
-    def _score_pair(self, left: Document, right: Document) -> Optional[RelationshipCandidate]:
+    def _score_pair(self, left: Document, right: Document, log_prefix: str = "") -> Optional[RelationshipCandidate]:
+        if left.id == right.id:
+            logger.debug("Relationship skipped same doc left=%s right=%s", left.id, right.id)
+            return None
+        if left.is_archived or right.is_archived:
+            logger.debug("Relationship skipped archived doc left=%s right=%s", left.id, right.id)
+            return None
+        if getattr(left, "user_id", None) != getattr(right, "user_id", None):
+            logger.debug("Relationship skipped permission/user mismatch left=%s right=%s", left.id, right.id)
+            return None
+        if getattr(right, "processing_status", None) != "completed":
+            logger.debug("Relationship skipped insufficient docs status left=%s right=%s", left.id, right.id)
+            return None
+
         left_tags = set((left.ai_tags or []) + (left.user_tags or []))
         right_tags = set((right.ai_tags or []) + (right.user_tags or []))
 
         tag_overlap = len(left_tags & right_tags) / max(len(left_tags | right_tags), 1)
         entity_overlap = self._entity_overlap(left.entities or {}, right.entities or {})
+        category_overlap = 1.0 if (left.user_category_id and left.user_category_id == right.user_category_id) or (left.ai_category_id and left.ai_category_id == right.ai_category_id) else 0.0
+        timeline_overlap = self._timeline_overlap(left, right)
+        follow_up_signal = self._follow_up_signal(left, right)
+        keyword_overlap = self._keyword_overlap(left, right)
         title_similarity = SequenceMatcher(None, (left.filename or "").lower(), (right.filename or "").lower()).ratio()
         text_similarity = SequenceMatcher(None, (left.summary or "").lower(), (right.summary or "").lower()).ratio()
 
@@ -116,9 +148,13 @@ class RelationshipDetectionService:
         weighted = {
             "title_similarity": title_similarity * 0.25,
             "summary_similarity": text_similarity * 0.2,
-            "tag_overlap": tag_overlap * 0.2,
-            "entity_overlap": entity_overlap * 0.15,
-            "date_adjacency": date_adjacent * 0.1,
+            "tag_overlap": tag_overlap * 0.12,
+            "entity_overlap": entity_overlap * 0.12,
+            "category_overlap": category_overlap * 0.14,
+            "timeline_overlap": timeline_overlap * 0.14,
+            "keyword_overlap": keyword_overlap * 0.12,
+            "follow_up_signal": follow_up_signal * 0.08,
+            "date_adjacency": date_adjacent * 0.08,
             "semantic_similarity": semantic * 0.1,
         }
         score = sum(weighted.values())
@@ -126,14 +162,18 @@ class RelationshipDetectionService:
         relationship_type = "related_to"
         if score >= 0.92 or (title_similarity > 0.9 and text_similarity > 0.9):
             relationship_type = "duplicates"
-        elif date_adjacent >= 1.0 and entity_overlap >= 0.3:
+        elif follow_up_signal >= 0.9 or (date_adjacent >= 1.0 and (entity_overlap >= 0.2 or timeline_overlap >= 0.5)):
             relationship_type = "follows_up"
-        elif semantic > 0.75 or score > 0.65:
+        elif semantic > 0.72 or keyword_overlap > 0.35 or score > 0.6:
             relationship_type = "similar_to"
 
-        if score < 0.45:
+        if not (left.entities or right.entities or (left.summary or left.filename) and (right.summary or right.filename)):
+            logger.debug("Relationship skipped missing entities and text left=%s right=%s", left.id, right.id)
+            return None
+
+        if score < 0.33:
             logger.debug(
-                "Relationship skipped low-score left=%s right=%s score=%.5f signals=%s",
+                "Relationship skipped low score left=%s right=%s score=%.5f signals=%s",
                 left.id,
                 right.id,
                 score,
@@ -152,6 +192,44 @@ class RelationshipDetectionService:
                 "titles": [left.filename, right.filename],
             },
         )
+
+    def _timeline_overlap(self, left: Document, right: Document) -> float:
+        left_dates = self._extract_dates(left)
+        right_dates = self._extract_dates(right)
+        if not left_dates and not right_dates:
+            return 0.0
+        overlap = left_dates & right_dates
+        return len(overlap) / max(len(left_dates | right_dates), 1)
+
+    def _extract_dates(self, doc: Document) -> set[str]:
+        values: set[str] = set()
+        for source in [getattr(doc, "entities", {}) or {}, getattr(doc, "extracted_metadata", {}) or {}]:
+            for key, v in source.items():
+                if "date" in str(key).lower():
+                    vals = v if isinstance(v, list) else [v]
+                    for item in vals:
+                        s = str(item)[:10]
+                        if re.match(r"\d{4}-\d{2}-\d{2}", s):
+                            values.add(s)
+        for match in re.findall(r"\b\d{4}-\d{2}-\d{2}\b", (getattr(doc, "summary", "") or "") + " " + (getattr(doc, "raw_text", "") or "")):
+            values.add(match)
+        return values
+
+    def _keyword_overlap(self, left: Document, right: Document) -> float:
+        l_tokens = self._tokenize_text(f"{left.filename or ''} {left.summary or ''}")
+        r_tokens = self._tokenize_text(f"{right.filename or ''} {right.summary or ''}")
+        if not l_tokens or not r_tokens:
+            return 0.0
+        return len(l_tokens & r_tokens) / max(min(len(l_tokens), len(r_tokens)), 1)
+
+    def _tokenize_text(self, text: str) -> set[str]:
+        toks = {t for t in re.findall(r"[a-z0-9]{3,}", (text or "").lower()) if t not in STOPWORDS}
+        return toks
+
+    def _follow_up_signal(self, left: Document, right: Document) -> float:
+        blob = f"{left.filename or ''} {left.summary or ''} {right.filename or ''} {right.summary or ''}".lower()
+        phrases = ["follow up", "follow-up", "update", "next steps", "status update", "phase 2"]
+        return 1.0 if any(p in blob for p in phrases) else 0.0
 
     def _entity_overlap(self, left_entities: Dict, right_entities: Dict) -> float:
         left_values = {str(v).lower() for values in left_entities.values() for v in (values or [])}
