@@ -17,6 +17,11 @@ import {
   usePatchDocumentIntelligence,
 } from '@/hooks/useApi';
 
+function docStatusReady(status?: string) {
+  if (!status) return false;
+  return status !== 'uploading' && status !== 'processing';
+}
+
 export function DocumentDetailPage() {
   const { id = '' } = useParams();
   const qc = useQueryClient();
@@ -32,7 +37,8 @@ export function DocumentDetailPage() {
   });
   const similarQuery = useQuery({ queryKey: ['similar', id], queryFn: () => api.findSimilar(id), enabled: !!id });
 
-  const intelligenceQuery = useDocumentIntelligence(id);
+  const shouldFetchIntelligence = docStatusReady(documentQuery.data?.processing_status);
+  const intelligenceQuery = useDocumentIntelligence(id, shouldFetchIntelligence);
   const categoriesQuery = useCategories();
   const actionItemsQuery = useDocumentActionItems(id);
   const auditQuery = useDocumentAuditHistory(id);
@@ -108,13 +114,19 @@ export function DocumentDetailPage() {
 
       <Card>
         <h2 className="mb-2 text-lg">Document intelligence</h2>
-        {intelligenceQuery.isLoading && <LoadingState label="Loading intelligence..." />}
-        {intelligenceQuery.isError && (
+        {!shouldFetchIntelligence && (
+          <EmptyState label={doc.processing_error ? `Processing failed: ${doc.processing_error}` : 'Document is still processing. Intelligence is not available yet.'} />
+        )}
+        {shouldFetchIntelligence && intelligenceQuery.isLoading && <LoadingState label="Loading intelligence..." />}
+        {shouldFetchIntelligence && intelligenceQuery.isError && (
           <ErrorState
             message={doc.processing_error ?? 'AI enrichment is unavailable for this document. Configure OPENAI_API_KEY and reprocess to generate intelligence.'}
           />
         )}
-        {intelligenceQuery.data && (
+        {shouldFetchIntelligence && intelligenceQuery.isSuccess && !intelligenceQuery.data && (
+          <EmptyState label="Intelligence is not available yet." />
+        )}
+        {shouldFetchIntelligence && intelligenceQuery.data && (
           <div className="space-y-3">
             <div className="text-sm text-slate-300">Confidence: <span className="font-medium">{intelligenceQuery.data.confidence}</span></div>
             <div className="text-sm text-slate-300">Suggested category: <span className="font-medium">{doc.ai_category?.name ?? 'None'}</span></div>

@@ -131,14 +131,12 @@ def review_document(
     return crud_document.update_document_fields(db, db_obj=document, **updates)
 
 
-@router.get("/{document_id}/intelligence", response_model=DocumentIntelligenceResponse)
+@router.get("/{document_id}/intelligence", response_model=DocumentIntelligenceResponse | None)
 def get_document_intelligence(document_id: UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     document = crud_document.get_document(db, id=document_id, user=current_user)
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
     intelligence = document_intelligence_service.get_for_document(db, document)
-    if not intelligence:
-        raise HTTPException(status_code=404, detail="Document intelligence not found")
     return intelligence
 
 

@@ -24,6 +24,17 @@ def test_get_document_intelligence_returns_payload(client, db, sample_document):
     assert payload["document_id"] == str(sample_document.id)
 
 
+def test_get_document_intelligence_returns_null_when_missing_for_existing_document(client, sample_document):
+    response = client.get(f"/api/v1/documents/{sample_document.id}/intelligence")
+    assert response.status_code == 200
+    assert response.json() is None
+
+
+def test_get_document_intelligence_returns_404_for_missing_document(client):
+    response = client.get(f"/api/v1/documents/{uuid.uuid4()}/intelligence")
+    assert response.status_code == 404
+
+
 def test_patch_document_intelligence_updates_fields(client, db, sample_document):
     intelligence = DocumentIntelligence(
         document_id=sample_document.id,
