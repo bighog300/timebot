@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 from uuid import UUID
 
-from app.db.session import SessionLocal
+from app.db.base import SessionLocal
 from app.models.document import Document
 from app.services.relationship_detection import relationship_detection_service
 
