@@ -98,6 +98,23 @@ If backend is not reachable, confirm container startup logs:
 docker compose logs app --tail=200
 ```
 
+## Reprocess summary diagnostics
+
+When a document shows a blank summary after clicking **Reprocess**, run:
+
+```bash
+docker compose logs -f app celery-worker
+python -m app.scripts.inspect_document <document_id>
+```
+
+Expected good signals:
+
+- extracted_text_length > 0
+- AI analysis logs show summary_length > 0
+- persisted document_summary_length > 0
+- persisted intelligence_summary_length > 0
+- API responses from `/api/v1/documents/{id}` and `/api/v1/documents/{id}/intelligence` include non-empty summary fields
+
 OpenAI env verification (after rebuilds):
 
 ```bash

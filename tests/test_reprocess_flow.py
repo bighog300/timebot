@@ -60,3 +60,24 @@ def test_existing_intelligence_is_updated_not_duplicated(db, sample_document):
     rows = db.query(DocumentIntelligence).filter(DocumentIntelligence.document_id == sample_document.id).all()
     assert len(rows) == 1
     assert rows[0].summary == "new"
+
+
+def test_reprocess_updates_blank_document_and_intelligence_summary(db, sample_document):
+    from app.services.document_intelligence import document_intelligence_service
+
+    sample_document.summary = ""
+    existing = DocumentIntelligence(document_id=sample_document.id, summary="", key_points=[], suggested_tags=[], entities={})
+    db.add(existing)
+    db.add(sample_document)
+    db.commit()
+
+    document_intelligence_service.create_from_analysis(
+        db,
+        sample_document,
+        {"summary": "Expected non-empty summary", "key_points": ["k"], "tags": ["t"], "entities": {}, "action_items": []},
+    )
+    db.expire_all()
+    refreshed_doc = db.query(type(sample_document)).filter(type(sample_document).id == sample_document.id).first()
+    refreshed_intel = db.query(DocumentIntelligence).filter(DocumentIntelligence.document_id == sample_document.id).first()
+    assert refreshed_doc.summary == "Expected non-empty summary"
+    assert refreshed_intel.summary == "Expected non-empty summary"

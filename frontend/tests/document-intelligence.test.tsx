@@ -111,3 +111,33 @@ test('reprocess click calls API endpoint', async () => {
   fireEvent.click(btn);
   await waitFor(() => expect(api.reprocessDocument).toHaveBeenCalledWith('doc-3'));
 });
+
+test('document detail displays intelligence summary when available', async () => {
+  vi.mocked(api.getDocument).mockResolvedValue({
+    id: 'doc-4', filename: 'd.pdf', file_type: 'pdf', file_size: 1, source: 'upload', upload_date: new Date().toISOString(), processing_status: 'completed',
+    ai_tags: [], user_tags: [], is_favorite: false, is_archived: false, summary: 'doc summary',
+  } as never);
+  vi.mocked(api.findSimilar).mockResolvedValue({ query: '', total: 0, results: [] });
+  vi.mocked(api.getDocumentIntelligence).mockResolvedValue({
+    document_id: 'doc-4', summary: 'intel summary', key_points: [], suggested_category_id: null, confidence: 'high', suggested_tags: [], entities: {},
+    model_name: null, model_version: null, model_metadata: {}, category_status: 'suggested', generated_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+  } as never);
+
+  render(<MemoryRouter initialEntries={['/documents/doc-4']}><QueryClientProvider client={new QueryClient()}><Routes><Route path="/documents/:id" element={<DocumentDetailPage />} /></Routes></QueryClientProvider></MemoryRouter>);
+  expect(await screen.findByDisplayValue('intel summary')).toBeInTheDocument();
+});
+
+test('document detail falls back to document summary when intelligence summary blank', async () => {
+  vi.mocked(api.getDocument).mockResolvedValue({
+    id: 'doc-5', filename: 'e.pdf', file_type: 'pdf', file_size: 1, source: 'upload', upload_date: new Date().toISOString(), processing_status: 'completed',
+    ai_tags: [], user_tags: [], is_favorite: false, is_archived: false, summary: 'fallback document summary',
+  } as never);
+  vi.mocked(api.findSimilar).mockResolvedValue({ query: '', total: 0, results: [] });
+  vi.mocked(api.getDocumentIntelligence).mockResolvedValue({
+    document_id: 'doc-5', summary: '', key_points: [], suggested_category_id: null, confidence: 'high', suggested_tags: [], entities: {},
+    model_name: null, model_version: null, model_metadata: {}, category_status: 'suggested', generated_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+  } as never);
+
+  render(<MemoryRouter initialEntries={['/documents/doc-5']}><QueryClientProvider client={new QueryClient()}><Routes><Route path="/documents/:id" element={<DocumentDetailPage />} /></Routes></QueryClientProvider></MemoryRouter>);
+  expect(await screen.findByText('fallback document summary')).toBeInTheDocument();
+});

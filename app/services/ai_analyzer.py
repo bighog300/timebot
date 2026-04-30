@@ -48,7 +48,7 @@ class AIAnalyzer:
                 ],
             )
             content = (response.choices[0].message.content or "").strip()
-            analysis = self._parse_json(content)
+            analysis = self._normalize_analysis(self._parse_json(content))
             summary = (analysis.get("summary") or "").strip()
             if not summary:
                 raise AIAnalysisError("AI enrichment failed: summary missing from model response.")
@@ -73,6 +73,26 @@ class AIAnalyzer:
         except json.JSONDecodeError as e:
             logger.error("JSON parse error in AI response: %s", e)
             raise AIAnalysisError("AI enrichment failed: invalid JSON response.") from e
+
+    def _normalize_analysis(self, analysis: Dict[str, Any]) -> Dict[str, Any]:
+        normalized = dict(analysis or {})
+        summary = normalized.get("summary")
+        if not summary:
+            summary = (
+                normalized.get("document_summary")
+                or normalized.get("executive_summary")
+                or (normalized.get("analysis") or {}).get("summary")
+            )
+        normalized["summary"] = (summary or "").strip()
+        normalized["key_points"] = normalized.get("key_points") or []
+        normalized["tags"] = normalized.get("tags") or []
+        normalized["entities"] = normalized.get("entities") or {}
+        timeline_events = normalized.get("timeline_events") or []
+        if not isinstance(timeline_events, list):
+            timeline_events = []
+        normalized["timeline_events"] = timeline_events
+        normalized["action_items"] = normalized.get("action_items") or []
+        return normalized
 
     def compute_confidence(self, analysis: Dict[str, Any]) -> float:
         confidence = 1.0
