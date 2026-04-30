@@ -210,3 +210,19 @@ class GmailImportedMessage(Base):
     __table_args__ = (
         UniqueConstraint("user_id", "gmail_message_id", name="uq_gmail_imported_message_per_user"),
     )
+
+
+class GmailImportedAttachment(Base):
+    __tablename__ = "gmail_imported_attachments"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    gmail_message_id = Column(String(255), nullable=False, index=True)
+    attachment_id = Column(String(255), nullable=False)
+    filename = Column(String(255))
+    document_id = Column(UUID(as_uuid=True), ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True)
+    created_at = Column(TIMESTAMP(timezone=True), default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "gmail_message_id", "attachment_id", name="uq_gmail_imported_attachment_per_user"),
+    )

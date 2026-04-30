@@ -37,7 +37,7 @@ beforeEach(() => {
   gmailPreviewMutateAsync.mockReset();
   gmailImportMutateAsync.mockReset();
   gmailPreviewMutateAsync.mockResolvedValue({ messages: [] });
-  gmailImportMutateAsync.mockResolvedValue({ imported_count: 1 });
+  gmailImportMutateAsync.mockResolvedValue({ imported_count: 1, imported_email_count: 1, imported_attachment_count: 0, skipped_attachment_count: 0, skipped_attachments: [], duplicate_message_count: 0, created_document_ids: ['d1'] });
 });
 
 afterEach(() => {
@@ -145,4 +145,20 @@ test('gmail error state renders', async () => {
   fireEvent.change(screen.getByPlaceholderText('sender@example.com'), { target: { value: 'd@example.com' } });
   fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
   await screen.findByText('Gmail is not connected or not configured.');
+});
+
+
+test('import success toast includes email and attachment counts', async () => {
+  gmailPreviewMutateAsync.mockResolvedValueOnce({
+    messages: [{ gmail_message_id: 'm9', subject: 'S', sender: 's@example.com', received_at: null, snippet: 'N', already_imported: false, attachments: [] }],
+  });
+  gmailImportMutateAsync.mockResolvedValueOnce({ imported_count: 1, imported_email_count: 3, imported_attachment_count: 5, skipped_attachment_count: 2, skipped_attachments: [{ filename: 'x.exe', reason: 'unsupported attachment type' }], duplicate_message_count: 0, created_document_ids: ['d1'] });
+  renderPage();
+  fireEvent.change(screen.getByPlaceholderText('sender@example.com'), { target: { value: 's@example.com' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+  await screen.findByText('S');
+  fireEvent.click(screen.getAllByRole('checkbox')[1]);
+  fireEvent.click(screen.getByRole('button', { name: 'Import selected' }));
+  await waitFor(() => expect(pushToast).toHaveBeenCalledWith('Imported 3 emails and 5 attachments. Skipped 2 unsupported attachments.'));
+  expect(pushToast).toHaveBeenCalledWith('Skipped attachments: x.exe (unsupported attachment type)');
 });

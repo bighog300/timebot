@@ -125,7 +125,10 @@ export function DocumentsPage() {
         message_ids: selectedMessageIds,
         include_attachments: includeAttachments,
       });
-      pushToast(`Imported ${result.imported_count} email(s).`);
+      pushToast(`Imported ${result.imported_email_count} emails and ${result.imported_attachment_count} attachments. Skipped ${result.skipped_attachment_count} unsupported attachments.`);
+      if (result.skipped_attachments?.length) {
+        pushToast(`Skipped attachments: ${result.skipped_attachments.map((a: { filename: string; reason: string }) => `${a.filename} (${a.reason})`).join(', ')}`);
+      }
       setPreviewMessages((current) =>
         current.map((message) => (selectedMessageIds.includes(message.gmail_message_id) ? { ...message, already_imported: true } : message)),
       );

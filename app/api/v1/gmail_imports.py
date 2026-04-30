@@ -25,5 +25,5 @@ def preview(req: PreviewReq, db: Session = Depends(get_db), current_user: User =
 
 @router.post('/import')
 def import_selected(req: ImportReq, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    try: return gmail_import_service.import_messages(db, current_user, req.sender_email, req.message_ids)
+    try: return gmail_import_service.import_messages(db, current_user, req.sender_email, req.message_ids, req.include_attachments)
     except ValueError as exc: raise HTTPException(status_code=400, detail=str(exc))

@@ -377,3 +377,4 @@ export interface GeneratedReport {
 export interface GmailPreviewRequest { sender_email: string; max_results: number; include_attachments: boolean; }
 export interface GmailPreviewMessage { gmail_message_id: string; sender: string; subject: string; received_at: string | null; snippet: string; already_imported: boolean; attachments: string[]; }
 export interface GmailPreviewResponse { messages: GmailPreviewMessage[]; }
+export interface GmailImportResponse { imported_count: number; imported_email_count: number; imported_attachment_count: number; skipped_attachment_count: number; skipped_attachments: Array<{ filename: string; reason: string }>; duplicate_message_count: number; created_document_ids: string[]; }
