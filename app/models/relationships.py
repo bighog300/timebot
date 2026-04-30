@@ -178,3 +178,35 @@ class DocumentVersion(Base):
         ),
         UniqueConstraint("document_id", "version_number", name="unique_document_version"),
     )
+
+
+class GmailImportRule(Base):
+    __tablename__ = "gmail_import_rules"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    sender_email = Column(String(255), nullable=False, index=True)
+    query = Column(String(255))
+    include_attachments = Column(Boolean, default=False, nullable=False)
+    max_results = Column(Integer, default=20, nullable=False)
+    last_imported_at = Column(TIMESTAMP(timezone=True))
+    created_at = Column(TIMESTAMP(timezone=True), default=func.now())
+    updated_at = Column(TIMESTAMP(timezone=True), default=func.now(), onupdate=func.now())
+
+
+class GmailImportedMessage(Base):
+    __tablename__ = "gmail_imported_messages"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    gmail_message_id = Column(String(255), nullable=False, index=True)
+    gmail_thread_id = Column(String(255))
+    sender = Column(String(255))
+    subject = Column(String(255))
+    received_at = Column(TIMESTAMP(timezone=True))
+    document_id = Column(UUID(as_uuid=True), ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True)
+    created_at = Column(TIMESTAMP(timezone=True), default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "gmail_message_id", name="uq_gmail_imported_message_per_user"),
+    )

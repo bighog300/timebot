@@ -29,6 +29,8 @@ import type {
   ChatMessageRequest,
   GeneratedReport,
   ReportCreateRequest,
+  GmailPreviewRequest,
+  GmailPreviewResponse,
 } from '@/types/api';
 
 
@@ -173,4 +175,6 @@ export const api = {
   disconnectProvider: async (type: string): Promise<Connection> => (await http.post(`/connections/${type}/disconnect`)).data,
   syncProvider: async (type: string): Promise<SyncRunResponse> => (await http.post(`/connections/${type}/sync`)).data,
   getSyncLogs: async (type: string): Promise<SyncLog[]> => (await http.get(`/connections/${type}/sync-logs`)).data,
+  gmailPreview: async (payload: GmailPreviewRequest): Promise<GmailPreviewResponse> => (await http.post('/imports/gmail/preview', payload)).data,
+  gmailImport: async (payload: { sender_email: string; message_ids: string[]; include_attachments: boolean }): Promise<{ imported_count: number }> => (await http.post('/imports/gmail/import', payload)).data,
 };
