@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from datetime import timedelta
 from difflib import SequenceMatcher
 from itertools import combinations
+import logging
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
@@ -44,6 +45,8 @@ except ModuleNotFoundError:  # pragma: no cover - local test fallback when deps 
         upload_date = _ModelFieldFallback()
 from app.services.embedding_service import embedding_service
 from app.services.relationship_review import relationship_review_service
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -158,6 +161,7 @@ class RelationshipDetectionService:
     def _persist_candidates(self, db: Session, candidates: List[RelationshipCandidate]) -> Dict[str, int]:
         created = 0
         updated = 0
+        duplicates_skipped = 0
 
         for candidate in candidates:
             existing = (
@@ -170,6 +174,7 @@ class RelationshipDetectionService:
                 .first()
             )
             if existing:
+                duplicates_skipped += 1
                 if (existing.confidence or 0.0) < candidate.confidence:
                     existing.confidence = candidate.confidence
                     existing.relationship_metadata = candidate.metadata
@@ -201,6 +206,13 @@ class RelationshipDetectionService:
                 )
 
         db.commit()
+        logger.info(
+            "Relationship candidate persistence finished: candidates=%s created=%s updated=%s duplicates_skipped=%s",
+            len(candidates),
+            created,
+            updated,
+            duplicates_skipped,
+        )
         return {"created": created, "updated": updated}
 
     def _to_review_type(self, relationship_type: str) -> str | None:
