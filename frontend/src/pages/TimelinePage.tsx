@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/services/api';
@@ -21,6 +21,20 @@ const MIN_BAR_WIDTH = 6;
 export function TimelinePage() {
   const navigate = useNavigate();
   const { data, isLoading, isError } = useQuery({ queryKey: ['timeline'], queryFn: api.getTimeline });
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const [containerWidth, setContainerWidth] = useState<number>(0);
+
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const updateWidth = () => setContainerWidth(container.clientWidth);
+    updateWidth();
+
+    const observer = new ResizeObserver(updateWidth);
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, []);
 
   const normalizedEvents = useMemo(() => {
     const events = data?.events ?? [];
@@ -59,7 +73,7 @@ export function TimelinePage() {
     paddedMax.setUTCDate(paddedMax.getUTCDate() + paddingDays);
 
     const totalDays = Math.max(1, Math.ceil((paddedMax.getTime() - paddedMin.getTime()) / MS_PER_DAY));
-    const width = Math.max(MIN_CHART_WIDTH, totalDays * PIXELS_PER_DAY);
+    const width = Math.max(MIN_CHART_WIDTH, totalDays * PIXELS_PER_DAY, containerWidth || 0);
 
     const ticks: Array<{ label: string; x: number }> = [];
     const tickDate = new Date(Date.UTC(paddedMin.getUTCFullYear(), paddedMin.getUTCMonth(), 1));
@@ -72,7 +86,7 @@ export function TimelinePage() {
     const dateToX = (date: Date) => ((date.getTime() - paddedMin.getTime()) / (paddedMax.getTime() - paddedMin.getTime())) * width;
 
     return { width, ticks, dateToX };
-  }, [normalizedEvents]);
+  }, [containerWidth, normalizedEvents]);
 
   if (isLoading) return <div>Loading timeline…</div>;
   if (isError) return <div>Failed to load timeline.</div>;
@@ -80,62 +94,73 @@ export function TimelinePage() {
   if (!chart) return null;
 
   return (
-    <div className="space-y-3">
+    <div className="min-w-0 space-y-3 overflow-hidden">
       <h1 className="text-xl font-semibold">Timeline</h1>
-      <div className="overflow-x-auto rounded border border-slate-700" data-testid="timeline-scroll-area">
-        <div className="min-w-max" style={{ minWidth: LABEL_WIDTH + chart.width }}>
-          <div className="sticky top-0 z-10 flex border-b border-slate-700 bg-slate-900/95">
-            <div className="shrink-0 p-3 text-xs font-semibold uppercase tracking-wide text-slate-300" style={{ width: LABEL_WIDTH }}>
-              Event / Document
-            </div>
-            <div className="relative" style={{ width: chart.width, height: 44 }} data-testid="timeline-axis">
-              {chart.ticks.map((tick) => (
-                <div key={tick.label} className="absolute inset-y-0" style={{ left: tick.x }}>
-                  <div className="h-3 w-px bg-slate-500" />
-                  <div className="mt-1 -translate-x-1/2 whitespace-nowrap text-xs text-slate-300">{tick.label}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {normalizedEvents.map((item, idx) => {
-            const startX = chart.dateToX(item.start);
-            const endX = chart.dateToX(item.end);
-            const width = Math.max(MIN_BAR_WIDTH, endX - startX);
-
-            return (
-              <button
-                key={`${item.event.document_id}-${idx}`}
-                className="flex w-full border-b border-slate-700 text-left hover:bg-slate-800/60"
-                onClick={() => navigate(`/documents/${item.event.document_id}`)}
-                title={`${item.event.title} • ${item.event.document_title} • ${item.event.start_date || item.event.date}${item.event.end_date ? ` → ${item.event.end_date}` : ''}${item.event.source_quote ? ` • ${item.event.source_quote}` : ''}`}
+      <p className="text-xs text-slate-400">Scroll horizontally to explore timeline.</p>
+      <div className="rounded-2xl border border-slate-700 bg-slate-900 shadow-sm overflow-hidden">
+        <div
+          ref={scrollContainerRef}
+          className="timeline-scroll max-h-[calc(100vh-240px)] overflow-auto overscroll-contain"
+          style={{ WebkitOverflowScrolling: 'touch', touchAction: 'pan-x pan-y' }}
+          data-testid="timeline-scroll-area"
+        >
+          <div className="min-w-max">
+            <div className="sticky top-0 z-20 flex border-b border-slate-700 bg-slate-900/95">
+              <div
+                className="sticky left-0 top-0 z-30 shrink-0 border-r border-slate-700 bg-slate-900 p-3 text-xs font-semibold uppercase tracking-wide text-slate-300"
+                style={{ width: LABEL_WIDTH }}
               >
-                <div className="shrink-0 p-3" style={{ width: LABEL_WIDTH }}>
-                  <div className="text-sm font-medium">{item.event.title}</div>
-                  <div className="text-xs text-slate-400">{item.event.document_title}</div>
-                  <div className="text-xs text-slate-500">confidence: {Math.round(item.event.confidence * 100)}%</div>
-                </div>
-                <div className="relative" style={{ width: chart.width, height: ROW_HEIGHT }}>
-                  {chart.ticks.map((tick) => (
-                    <div key={`${item.event.title}-${tick.label}`} className="absolute inset-y-0 w-px bg-slate-800" style={{ left: tick.x }} />
-                  ))}
-                  {item.isMilestone ? (
-                    <div
-                      className="absolute h-3 w-3 -translate-x-1/2 rotate-45 rounded-[1px] bg-emerald-400"
-                      style={{ left: startX, marginTop: 25 }}
-                      data-testid="timeline-milestone"
-                    />
-                  ) : (
-                    <div
-                      className="absolute h-3 rounded bg-blue-500"
-                      style={{ left: startX, width, marginTop: 25 }}
-                      data-testid="timeline-range-bar"
-                    />
-                  )}
-                </div>
-              </button>
-            );
-          })}
+              Event / Document
+              </div>
+              <div className="relative shrink-0" style={{ width: chart.width, height: 44 }} data-testid="timeline-axis">
+                {chart.ticks.map((tick) => (
+                  <div key={tick.label} className="absolute inset-y-0" style={{ left: tick.x }}>
+                    <div className="h-3 w-px bg-slate-500" />
+                    <div className="mt-1 -translate-x-1/2 whitespace-nowrap text-xs text-slate-300">{tick.label}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {normalizedEvents.map((item, idx) => {
+              const startX = chart.dateToX(item.start);
+              const endX = chart.dateToX(item.end);
+              const width = Math.max(MIN_BAR_WIDTH, endX - startX);
+
+              return (
+                <button
+                  key={`${item.event.document_id}-${idx}`}
+                  className="flex w-full border-b border-slate-700 text-left hover:bg-slate-800/60"
+                  onClick={() => navigate(`/documents/${item.event.document_id}`)}
+                  title={`${item.event.title} • ${item.event.document_title} • ${item.event.start_date || item.event.date}${item.event.end_date ? ` → ${item.event.end_date}` : ''}${item.event.source_quote ? ` • ${item.event.source_quote}` : ''}`}
+                >
+                  <div className="sticky left-0 z-10 shrink-0 border-r border-slate-700 bg-slate-900 p-3" style={{ width: LABEL_WIDTH }}>
+                    <div className="truncate text-sm font-medium">{item.event.title}</div>
+                    <div className="truncate text-xs text-slate-400">{item.event.document_title}</div>
+                    <div className="text-xs text-slate-500">confidence: {Math.round(item.event.confidence * 100)}%</div>
+                  </div>
+                  <div className="relative shrink-0" style={{ width: chart.width, height: ROW_HEIGHT }}>
+                    {chart.ticks.map((tick) => (
+                      <div key={`${item.event.title}-${tick.label}`} className="absolute inset-y-0 w-px bg-slate-800" style={{ left: tick.x }} />
+                    ))}
+                    {item.isMilestone ? (
+                      <div
+                        className="absolute h-3 w-3 -translate-x-1/2 rotate-45 rounded-[1px] bg-emerald-400"
+                        style={{ left: startX, marginTop: 25 }}
+                        data-testid="timeline-milestone"
+                      />
+                    ) : (
+                      <div
+                        className="absolute h-3 rounded bg-blue-500"
+                        style={{ left: startX, width, marginTop: 25 }}
+                        data-testid="timeline-range-bar"
+                      />
+                    )}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
     </div>

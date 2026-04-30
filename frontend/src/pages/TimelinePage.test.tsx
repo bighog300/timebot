@@ -26,7 +26,13 @@ function renderPage() {
 }
 
 describe('TimelinePage', () => {
+  class ResizeObserverMock {
+    observe() {}
+    disconnect() {}
+  }
+
   beforeEach(() => {
+    vi.stubGlobal('ResizeObserver', ResizeObserverMock);
     vi.mocked(api.getTimeline).mockReset();
     navigateMock.mockReset();
   });
@@ -44,7 +50,9 @@ describe('TimelinePage', () => {
     renderPage();
 
     expect(await screen.findByTestId('timeline-axis')).toBeTruthy();
+    expect(screen.getByTestId('timeline-scroll-area').className).toContain('max-h-[calc(100vh-240px)]');
     expect(screen.getAllByText(/2025/).length).toBeGreaterThan(0);
+    expect(screen.getByText('Event / Document')).toBeTruthy();
     expect(screen.getByTestId('timeline-range-bar')).toBeTruthy();
     expect(screen.getByTestId('timeline-milestone')).toBeTruthy();
   });
