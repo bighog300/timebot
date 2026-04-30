@@ -19,9 +19,17 @@ import type {
   SyncLog,
   SyncRunResponse,
   TimelineResponse,
+  AdminUsersPage,
+  AdminMetrics,
+  AdminAuditPage,
 } from '@/types/api';
 
 export const api = {
+
+  listAdminUsers: async (limit = 20, offset = 0): Promise<AdminUsersPage> => (await http.get('/admin/users', { params: { limit, offset } })).data,
+  updateAdminUserRole: async (userId: string, role: string) => (await http.patch(`/admin/users/${userId}/role`, { role })).data,
+  getAdminMetrics: async (): Promise<AdminMetrics> => (await http.get('/admin/metrics')).data,
+  listAdminAudit: async (limit = 20, offset = 0): Promise<AdminAuditPage> => (await http.get('/admin/audit', { params: { limit, offset } })).data,
   listDocuments: async (includeArchived = false): Promise<Document[]> =>
     (await http.get('/documents', { params: { include_archived: includeArchived } })).data,
   getDocument: async (id: string): Promise<Document> => (await http.get(`/documents/${id}`)).data,
