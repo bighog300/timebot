@@ -1,8 +1,8 @@
 import axios from 'axios';
-import { type ChangeEvent, type DragEvent, useRef, useState } from 'react';
+import { type ChangeEvent, type DragEvent, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/auth/AuthContext';
-import { useDocuments, useUploadDocument } from '@/hooks/useApi';
+import { useConnections, useDocuments, useGmailImport, useGmailPreview, useUploadDocument } from '@/hooks/useApi';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui/States';
@@ -14,8 +14,17 @@ export function DocumentsPage() {
   const { token, loading: authLoading } = useAuth();
   const upload = useUploadDocument();
   const pushToast = useUIStore((s) => s.pushToast);
+  const { data: connections } = useConnections();
+  const gmailPreview = useGmailPreview();
+  const gmailImport = useGmailImport();
   const inputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [senderEmail, setSenderEmail] = useState('');
+  const [maxResults, setMaxResults] = useState(20);
+  const [includeAttachments, setIncludeAttachments] = useState(false);
+  const [previewMessages, setPreviewMessages] = useState<Array<{ gmail_message_id: string; sender: string; subject: string; received_at: string | null; snippet: string; already_imported: boolean }>>([]);
+  const [selectedMessageIds, setSelectedMessageIds] = useState<string[]>([]);
+  const [gmailError, setGmailError] = useState<string | null>(null);
 
   const uploadDisabledReason = authLoading
     ? 'Authentication is still loading. Please wait a moment.'
@@ -81,6 +90,51 @@ export function DocumentsPage() {
     if (e.dataTransfer.files?.length) await onFiles(e.dataTransfer.files);
   };
 
+  const gmailConnection = useMemo(() => connections?.find((connection) => connection.type === 'gmail'), [connections]);
+  const oauthReady = Boolean(gmailConnection?.is_authenticated);
+  const gmailConfigured = gmailConnection?.provider_is_configured ?? oauthReady;
+  const previewDisabled = gmailPreview.isPending || !senderEmail.trim() || !oauthReady || !gmailConfigured;
+
+  const onGmailPreview = async () => {
+    setPreviewMessages([]);
+    setSelectedMessageIds([]);
+    setGmailError(null);
+    try {
+      const response = await gmailPreview.mutateAsync({
+        sender_email: senderEmail.trim(),
+        max_results: maxResults,
+        include_attachments: includeAttachments,
+      });
+      setPreviewMessages(response.messages);
+    } catch (error) {
+      const detail = typeof (axios.isAxiosError(error) ? error.response?.data?.detail : null) === 'string'
+        ? (error as { response?: { data?: { detail?: string } } }).response?.data?.detail ?? ''
+        : '';
+      if (detail.toLowerCase().includes('oauth') || detail.toLowerCase().includes('configured')) {
+        setGmailError('Gmail is not connected or not configured.');
+        return;
+      }
+      setGmailError(detail || 'Gmail is not connected or not configured.');
+    }
+  };
+
+  const onGmailImport = async () => {
+    try {
+      const result = await gmailImport.mutateAsync({
+        sender_email: senderEmail.trim(),
+        message_ids: selectedMessageIds,
+        include_attachments: includeAttachments,
+      });
+      pushToast(`Imported ${result.imported_count} email(s).`);
+      setPreviewMessages((current) =>
+        current.map((message) => (selectedMessageIds.includes(message.gmail_message_id) ? { ...message, already_imported: true } : message)),
+      );
+      setSelectedMessageIds([]);
+    } catch {
+      pushToast('Gmail import failed');
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div
@@ -126,6 +180,48 @@ export function DocumentsPage() {
           </Card>
         ))}
       </div>
+
+      <Card>
+        <div className="space-y-3">
+          <h2 className="text-lg font-semibold">Import from Gmail</h2>
+          <div className="grid gap-2 md:grid-cols-4">
+            <input className="rounded border border-slate-700 bg-slate-900 p-2 text-sm" placeholder="sender@example.com" value={senderEmail} onChange={(e) => setSenderEmail(e.target.value)} />
+            <input className="rounded border border-slate-700 bg-slate-900 p-2 text-sm" type="number" min={1} max={100} value={maxResults} onChange={(e) => setMaxResults(Number(e.target.value) || 20)} />
+            <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={includeAttachments} onChange={(e) => setIncludeAttachments(e.target.checked)} />Include attachments</label>
+            <Button onClick={onGmailPreview} disabled={previewDisabled}>{gmailPreview.isPending ? 'Previewing…' : 'Preview'}</Button>
+          </div>
+          {!oauthReady && <div className="text-sm text-yellow-300">Gmail is not connected or not configured.</div>}
+          {gmailError && <div className="text-sm text-red-300">{gmailError}</div>}
+          {previewMessages.length === 0 && !gmailPreview.isPending && senderEmail.trim() && !gmailError && <EmptyState label="No messages found for this sender" />}
+          {previewMessages.length > 0 && (
+            <div className="space-y-2">
+              {previewMessages.map((message) => (
+                <div key={message.gmail_message_id} className="rounded border border-slate-700 p-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <label className="flex items-start gap-2">
+                      <input
+                        type="checkbox"
+                        checked={selectedMessageIds.includes(message.gmail_message_id)}
+                        disabled={message.already_imported}
+                        onChange={(e) => setSelectedMessageIds((curr) => e.target.checked ? [...curr, message.gmail_message_id] : curr.filter((id) => id !== message.gmail_message_id))}
+                      />
+                      <div>
+                        <div className="font-medium">{message.subject}</div>
+                        <div className="text-xs text-slate-400">{message.sender} • {message.received_at ? new Date(message.received_at).toLocaleString() : 'Unknown date'}</div>
+                        <div className="text-sm text-slate-300">{message.snippet}</div>
+                      </div>
+                    </label>
+                    {message.already_imported && <span className="rounded bg-slate-700 px-2 py-1 text-xs">already imported</span>}
+                  </div>
+                </div>
+              ))}
+              <Button onClick={onGmailImport} disabled={gmailImport.isPending || selectedMessageIds.length === 0}>
+                {gmailImport.isPending ? 'Importing…' : 'Import selected'}
+              </Button>
+            </div>
+          )}
+        </div>
+      </Card>
     </div>
   );
 }

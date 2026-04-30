@@ -49,6 +49,7 @@ export const keys = {
   chatSession: (sessionId: string) => ['chat-session', sessionId] as const,
   reports: ['reports'] as const,
   report: (reportId: string) => ['report', reportId] as const,
+  gmailConnections: ['connections'] as const,
 };
 
 function useAuthReady() {
@@ -439,3 +440,19 @@ export function useSendChatMessage(sessionId: string) { const qc = useQueryClien
 export function useReports() { const authReady = useAuthReady(); return useQuery({ queryKey: keys.reports, queryFn: api.listReports, enabled: authReady }); }
 export function useReport(reportId: string) { const authReady = useAuthReady(); return useQuery({ queryKey: keys.report(reportId), queryFn: () => api.getReport(reportId), enabled: authReady && Boolean(reportId) }); }
 export function useCreateReport() { const qc = useQueryClient(); return useMutation({ mutationFn: api.createReport, onSuccess: () => qc.invalidateQueries({ queryKey: keys.reports }) }); }
+
+export function useGmailPreview() {
+  return useMutation({
+    mutationFn: api.gmailPreview,
+  });
+}
+
+export function useGmailImport() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: api.gmailImport,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: keys.documents });
+    },
+  });
+}
