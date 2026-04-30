@@ -3,6 +3,7 @@ import axios from 'axios';
 import { useAuth } from '@/auth/AuthContext';
 import { api } from '@/services/api';
 import type { ActionItem, RelationshipReviewItem, ReviewItem } from '@/types/api';
+import type { DocumentRelationshipListItem } from '@/types/api';
 
 type PaginatedData<T> = { items: T[]; total_count: number; limit: number; offset: number };
 
@@ -37,6 +38,7 @@ export const keys = {
   documentIntelligence: (documentId: string) => ['document-intelligence', documentId] as const,
   documentActionItems: (documentId: string) => ['document-action-items', documentId] as const,
   documentAuditHistory: (documentId: string) => ['document-audit-history', documentId] as const,
+  documentRelationships: (documentId: string) => ['document-relationships', documentId] as const,
   categories: ['categories'] as const,
   connections: ['connections'] as const,
   adminUsers: (page:number,limit:number)=>['admin-users',page,limit] as const,
@@ -188,6 +190,25 @@ export function useReviewMetrics() {
 export function useRelationshipReviews(status: 'pending' | 'confirmed' | 'dismissed') {
   const authReady = useAuthReady();
   return useQuery({ queryKey: keys.relationshipReviews(status), queryFn: () => api.listRelationshipReviews(status), enabled: authReady });
+}
+
+export function useDocumentRelationships(documentId: string) {
+  const authReady = useAuthReady();
+  return useQuery<DocumentRelationshipListItem[]>({
+    queryKey: keys.documentRelationships(documentId),
+    queryFn: async () => {
+      try {
+        return await api.listDocumentRelationships(documentId);
+      } catch (error) {
+        if (axios.isAxiosError(error)) {
+          const detail = typeof error.response?.data?.detail === 'string' ? error.response.data.detail : null;
+          throw new Error(detail ?? error.message);
+        }
+        throw error;
+      }
+    },
+    enabled: authReady && Boolean(documentId),
+  });
 }
 
 export function useConfirmRelationshipReview() {

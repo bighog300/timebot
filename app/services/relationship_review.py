@@ -12,15 +12,18 @@ logger = logging.getLogger(__name__)
 
 
 class RelationshipReviewService:
+    @staticmethod
+    def _base_query(db: Session):
+        return db.query(DocumentRelationshipReview).options(
+            joinedload(DocumentRelationshipReview.source_document).joinedload(Document.intelligence),
+            joinedload(DocumentRelationshipReview.target_document).joinedload(Document.intelligence),
+        )
+
     def list_items(self, db: Session, *, user_id: UUID, status: str = "pending") -> list[DocumentRelationshipReview]:
         source_doc = aliased(Document)
         target_doc = aliased(Document)
         items = (
-            db.query(DocumentRelationshipReview)
-            .options(
-                joinedload(DocumentRelationshipReview.source_document).joinedload(Document.intelligence),
-                joinedload(DocumentRelationshipReview.target_document).joinedload(Document.intelligence),
-            )
+            self._base_query(db)
             .join(source_doc, source_doc.id == DocumentRelationshipReview.source_document_id)
             .join(target_doc, target_doc.id == DocumentRelationshipReview.target_document_id)
             .filter(source_doc.user_id == user_id, target_doc.user_id == user_id, DocumentRelationshipReview.status == status)
@@ -34,11 +37,7 @@ class RelationshipReviewService:
         source_doc = aliased(Document)
         target_doc = aliased(Document)
         return (
-            db.query(DocumentRelationshipReview)
-            .options(
-                joinedload(DocumentRelationshipReview.source_document).joinedload(Document.intelligence),
-                joinedload(DocumentRelationshipReview.target_document).joinedload(Document.intelligence),
-            )
+            self._base_query(db)
             .join(source_doc, source_doc.id == DocumentRelationshipReview.source_document_id)
             .join(target_doc, target_doc.id == DocumentRelationshipReview.target_document_id)
             .filter(
@@ -48,6 +47,39 @@ class RelationshipReviewService:
             )
             .first()
         )
+
+    def list_for_document(
+        self,
+        db: Session,
+        *,
+        document_id: UUID,
+        user_id: UUID,
+        include_dismissed: bool = False,
+        status: str | None = None,
+        limit: int = 50,
+    ) -> list[DocumentRelationshipReview]:
+        source_doc = aliased(Document)
+        target_doc = aliased(Document)
+        query = (
+            self._base_query(db)
+            .join(source_doc, source_doc.id == DocumentRelationshipReview.source_document_id)
+            .join(target_doc, target_doc.id == DocumentRelationshipReview.target_document_id)
+            .filter(
+                source_doc.user_id == user_id,
+                target_doc.user_id == user_id,
+                (DocumentRelationshipReview.source_document_id == document_id)
+                | (DocumentRelationshipReview.target_document_id == document_id),
+            )
+        )
+        if status:
+            query = query.filter(DocumentRelationshipReview.status == status)
+        elif not include_dismissed:
+            query = query.filter(DocumentRelationshipReview.status.in_(("pending", "confirmed")))
+
+        return query.order_by(
+            DocumentRelationshipReview.created_at.desc(),
+            DocumentRelationshipReview.id.desc(),
+        ).limit(limit).all()
 
     def create_or_refresh_pending(
         self,

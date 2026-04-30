@@ -220,3 +220,17 @@ class RelationshipReviewResponse(BaseModel):
     reviewed_by: UUID | None = None
 
     model_config = {"from_attributes": True}
+
+
+class DocumentRelationshipListItemResponse(BaseModel):
+    id: UUID
+    status: RelationshipReviewStatus
+    relationship_type: RelationshipReviewType
+    confidence: float | None = None
+    related_document_id: UUID
+    related_document_title: str
+    related_document_name: str
+    related_document_snippet: str
+    direction: str
+    created_at: datetime
+    updated_at: datetime | None = None

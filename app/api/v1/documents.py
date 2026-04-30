@@ -17,12 +17,15 @@ from app.schemas.document import (
 )
 from app.schemas.review_workflow import (
     CategoryOverrideRequest,
+    DocumentRelationshipListItemResponse,
     DocumentIntelligenceResponse,
     DocumentIntelligenceUpdate,
+    RelationshipReviewStatus,
     ReviewAuditEventResponse,
 )
 from app.services.document_intelligence import document_intelligence_service
 from app.services.openai_client import openai_client_service
+from app.services.relationship_review import relationship_review_service
 from app.services.review_audit import review_audit_service
 
 router = APIRouter(prefix="/documents", tags=["documents"])
@@ -69,6 +72,48 @@ def get_document(document_id: UUID, db: Session = Depends(get_db), current_user:
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
     return document
+
+
+@router.get("/{document_id}/relationships", response_model=List[DocumentRelationshipListItemResponse])
+def list_document_relationships(
+    document_id: UUID,
+    include_dismissed: bool = Query(False),
+    status: RelationshipReviewStatus | None = Query(default=None),
+    limit: int = Query(50, ge=1, le=200),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    document = crud_document.get_document(db, id=document_id, user=current_user)
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+    items = relationship_review_service.list_for_document(
+        db,
+        document_id=document_id,
+        user_id=current_user.id,
+        include_dismissed=include_dismissed,
+        status=status,
+        limit=limit,
+    )
+    payload: list[DocumentRelationshipListItemResponse] = []
+    for item in items:
+        is_source = str(item.source_document_id) == str(document_id)
+        related_doc = item.target_document if is_source else item.source_document
+        payload.append(
+            DocumentRelationshipListItemResponse(
+                id=item.id,
+                status=item.status,
+                relationship_type=item.relationship_type,
+                confidence=item.confidence,
+                related_document_id=related_doc.id,
+                related_document_title=item._document_title(related_doc),
+                related_document_name=item._document_title(related_doc),
+                related_document_snippet=item._document_snippet(related_doc),
+                direction="source" if is_source else "target",
+                created_at=item.created_at,
+                updated_at=item.reviewed_at,
+            )
+        )
+    return payload
 
 
 @router.put("/{document_id}", response_model=DocumentResponse)

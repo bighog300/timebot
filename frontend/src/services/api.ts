@@ -7,6 +7,7 @@ import type {
   ConnectStartResponse,
   Document,
   DocumentIntelligence,
+  DocumentRelationshipListItem,
   InsightsResponse,
   QueueItem,
   QueueStats,
@@ -105,6 +106,8 @@ export const api = {
   overrideDocumentCategory: async (id: string, categoryId: string): Promise<Document> =>
     (await http.post(`/documents/${id}/category/override`, { category_id: categoryId })).data,
   getDocumentAuditHistory: async (id: string): Promise<ReviewAuditEvent[]> => (await http.get(`/documents/${id}/review-audit`)).data,
+  listDocumentRelationships: async (id: string, params?: { include_dismissed?: boolean; status?: 'pending' | 'confirmed' | 'dismissed'; limit?: number }): Promise<DocumentRelationshipListItem[]> =>
+    (await http.get(`/documents/${id}/relationships`, { params })).data,
   listActionItems: async (status?: 'open' | 'completed' | 'dismissed', limit = 20, offset = 0): Promise<{items: ActionItem[]; total_count:number; limit:number; offset:number}> =>
     (await http.get('/action-items', { params: { status, limit, offset } })).data,
   completeActionItem: async (id: string): Promise<ActionItem> => (await http.post(`/action-items/${id}/complete`)).data,
