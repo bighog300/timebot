@@ -24,6 +24,8 @@ from app.api.v1 import (
     search,
     upload,
     websocket,
+    chat,
+    reports,
 )
 
 logger = logging.getLogger(__name__)
@@ -111,6 +113,8 @@ app.include_router(auth.router, prefix="/api/v1")
 app.include_router(review.router, prefix="/api/v1")
 app.include_router(action_items.router, prefix="/api/v1")
 app.include_router(admin.router, prefix="/api/v1")
+app.include_router(chat.router, prefix="/api/v1")
+app.include_router(reports.router, prefix="/api/v1")
 
 
 @app.get("/health", tags=["health"])
