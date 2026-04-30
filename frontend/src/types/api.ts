@@ -283,6 +283,20 @@ export interface RelationshipReviewItem {
   reviewed_by: string | null;
 }
 
+export interface DocumentRelationshipListItem {
+  id: string;
+  status: 'pending' | 'confirmed' | 'dismissed';
+  relationship_type: 'duplicate' | 'similar' | 'related';
+  confidence: number | null;
+  related_document_id: string;
+  related_document_title: string;
+  related_document_name: string;
+  related_document_snippet: string;
+  direction: 'source' | 'target';
+  created_at: string;
+  updated_at: string | null;
+}
+
 
 export interface AdminUser { id: string; email: string; display_name: string; role: string; created_at: string; }
 export interface AdminUsersPage { items: AdminUser[]; total_count: number; limit: number; offset: number; }

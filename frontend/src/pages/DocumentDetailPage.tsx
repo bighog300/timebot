@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { api } from '@/services/api';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -13,6 +13,7 @@ import {
   useDocumentActionItems,
   useDocumentAuditHistory,
   useDocumentIntelligence,
+  useDocumentRelationships,
   useOverrideDocumentCategory,
   usePatchDocumentIntelligence,
 } from '@/hooks/useApi';
@@ -42,6 +43,7 @@ export function DocumentDetailPage() {
   const categoriesQuery = useCategories();
   const actionItemsQuery = useDocumentActionItems(id);
   const auditQuery = useDocumentAuditHistory(id);
+  const relationshipsQuery = useDocumentRelationships(id);
   const patchIntelligence = usePatchDocumentIntelligence(id);
   const approveCategory = useApproveDocumentCategory(id);
   const overrideCategory = useOverrideDocumentCategory(id);
@@ -203,6 +205,35 @@ export function DocumentDetailPage() {
           </ul>
         </Card>
       </div>
+
+      <Card>
+        <h3 className="mb-2">Related documents</h3>
+        {(doc.processing_status === 'uploading' || doc.processing_status === 'processing') && (
+          <div className="mb-3 text-xs text-slate-400">Relationships may appear after processing completes.</div>
+        )}
+        {relationshipsQuery.isLoading && <LoadingState label="Loading related documents..." />}
+        {relationshipsQuery.isError && <ErrorState message={`Failed to load related documents: ${relationshipsQuery.error.message}`} />}
+        {relationshipsQuery.isSuccess && (relationshipsQuery.data?.length ?? 0) === 0 && <EmptyState label="No related documents yet." />}
+        <ul className="space-y-2 text-sm">
+          {(relationshipsQuery.data ?? [])
+            .slice()
+            .sort((a, b) => (a.status === b.status ? 0 : a.status === 'confirmed' ? -1 : 1))
+            .map((item) => (
+              <li key={item.id} className="rounded border border-slate-800 p-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Link className="font-medium text-blue-300 hover:text-blue-200" to={`/documents/${item.related_document_id}`}>
+                    {item.related_document_title || item.related_document_name || item.related_document_id}
+                  </Link>
+                  <span className="rounded bg-slate-800 px-2 py-1 text-xs">{item.relationship_type}</span>
+                  <span className="rounded bg-slate-800 px-2 py-1 text-xs">{item.status}</span>
+                  <span className="text-xs text-slate-400">{item.confidence != null ? `${Math.round(item.confidence * 100)}% confidence` : 'n/a confidence'}</span>
+                </div>
+                <p className="mt-2 text-slate-300">{item.related_document_snippet || 'No summary/snippet available.'}</p>
+              </li>
+            ))}
+        </ul>
+        <div className="mt-2 text-xs text-slate-400">Need to review or update relationships? Visit the <Link to="/review/relationships" className="text-blue-300 hover:text-blue-200">Relationships review page</Link>.</div>
+      </Card>
 
       <Card>
         <h3 className="mb-2">Similar documents</h3>
