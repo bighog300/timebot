@@ -61,6 +61,11 @@ export function DocumentDetailPage() {
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ['document', id] });
     qc.invalidateQueries({ queryKey: ['documents'] });
+    qc.invalidateQueries({ queryKey: ['intelligence', id] });
+    qc.invalidateQueries({ queryKey: ['timeline'] });
+    qc.invalidateQueries({ queryKey: ['search'] });
+    qc.invalidateQueries({ queryKey: ['action-items'] });
+    qc.invalidateQueries({ queryKey: ['relationships'] });
   };
 
   const updateMutation = useMutation({
@@ -77,7 +82,10 @@ export function DocumentDetailPage() {
       refresh();
       pushToast('Reprocessing queued');
     },
-    onError: () => pushToast('Failed to queue reprocessing'),
+    onError: (error: unknown) => {
+      const message = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      pushToast(message ? `Failed to queue reprocessing: ${message}` : 'Failed to queue reprocessing');
+    },
   });
   const deleteMutation = useMutation({
     mutationFn: () => api.deleteDocument(id),

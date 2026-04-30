@@ -90,6 +90,7 @@ def process_document_task(self, document_id: str):
 
 @celery_app.task(name="app.workers.tasks.reprocess_document_task")
 def reprocess_document_task(document_id: str):
+    logger.info("Reprocess worker task started document_id=%s", document_id)
     from app.db.base import SessionLocal
     from app.models.document import Document
 
@@ -101,10 +102,14 @@ def reprocess_document_task(document_id: str):
             doc.processing_error = None
             db.add(doc)
             db.commit()
+        else:
+            logger.error("Reprocess worker task missing document_id=%s", document_id)
     finally:
         db.close()
 
-    return process_document_task.apply_async(args=[document_id])
+    result = process_document_task.apply_async(args=[document_id])
+    logger.info("Reprocess delegated document_id=%s process_task_id=%s", document_id, result.id)
+    return {"document_id": document_id, "process_task_id": result.id}
 
 
 
