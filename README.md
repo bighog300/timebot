@@ -23,7 +23,7 @@ AI-assisted document intelligence platform with upload/search, review workflow, 
 2. Set required secrets in `.env` (at minimum `AUTH_SECRET_KEY`). `OPENAI_API_KEY` can be blank for boot/auth.
 3. Start stack:
    ```bash
-   docker compose up --build
+   docker compose up -d --build
    ```
 4. Migrations run automatically on app startup in Docker (`alembic upgrade head` via `scripts/start-app.sh`).
 5. Qdrant is started by Compose, but app/worker dependencies use `service_started` so API startup is not blocked by Qdrant healthcheck fragility.
@@ -182,6 +182,18 @@ tests/              Backend tests
 - Use production-only `AUTH_SECRET_KEY` and strict `ALLOWED_ORIGINS` values.
 - Configure HTTPS, secret manager integration, and real deployment automation (current deploy workflow is a placeholder).
 - Review known deferred items in `docs/RELEASE_READINESS.md` before production launch.
+
+## Data persistence in Docker
+
+- Compose uses named volumes for Postgres (`postgres_data`), Qdrant (`qdrant_data`), and backend file storage (`timebot_data`, `timebot_uploads`, `timebot_artifacts`).
+- Normal deploy/rebuild flow:
+  ```bash
+  docker compose up -d --build
+  ```
+- Destructive full reset (removes all named volumes and persisted data):
+  ```bash
+  docker compose down -v
+  ```
 
 ## Known limitations and production handoff
 

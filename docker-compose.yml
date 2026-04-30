@@ -66,15 +66,20 @@ services:
       - UPLOAD_PATH=/app/data/uploads
       - PROCESSED_PATH=/app/data/processed
       - STORAGE_PATH=/app/data
+      - DATA_DIR=/app/data
       - QDRANT_HOST=qdrant
       - QDRANT_PORT=6333
+      - UPLOAD_DIR=/app/uploads
+      - ARTIFACT_DIR=/app/artifacts
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:5174,http://127.0.0.1:5174}
       - AUTH_SECRET_KEY=${AUTH_SECRET_KEY:-dev-insecure-change-me}
       - INITIAL_ADMIN_EMAIL=${INITIAL_ADMIN_EMAIL:-}
       - INITIAL_ADMIN_PASSWORD=${INITIAL_ADMIN_PASSWORD:-}
       - INITIAL_ADMIN_NAME=${INITIAL_ADMIN_NAME:-Timebot Admin}
     volumes:
-      - ./data:/app/data
+      - timebot_data:/app/data
+      - timebot_uploads:/app/uploads
+      - timebot_artifacts:/app/artifacts
     depends_on:
       db:
         condition: service_healthy
@@ -101,11 +106,16 @@ services:
       - UPLOAD_PATH=/app/data/uploads
       - PROCESSED_PATH=/app/data/processed
       - STORAGE_PATH=/app/data
+      - DATA_DIR=/app/data
       - QDRANT_HOST=qdrant
       - QDRANT_PORT=6333
+      - UPLOAD_DIR=/app/uploads
+      - ARTIFACT_DIR=/app/artifacts
       - AUTH_SECRET_KEY=${AUTH_SECRET_KEY:-dev-insecure-change-me}
     volumes:
-      - ./data:/app/data
+      - timebot_data:/app/data
+      - timebot_uploads:/app/uploads
+      - timebot_artifacts:/app/artifacts
     depends_on:
       db:
         condition: service_healthy
@@ -157,6 +167,9 @@ volumes:
   postgres_data:
   redis_data:
   qdrant_data:
+  timebot_data:
+  timebot_uploads:
+  timebot_artifacts:
 
 networks:
   doc-network:
