@@ -171,3 +171,36 @@ ALLOW_IMAGE_PUSH=1
 ```
 
 Only set this in intentional release/deploy contexts.
+
+
+## Celery worker diagnostics
+
+Use these commands to verify document-processing tasks are actually running:
+
+```bash
+docker compose ps
+docker compose logs -f celery-worker
+docker compose logs -f app
+```
+
+Check worker responsiveness and task registration:
+
+```bash
+docker compose exec celery-worker celery -A app.workers.celery_app.celery_app inspect ping
+docker compose exec celery-worker celery -A app.workers.celery_app.celery_app inspect registered
+docker compose exec celery-worker celery -A app.workers.celery_app.celery_app inspect active
+docker compose exec celery-worker celery -A app.workers.celery_app.celery_app inspect reserved
+```
+
+Expected output:
+- `inspect ping` returns at least one worker with `"pong"`.
+- `inspect registered` includes `app.workers.tasks.process_document_task` and `app.workers.tasks.reprocess_document_task`.
+- `inspect active`/`reserved` show task lists while processing is in-flight (can be empty when idle).
+
+Manual single-document debug processing:
+
+```bash
+docker compose exec app python -m app.scripts.process_document <document_id>
+```
+
+This prints AI configuration status, extracted text length, summary length, and final processing status.

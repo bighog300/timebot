@@ -20,6 +20,7 @@ def process_document_task(self, document_id: str):
     from app.models.relationships import ProcessingQueue
     from app.services.document_processor import document_processor
 
+    logger.info("Process task received task_id=%s document_id=%s worker=%s openai_configured=%s", self.request.id, document_id, self.request.hostname, bool(settings.OPENAI_API_KEY))
     db = SessionLocal()
     queue_entry = _ensure_queue_entry(db, document_id)
 
@@ -30,6 +31,7 @@ def process_document_task(self, document_id: str):
             _update_queue_entry(db, queue_entry, status="failed", error_message="Document not found")
             return {"status": "error", "message": "Document not found"}
 
+        logger.info("Process task starting task_id=%s document_id=%s queue_entry_id=%s", self.request.id, document_id, queue_entry.id)
         _update_queue_entry(
             db,
             queue_entry,
@@ -43,6 +45,7 @@ def process_document_task(self, document_id: str):
         document_processor.process_document(db, document)
 
         if document.processing_status == "completed":
+            logger.info("Process task completed task_id=%s document_id=%s summary_length=%s", self.request.id, document_id, len(document.summary or ""))
             _update_queue_entry(db, queue_entry, status="completed", completed_at=True)
             embed_document_task.delay(document_id)
             detect_relationships_task.delay(document_id)

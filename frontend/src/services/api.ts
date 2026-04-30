@@ -31,7 +31,7 @@ export const api = {
   getAdminMetrics: async (): Promise<AdminMetrics> => (await http.get('/admin/metrics')).data,
   listAdminAudit: async (limit = 20, offset = 0): Promise<AdminAuditPage> => (await http.get('/admin/audit', { params: { limit, offset } })).data,
   listDocuments: async (includeArchived = false): Promise<Document[]> =>
-    (await http.get('/documents', { params: { include_archived: includeArchived } })).data,
+    (await http.get('/documents/', { params: { include_archived: includeArchived } })).data,
   getDocument: async (id: string): Promise<Document> => (await http.get(`/documents/${id}`)).data,
   uploadDocument: async (file: File, token: string): Promise<Document> => {
     const body = new FormData();
