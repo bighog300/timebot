@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+import logging
 from uuid import UUID
 
 from sqlalchemy.orm import Session, aliased
@@ -6,6 +7,8 @@ from sqlalchemy.orm import Session, aliased
 from app.models.document import Document
 from app.models.intelligence import DocumentRelationshipReview
 from app.services.review_audit import review_audit_service
+
+logger = logging.getLogger(__name__)
 
 
 class RelationshipReviewService:
@@ -60,6 +63,13 @@ class RelationshipReviewService:
         )
         existing = pending_matches[0] if pending_matches else None
         if existing:
+            logger.info(
+                "Refreshing pending relationship review source=%s target=%s type=%s duplicates=%s",
+                source_document_id,
+                target_document_id,
+                relationship_type,
+                max(len(pending_matches) - 1, 0),
+            )
             existing.confidence = confidence
             existing.reason_codes_json = reason_codes_json or []
             existing.metadata_json = metadata_json or {}
@@ -74,6 +84,12 @@ class RelationshipReviewService:
                 db.add(duplicate)
             return existing
 
+        logger.info(
+            "Creating pending relationship review source=%s target=%s type=%s",
+            source_document_id,
+            target_document_id,
+            relationship_type,
+        )
         created = DocumentRelationshipReview(
             source_document_id=source_document_id,
             target_document_id=target_document_id,

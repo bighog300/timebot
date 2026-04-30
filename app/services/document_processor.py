@@ -118,6 +118,7 @@ class DocumentProcessor:
         from app.models.category import Category
         from app.services.ai_analyzer import ai_analyzer
         from app.services.document_intelligence import document_intelligence_service
+        from app.services.relationship_detection import relationship_detection_service
 
         categories = db.query(Category).all()
         analysis = ai_analyzer.analyze_document(
@@ -134,6 +135,25 @@ class DocumentProcessor:
                 else "approved"
             )
             document_intelligence_service.create_from_analysis(db, document, analysis)
+            try:
+                logger.info("Starting relationship detection for document %s", document.id)
+                relationship_result = relationship_detection_service.detect_for_document(
+                    db=db,
+                    document_id=document.id,
+                )
+                logger.info(
+                    "Relationship detection completed for document %s: scanned=%s created=%s updated=%s",
+                    document.id,
+                    relationship_result.get("scanned", 0),
+                    relationship_result.get("created", 0),
+                    relationship_result.get("updated", 0),
+                )
+            except Exception as exc:
+                logger.exception("Relationship detection failed for document %s", document.id)
+                self._append_processing_warning(
+                    document,
+                    f"Relationship generation failed: {exc}",
+                )
             return
 
         if not settings.OPENAI_API_KEY:
@@ -141,6 +161,17 @@ class DocumentProcessor:
             logger.info("AI enrichment skipped for %s because OPENAI_API_KEY is blank", document.id)
         else:
             document.processing_error = "AI enrichment unavailable: analysis did not return a valid response."
+            logger.warning("AI enrichment returned no analysis for document %s", document.id)
+
+    def _append_processing_warning(self, document: Document, message: str) -> None:
+        if not message:
+            return
+        if not document.processing_error:
+            document.processing_error = message
+            return
+        if message in document.processing_error:
+            return
+        document.processing_error = f"{document.processing_error} | {message}"
 
 
 document_processor = DocumentProcessor()
