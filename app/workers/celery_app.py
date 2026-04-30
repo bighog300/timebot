@@ -1,12 +1,21 @@
 from celery import Celery
+import logging
 
 from app.config import settings
+
+logger = logging.getLogger(__name__)
 
 celery_app = Celery(
     "doc_intelligence",
     broker=settings.CELERY_BROKER_URL,
     backend=settings.CELERY_RESULT_BACKEND,
     include=["app.workers.tasks"],
+)
+
+logger.info(
+    "Celery OpenAI configured: %s; model=%s",
+    bool(settings.OPENAI_API_KEY),
+    settings.OPENAI_MODEL,
 )
 
 celery_app.conf.update(

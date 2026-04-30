@@ -7,7 +7,7 @@ from app.config import settings
 from app.models.document import Document
 from app.models.intelligence import DocumentIntelligence
 from app.services.action_items import action_items_service
-from app.services.ai_analyzer import ai_analyzer
+from app.services.ai_analyzer import AIAnalysisError, ai_analyzer
 from app.services.categorizer import categorizer
 from app.services.review_audit import review_audit_service
 from app.services.review_queue import review_queue_service
@@ -30,14 +30,15 @@ class DocumentIntelligenceService:
         from app.models.category import Category
 
         categories = db.query(Category).all()
-        analysis = ai_analyzer.analyze_document(
-            text=document.raw_text,
-            filename=document.filename,
-            file_type=document.file_type,
-            existing_categories=[c.name for c in categories],
-        )
-        if not analysis:
-            raise RuntimeError("AI analysis failed")
+        try:
+            analysis = ai_analyzer.analyze_document(
+                text=document.raw_text,
+                filename=document.filename,
+                file_type=document.file_type,
+                existing_categories=[c.name for c in categories],
+            )
+        except AIAnalysisError as exc:
+            raise RuntimeError(str(exc)) from exc
 
         return self.create_from_analysis(db, document, analysis)
 

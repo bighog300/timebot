@@ -116,18 +116,18 @@ class DocumentProcessor:
 
     def _run_ai_analysis(self, db: Session, document: Document, text: str):
         from app.models.category import Category
-        from app.services.ai_analyzer import ai_analyzer
+        from app.services.ai_analyzer import AIAnalysisError, ai_analyzer
         from app.services.document_intelligence import document_intelligence_service
         from app.services.relationship_detection import relationship_detection_service
 
         categories = db.query(Category).all()
-        analysis = ai_analyzer.analyze_document(
-            text=text,
-            filename=document.filename,
-            file_type=document.file_type,
-            existing_categories=[c.name for c in categories],
-        )
-        if analysis:
+        try:
+            analysis = ai_analyzer.analyze_document(
+                text=text,
+                filename=document.filename,
+                file_type=document.file_type,
+                existing_categories=[c.name for c in categories],
+            )
             confidence = ai_analyzer.compute_confidence(analysis)
             document.review_status = (
                 "pending"
@@ -154,14 +154,9 @@ class DocumentProcessor:
                     document,
                     f"Relationship generation failed: {exc}",
                 )
-            return
-
-        if not settings.OPENAI_API_KEY:
-            document.processing_error = "AI enrichment unavailable: OPENAI_API_KEY is not configured."
-            logger.info("AI enrichment skipped for %s because OPENAI_API_KEY is blank", document.id)
-        else:
-            document.processing_error = "AI enrichment unavailable: analysis did not return a valid response."
-            logger.warning("AI enrichment returned no analysis for document %s", document.id)
+        except AIAnalysisError as exc:
+            self._append_processing_warning(document, str(exc))
+            logger.warning("AI enrichment unavailable for %s: %s", document.id, exc)
 
     def _append_processing_warning(self, document: Document, message: str) -> None:
         if not message:

@@ -57,6 +57,8 @@ services:
     command: ["./scripts/start-app.sh"]
     ports:
       - "8001:8000" # host:container (8001 avoids common local 8000 conflicts; frontend should call :8001)
+    env_file:
+      - .env
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - DATABASE_URL=postgresql://docuser:docpass@db:5432/documents
@@ -97,6 +99,8 @@ services:
       dockerfile: Dockerfile
     container_name: doc-celery-worker
     command: celery -A app.workers.celery_app worker --loglevel=info -Q documents,maintenance
+    env_file:
+      - .env
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - DATABASE_URL=postgresql://docuser:docpass@db:5432/documents

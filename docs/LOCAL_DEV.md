@@ -98,6 +98,24 @@ If backend is not reachable, confirm container startup logs:
 docker compose logs app --tail=200
 ```
 
+OpenAI env verification (after rebuilds):
+
+```bash
+docker compose exec app python - <<'PY'
+from app.config import settings
+print("app OPENAI configured:", bool(settings.OPENAI_API_KEY))
+print("model:", settings.OPENAI_MODEL)
+PY
+
+docker compose exec celery-worker python - <<'PY'
+from app.config import settings
+print("worker OPENAI configured:", bool(settings.OPENAI_API_KEY))
+print("model:", settings.OPENAI_MODEL)
+PY
+```
+
+If either value is `False`, ensure `.env` contains `OPENAI_API_KEY=...` and restart with `docker compose up -d --build`.
+
 ## Persistence verification
 
 Normal rebuild/restart should keep document data:
