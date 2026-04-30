@@ -51,10 +51,18 @@ test('renders documents list', () => {
   expect(screen.getByText('a.pdf')).toBeInTheDocument();
 });
 
+
+test('drop zone label and helper text render', () => {
+  renderPage();
+  expect(screen.getByText('Drag and drop documents here')).toBeInTheDocument();
+  expect(screen.getByText('PDF, Word, Excel, PowerPoint, text, and image files supported')).toBeInTheDocument();
+  expect(screen.getByText('or choose files')).toBeInTheDocument();
+});
+
 test('clicking upload triggers native file input click', () => {
   const clickSpy = vi.spyOn(HTMLInputElement.prototype, 'click');
   renderPage();
-  fireEvent.click(screen.getByRole('button', { name: 'Upload' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Choose files' }));
   expect(clickSpy).toHaveBeenCalled();
 });
 
