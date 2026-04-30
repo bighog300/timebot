@@ -204,6 +204,14 @@ class RelationshipReviewResponse(BaseModel):
     target_document_id: UUID
     relationship_type: RelationshipReviewType
     confidence: float | None = None
+    source_document_title: str | None = None
+    source_document_name: str | None = None
+    source_document_snippet: str | None = None
+    target_document_title: str | None = None
+    target_document_name: str | None = None
+    target_document_snippet: str | None = None
+    source_snippet: str | None = None
+    target_snippet: str | None = None
     status: RelationshipReviewStatus
     reason_codes_json: list[str] = Field(default_factory=list)
     metadata_json: dict[str, Any] = Field(default_factory=dict)

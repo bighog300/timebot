@@ -56,6 +56,7 @@ export function AppShell() {
               <NavLink
                 key={to}
                 to={to}
+                end={to === '/review'}
                 className={({ isActive }) =>
                   `rounded px-3 py-2 text-sm ${isActive ? 'bg-slate-700 text-white' : 'text-slate-300 hover:bg-slate-800'}`
                 }

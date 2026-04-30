@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 import logging
 from uuid import UUID
 
-from sqlalchemy.orm import Session, aliased
+from sqlalchemy.orm import Session, aliased, joinedload
 
 from app.models.document import Document
 from app.models.intelligence import DocumentRelationshipReview
@@ -17,6 +17,10 @@ class RelationshipReviewService:
         target_doc = aliased(Document)
         items = (
             db.query(DocumentRelationshipReview)
+            .options(
+                joinedload(DocumentRelationshipReview.source_document).joinedload(Document.intelligence),
+                joinedload(DocumentRelationshipReview.target_document).joinedload(Document.intelligence),
+            )
             .join(source_doc, source_doc.id == DocumentRelationshipReview.source_document_id)
             .join(target_doc, target_doc.id == DocumentRelationshipReview.target_document_id)
             .filter(source_doc.user_id == user_id, target_doc.user_id == user_id, DocumentRelationshipReview.status == status)
@@ -31,6 +35,10 @@ class RelationshipReviewService:
         target_doc = aliased(Document)
         return (
             db.query(DocumentRelationshipReview)
+            .options(
+                joinedload(DocumentRelationshipReview.source_document).joinedload(Document.intelligence),
+                joinedload(DocumentRelationshipReview.target_document).joinedload(Document.intelligence),
+            )
             .join(source_doc, source_doc.id == DocumentRelationshipReview.source_document_id)
             .join(target_doc, target_doc.id == DocumentRelationshipReview.target_document_id)
             .filter(
