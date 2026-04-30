@@ -253,6 +253,17 @@ class RelationshipDetectionService:
         duplicates_skipped = 0
 
         for candidate in candidates:
+            structural_existing = (
+                db.query(DocumentRelationship)
+                .filter(
+                    DocumentRelationship.source_doc_id == candidate.source_doc_id,
+                    DocumentRelationship.target_doc_id == candidate.target_doc_id,
+                    DocumentRelationship.relationship_type.in_(("thread", "attachment")),
+                )
+                .first()
+            )
+            if structural_existing:
+                continue
             existing = (
                 db.query(DocumentRelationship)
                 .filter(

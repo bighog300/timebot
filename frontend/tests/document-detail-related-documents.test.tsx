@@ -46,16 +46,31 @@ describe('DocumentDetailPage related documents panel', () => {
     expect(await screen.findByText('No related documents yet.')).toBeInTheDocument();
   });
 
-  it('renders related document fields and link', async () => {
+  it('groups thread, attachments, and related documents', async () => {
     mockUseDocumentRelationships.mockReturnValue({
       isLoading: false, isError: false, isSuccess: true,
-      data: [{
-        id: 'rel-1', status: 'confirmed', relationship_type: 'related', confidence: 0.88,
-        related_document_id: 'doc-2', related_document_title: 'Doc 2', related_document_name: 'Doc 2',
-        related_document_snippet: 'Snippet 2', direction: 'source', created_at: new Date().toISOString(), updated_at: null,
-      }],
+      data: [
+        {
+          id: 'rel-1', status: 'confirmed', relationship_type: 'related', confidence: 0.88,
+          related_document_id: 'doc-2', related_document_title: 'Doc 2', related_document_name: 'Doc 2',
+          related_document_snippet: 'Snippet 2', direction: 'source', created_at: new Date().toISOString(), updated_at: null,
+        },
+        {
+          id: 'rel-2', status: 'confirmed', relationship_type: 'thread', confidence: 0.99,
+          related_document_id: 'doc-3', related_document_title: 'Doc 3', related_document_name: 'Doc 3',
+          related_document_snippet: 'Snippet 3', direction: 'source', created_at: new Date().toISOString(), updated_at: null,
+        },
+        {
+          id: 'rel-3', status: 'confirmed', relationship_type: 'attachment', confidence: 1.0,
+          related_document_id: 'doc-4', related_document_title: 'Doc 4', related_document_name: 'Doc 4',
+          related_document_snippet: 'Snippet 4', direction: 'source', created_at: new Date().toISOString(), updated_at: null,
+        },
+      ],
     });
     renderPage();
+    expect(await screen.findByText('Email Thread')).toBeInTheDocument();
+    expect(screen.getByText('Attachments')).toBeInTheDocument();
+    expect(screen.getByText('Related Documents')).toBeInTheDocument();
     expect(await screen.findByText('Doc 2')).toBeInTheDocument();
     expect(screen.getByText('Snippet 2')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Doc 2' })).toHaveAttribute('href', '/documents/doc-2');

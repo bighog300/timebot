@@ -136,7 +136,7 @@ class DocumentRelationshipReview(Base):
     __table_args__ = (
         CheckConstraint("source_document_id != target_document_id", name="no_self_relationship_review"),
         CheckConstraint(
-            "relationship_type IN ('duplicate', 'similar', 'related')",
+            "relationship_type IN ('duplicate', 'similar', 'related', 'thread', 'attachment')",
             name="valid_relationship_review_type",
         ),
         CheckConstraint("status IN ('pending', 'confirmed', 'dismissed')", name="valid_relationship_review_status"),

@@ -34,7 +34,7 @@ class DocumentRelationship(Base):
 
     __table_args__ = (
         CheckConstraint(
-            "relationship_type IN ('similar_to', 'references', 'follows_up', 'related_to', 'duplicates')",
+            "relationship_type IN ('similar_to', 'references', 'follows_up', 'related_to', 'duplicates', 'thread', 'attachment')",
             name="valid_relationship_type",
         ),
         CheckConstraint("source_doc_id != target_doc_id", name="no_self_reference"),
