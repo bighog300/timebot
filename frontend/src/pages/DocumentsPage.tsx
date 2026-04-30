@@ -140,24 +140,36 @@ export function DocumentsPage() {
 
   return (
     <div className="space-y-4">
+      <h1 className="text-xl font-semibold">Documents</h1>
       <div
-        className={`flex items-center justify-between gap-3 rounded border p-3 ${isDragging ? 'border-blue-400 bg-blue-950/30' : 'border-slate-700'}`}
+        className={`rounded-lg border-2 p-4 transition-colors sm:p-6 ${isDragging ? 'border-blue-400 bg-blue-950/30' : 'border-dashed border-slate-600 bg-slate-900/40'}`}
         onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
         onDragLeave={() => setIsDragging(false)}
         onDrop={onDrop}
+        role="region"
+        aria-label="Document upload drop zone"
         data-testid="documents-dropzone"
       >
-        <h1 className="text-xl font-semibold">Documents</h1>
+        <div className="flex flex-col items-start gap-3">
+          <div>
+            <p className="text-base font-semibold">Drag and drop documents here</p>
+            <p className="text-sm text-slate-300">PDF, Word, Excel, PowerPoint, text, and image files supported</p>
+          </div>
         <input
           ref={inputRef}
           type="file"
           className="hidden"
+          multiple
           accept=".pdf,.doc,.docx,.txt,.xlsx,.xls,.ppt,.pptx,.png,.jpg,.jpeg"
           onChange={onInputChange}
         />
-        <Button onClick={onUploadClick} disabled={Boolean(uploadDisabledReason)} title={uploadDisabledReason ?? undefined}>
-          Upload
-        </Button>
+          <div className="flex flex-wrap items-center gap-2 text-sm text-slate-300">
+            <Button onClick={onUploadClick} disabled={Boolean(uploadDisabledReason)} title={uploadDisabledReason ?? undefined}>
+              {upload.isPending ? 'Uploading…' : 'Choose files'}
+            </Button>
+            <span>or choose files</span>
+          </div>
+        </div>
       </div>
 
       {isLoading && <LoadingState />}
