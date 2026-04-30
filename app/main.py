@@ -1,5 +1,7 @@
 import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
+from urllib.parse import urlsplit, urlunsplit
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -27,6 +29,15 @@ from app.api.v1 import (
 logger = logging.getLogger(__name__)
 
 
+def _redact_database_url(url: str) -> str:
+    parts = urlsplit(url)
+    if "@" not in parts.netloc:
+        return url
+    credentials, host = parts.netloc.rsplit("@", 1)
+    username = credentials.split(":", 1)[0] if ":" in credentials else credentials
+    return urlunsplit((parts.scheme, f"{username}:***@{host}", parts.path, parts.query, parts.fragment))
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup: schema is managed by Alembic (create_all only when ALEMBIC_SKIP=true).
@@ -38,6 +49,15 @@ async def lifespan(app: FastAPI):
         logger.warning("AUTH_SECRET_KEY is using the insecure development default. Set a unique secret for shared/prod environments.")
 
     init_db()
+    data_dir = Path(settings.effective_data_dir)
+    upload_dir = Path(settings.effective_upload_dir)
+    artifact_dir = Path(settings.effective_artifact_dir)
+    for directory in [data_dir, upload_dir, artifact_dir]:
+        directory.mkdir(parents=True, exist_ok=True)
+    logger.info("Storage config: database=%s", _redact_database_url(settings.DATABASE_URL))
+    logger.info("Storage config: data_dir=%s exists=%s", data_dir, data_dir.exists())
+    logger.info("Storage config: upload_dir=%s exists=%s", upload_dir, upload_dir.exists())
+    logger.info("Storage config: artifact_dir=%s exists=%s", artifact_dir, artifact_dir.exists())
 
     from app.services.admin_seed import seed_initial_admin
 

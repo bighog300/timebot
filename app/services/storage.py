@@ -11,14 +11,16 @@ from app.config import settings
 
 class StorageService:
     def __init__(self):
-        self.upload_path = Path(settings.UPLOAD_PATH)
-        self.processed_path = Path(settings.PROCESSED_PATH)
-        self.text_path = self.processed_path / "text"
-        self.thumbnail_path = self.processed_path / "thumbnails"
+        self.data_path = Path(settings.effective_data_dir)
+        self.upload_path = Path(settings.effective_upload_dir)
+        self.artifact_path = Path(settings.effective_artifact_dir)
+        self.text_path = self.artifact_path / "extracted_text"
+        self.thumbnail_path = self.artifact_path / "thumbnails"
+        self.processing_output_path = self.artifact_path / "processing_outputs"
         self._ensure_directories()
 
     def _ensure_directories(self):
-        for p in [self.upload_path, self.text_path, self.thumbnail_path]:
+        for p in [self.data_path, self.upload_path, self.artifact_path, self.text_path, self.thumbnail_path, self.processing_output_path]:
             p.mkdir(parents=True, exist_ok=True)
 
     def _dated_dir(self, base: Path) -> Path:

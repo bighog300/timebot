@@ -9,7 +9,7 @@ cp .env.example .env
 python3 -c "import secrets; print(secrets.token_hex(32))"
 # paste generated value into AUTH_SECRET_KEY in .env
 # set ALLOWED_ORIGINS for your frontend host(s)
-docker compose up --build
+docker compose up -d --build
 ```
 
 > Migrations run automatically before API startup in Docker (`alembic upgrade head`).
@@ -96,6 +96,23 @@ If backend is not reachable, confirm container startup logs:
 
 ```bash
 docker compose logs app --tail=200
+```
+
+## Persistence verification
+
+Normal rebuild/restart should keep document data:
+
+1. Start stack: `docker compose up -d --build`
+2. Upload and summarize a PDF.
+3. Rebuild: `docker compose up -d --build`
+4. Confirm the uploaded document + summary still exist.
+5. Restart: `docker compose restart`
+6. Confirm the uploaded document + summary still exist.
+
+Destructive reset (deletes all named volumes and persisted data):
+
+```bash
+docker compose down -v
 ```
 
 Frontend dev port mismatch (5174 expected):

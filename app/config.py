@@ -37,6 +37,9 @@ class Settings(BaseSettings):
     QDRANT_PORT: int = 6333
     AI_MAX_TOKENS: int = 4096
 
+    DATA_DIR: str = "data"
+    UPLOAD_DIR: str = "data/uploads"
+    ARTIFACT_DIR: str = "data/artifacts"
     STORAGE_PATH: str = "data"
     UPLOAD_PATH: str = "data/uploads"
     PROCESSED_PATH: str = "data/processed"
@@ -77,6 +80,20 @@ class Settings(BaseSettings):
         if self.ALLOWED_ORIGINS.strip() == "*":
             return ["*"]
         return [origin.strip() for origin in self.ALLOWED_ORIGINS.split(",") if origin.strip()]
+
+    @property
+    def effective_data_dir(self) -> str:
+        return self.DATA_DIR or self.STORAGE_PATH
+
+    @property
+    def effective_upload_dir(self) -> str:
+        return self.UPLOAD_DIR or self.UPLOAD_PATH
+
+    @property
+    def effective_artifact_dir(self) -> str:
+        if self.ARTIFACT_DIR:
+            return self.ARTIFACT_DIR
+        return self.PROCESSED_PATH or f"{self.effective_data_dir}/artifacts"
 
 
 settings = Settings()
