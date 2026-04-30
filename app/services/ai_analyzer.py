@@ -11,6 +11,10 @@ logger = logging.getLogger(__name__)
 MAX_TEXT_CHARS = 15_000  # ~3 750 tokens
 
 
+class AIAnalysisError(RuntimeError):
+    """Raised when AI analysis is unavailable or returns invalid output."""
+
+
 class AIAnalyzer:
     def analyze_document(
         self,
@@ -18,12 +22,11 @@ class AIAnalyzer:
         filename: str,
         file_type: str = "unknown",
         existing_categories: Optional[List[str]] = None,
-    ) -> Optional[Dict[str, Any]]:
+    ) -> Dict[str, Any]:
         if not text or not text.strip():
-            return None
+            raise AIAnalysisError("AI enrichment failed: document text is empty.")
         if not openai_client_service.enabled:
-            logger.warning("OPENAI_API_KEY not configured — skipping AI analysis")
-            return None
+            raise AIAnalysisError("AI enrichment unavailable: OPENAI_API_KEY is not configured.")
 
         try:
             categories_str = ", ".join(existing_categories) if existing_categories else "none yet"
@@ -45,16 +48,22 @@ class AIAnalyzer:
                 ],
             )
             content = (response.choices[0].message.content or "").strip()
-            return self._parse_json(content)
+            analysis = self._parse_json(content)
+            summary = (analysis.get("summary") or "").strip()
+            if not summary:
+                raise AIAnalysisError("AI enrichment failed: summary missing from model response.")
+            return analysis
 
         except APIError as e:
             logger.error("OpenAI API error: %s", e)
-            return None
+            raise AIAnalysisError(f"AI enrichment failed: OpenAI API error: {e}") from e
+        except AIAnalysisError:
+            raise
         except Exception as e:
             logger.error("AI analysis error: %s", e)
-            return None
+            raise AIAnalysisError(f"AI enrichment failed: {e}") from e
 
-    def _parse_json(self, content: str) -> Optional[Dict[str, Any]]:
+    def _parse_json(self, content: str) -> Dict[str, Any]:
         content = content.strip()
         if content.startswith("```"):
             lines = content.splitlines()
@@ -63,7 +72,7 @@ class AIAnalyzer:
             return json.loads(content)
         except json.JSONDecodeError as e:
             logger.error("JSON parse error in AI response: %s", e)
-            return None
+            raise AIAnalysisError("AI enrichment failed: invalid JSON response.") from e
 
     def compute_confidence(self, analysis: Dict[str, Any]) -> float:
         confidence = 1.0

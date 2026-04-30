@@ -58,6 +58,11 @@ async def lifespan(app: FastAPI):
     logger.info("Storage config: data_dir=%s exists=%s", data_dir, data_dir.exists())
     logger.info("Storage config: upload_dir=%s exists=%s", upload_dir, upload_dir.exists())
     logger.info("Storage config: artifact_dir=%s exists=%s", artifact_dir, artifact_dir.exists())
+    logger.info(
+        "OpenAI configured: %s; model=%s",
+        bool(settings.OPENAI_API_KEY),
+        settings.OPENAI_MODEL,
+    )
 
     from app.services.admin_seed import seed_initial_admin
 
