@@ -62,7 +62,7 @@ export const api = {
     await http.post(`/documents/${id}/reprocess`);
   },
   searchKeyword: async (query: string): Promise<SearchResponse> =>
-    (await http.post('/search', null, { params: { query } })).data,
+    (await http.post('/search/', null, { params: { query } })).data,
   searchSemantic: async (query: string): Promise<SemanticSearchResponse> =>
     (await http.post('/search/semantic', null, { params: { query } })).data,
   listSuggestions: async (q: string): Promise<string[]> =>
