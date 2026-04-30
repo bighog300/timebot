@@ -191,18 +191,17 @@ class RelationshipDetectionService:
                     existing.relationship_metadata = candidate.metadata
                     db.add(existing)
                     updated += 1
-                continue
-
-            db.add(
-                DocumentRelationship(
-                    source_doc_id=candidate.source_doc_id,
-                    target_doc_id=candidate.target_doc_id,
-                    relationship_type=candidate.relationship_type,
-                    confidence=candidate.confidence,
-                    relationship_metadata=candidate.metadata,
+            else:
+                db.add(
+                    DocumentRelationship(
+                        source_doc_id=candidate.source_doc_id,
+                        target_doc_id=candidate.target_doc_id,
+                        relationship_type=candidate.relationship_type,
+                        confidence=candidate.confidence,
+                        relationship_metadata=candidate.metadata,
+                    )
                 )
-            )
-            created += 1
+                created += 1
 
             review_type = self._to_review_type(candidate.relationship_type)
             if review_type:

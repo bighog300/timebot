@@ -59,6 +59,29 @@ npm install
 npm run dev -- --host 0.0.0.0 --port 5174
 ```
 
+### Relationship review diagnostics / backfill
+
+If the Relationships review page is empty unexpectedly, check raw vs review counts:
+
+```bash
+docker compose exec app python - <<'PY'
+from app.db.base import SessionLocal
+from app.models.relationships import DocumentRelationship
+from app.models.intelligence import DocumentRelationshipReview
+
+db = SessionLocal()
+print("raw relationships:", db.query(DocumentRelationship).count())
+print("relationship reviews:", db.query(DocumentRelationshipReview).count())
+print("pending reviews:", db.query(DocumentRelationshipReview).filter(DocumentRelationshipReview.status == "pending").count())
+PY
+```
+
+Backfill missing relationship review rows from existing `document_relationships`:
+
+```bash
+python -m app.scripts.backfill_relationship_reviews
+```
+
 
 Detailed Docker + frontend + LAN setup steps: see `docs/LOCAL_DEV.md`.
 
