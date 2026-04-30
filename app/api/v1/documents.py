@@ -21,6 +21,7 @@ from app.schemas.review_workflow import (
     ReviewAuditEventResponse,
 )
 from app.services.document_intelligence import document_intelligence_service
+from app.services.openai_client import openai_client_service
 from app.services.review_audit import review_audit_service
 
 router = APIRouter(prefix="/documents", tags=["documents"])
@@ -146,6 +147,11 @@ def regenerate_document_intelligence(document_id: UUID, db: Session = Depends(ge
     document = crud_document.get_document(db, id=document_id, user=current_user)
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
+    if not openai_client_service.enabled:
+        raise HTTPException(
+            status_code=503,
+            detail="AI enrichment unavailable: configure OPENAI_API_KEY and retry regeneration.",
+        )
     try:
         return document_intelligence_service.regenerate(db, document)
     except ValueError as exc:

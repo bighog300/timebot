@@ -168,6 +168,17 @@ def test_action_item_endpoints_complete_and_dismiss(client, db, sample_document)
     assert invalid_transition.status_code == 409
 
 
+def test_regenerate_intelligence_returns_503_without_openai_key(client, monkeypatch, sample_document):
+    class _NoAI:
+        enabled = False
+
+    monkeypatch.setattr('app.api.v1.documents.openai_client_service', _NoAI())
+
+    response = client.post(f"/api/v1/documents/{sample_document.id}/intelligence/regenerate")
+    assert response.status_code == 503
+    assert "OPENAI_API_KEY" in response.json()["detail"]
+
+
 def test_review_items_filtering_and_pagination(client, db, sample_document):
     open_item = DocumentReviewItem(id=uuid.uuid4(), document_id=sample_document.id, review_type="missing_tags", status="open", reason="open", payload={"priority": "high"})
     resolved_item = DocumentReviewItem(id=uuid.uuid4(), document_id=sample_document.id, review_type="processing_issues", status="resolved", reason="done", payload={"priority": "low"})

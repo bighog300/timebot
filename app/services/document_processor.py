@@ -134,6 +134,13 @@ class DocumentProcessor:
                 else "approved"
             )
             document_intelligence_service.create_from_analysis(db, document, analysis)
+            return
+
+        if not settings.OPENAI_API_KEY:
+            document.processing_error = "AI enrichment unavailable: OPENAI_API_KEY is not configured."
+            logger.info("AI enrichment skipped for %s because OPENAI_API_KEY is blank", document.id)
+        else:
+            document.processing_error = "AI enrichment unavailable: analysis did not return a valid response."
 
 
 document_processor = DocumentProcessor()
