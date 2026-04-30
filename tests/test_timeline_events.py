@@ -58,3 +58,12 @@ def test_upload_date_not_primary_event_date():
     doc = _doc(); doc.entities={}
     res = timeline_service.build_timeline(FakeDB([doc]))
     assert res['total_events'] == 0
+
+
+def test_timeline_fallback_extracts_dates_from_text():
+    doc = _doc()
+    doc.entities = {}
+    doc.raw_text = "Payment due date: February 15, 2025. Renewal deadline: 2025-11-30."
+    res = timeline_service.build_timeline(FakeDB([doc]))
+    assert res["total_events"] >= 2
+    assert all(ev["source"] == "date_extraction_fallback" for ev in res["events"])

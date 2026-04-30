@@ -55,7 +55,12 @@ Rules:
 - tags: 3-8 relevant lowercase single-word or short-phrase tags
 - suggested_category: choose from available categories or propose a new descriptive one
 - category_confidence: float 0.0-1.0 indicating confidence in the category
-- estimated_importance: float 0.0-1.0"""
+- estimated_importance: float 0.0-1.0
+- timeline_events: include ALL explicit dates/date ranges found in the document (invoice date, due date, contract effective date, term start/end, meeting date, renewal/termination date, project phase range)
+- every timeline event must include title and either date or start_date/end_date
+- use ISO YYYY-MM-DD whenever possible
+- do not invent dates
+- include source_quote/evidence snippet from source text for each timeline event when available"""
 
 
 def build_document_analysis_prompt(

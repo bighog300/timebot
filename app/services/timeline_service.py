@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from datetime import datetime
+import logging
+import re
 from typing import Any, Dict, List, Optional
 
 try:
@@ -34,6 +36,7 @@ class TimelineService:
         events: List[Dict[str, Any]] = []
         for doc in docs:
             events.extend(self._events_for_document(doc))
+        logging.getLogger(__name__).info("timeline_service_scan docs=%s events_before_filter=%s", len(docs), len(events))
 
         sd = self._parse_date(start_date) if start_date else None
         ed = self._parse_date(end_date) if end_date else None
@@ -48,11 +51,19 @@ class TimelineService:
             filtered.append(ev)
         filtered.sort(key=lambda e: e.get("start_date") or e.get("date") or "", reverse=False)
         buckets = [{"period": "all", "count": len(filtered), "events": filtered}]
+        logging.getLogger(__name__).info("timeline_service_result docs=%s events_returned=%s", len(docs), len(filtered))
         return {"group_by": group_by, "total_documents": len(docs), "total_events": len(filtered), "events": filtered, "buckets": buckets}
 
     def _events_for_document(self, doc: Document) -> List[Dict[str, Any]]:
         entities = doc.entities or {}
-        raw_events = entities.get('timeline_events', []) if isinstance(entities, dict) else []
+        intelligence_entities = ((getattr(doc, "intelligence", None) or {}).get("entities") if isinstance(getattr(doc, "intelligence", None), dict) else None) or {}
+        raw_events = []
+        if isinstance(intelligence_entities, dict):
+            raw_events = intelligence_entities.get('timeline_events', []) or []
+        if not raw_events and isinstance(entities, dict):
+            raw_events = entities.get('timeline_events', []) or []
+        if not raw_events:
+            raw_events = self._fallback_extract_from_text(getattr(doc, "raw_text", "") or "")
         normalized=[]
         for event in raw_events:
             if not isinstance(event, dict):
@@ -73,6 +84,31 @@ class TimelineService:
             })
         return normalized
 
+    def _fallback_extract_from_text(self, text: str) -> List[Dict[str, Any]]:
+        if not text:
+            return []
+        events = []
+        patterns = [r"\b\d{4}-\d{2}-\d{2}\b", r"\b[A-Z][a-z]+ \d{1,2}, \d{4}\b", r"\b\d{1,2}/\d{1,2}/\d{4}\b"]
+        for sentence in re.split(r"(?<=[.!?])\s+", text):
+            for p in patterns:
+                for m in re.finditer(p, sentence):
+                    d = self._parse_date(m.group(0))
+                    if not d:
+                        continue
+                    events.append({
+                        "title": sentence[:60].strip() or "Dated event",
+                        "description": None,
+                        "date": d.date().isoformat(),
+                        "start_date": None,
+                        "end_date": None,
+                        "confidence": 0.25,
+                        "source_quote": sentence[:220],
+                        "page_number": None,
+                        "category": "fallback_date",
+                        "source": "date_extraction_fallback",
+                    })
+        return events
+
     def _parse_date(self, value: Any) -> Optional[datetime]:
         if isinstance(value, datetime):
             return value
@@ -82,6 +118,11 @@ class TimelineService:
         try:
             return datetime.fromisoformat(s)
         except Exception:
+            for fmt in ("%B %d, %Y", "%d %B %Y", "%m/%d/%Y", "%d/%m/%Y"):
+                try:
+                    return datetime.strptime(s, fmt)
+                except ValueError:
+                    continue
             return None
 
 timeline_service = TimelineService()
