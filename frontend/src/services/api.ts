@@ -27,6 +27,7 @@ import type {
   ChatSession,
   ChatMessageResponse,
   ChatMessageRequest,
+  ChatStreamEvent,
   GeneratedReport,
   ReportCreateRequest,
   GmailPreviewRequest,
@@ -54,6 +55,52 @@ export const api = {
   listChatSessions: async (): Promise<ChatSession[]> => (await http.get('/chat/sessions')).data,
   getChatSession: async (sessionId: string): Promise<ChatSession> => (await http.get(`/chat/sessions/${sessionId}`)).data,
   sendChatMessage: async (sessionId: string, payload: ChatMessageRequest): Promise<ChatMessageResponse> => (await http.post(`/chat/sessions/${sessionId}/messages`, payload)).data,
+  sendChatMessageStream: async (
+    sessionId: string,
+    payload: ChatMessageRequest,
+    handlers: {
+      onEvent: (event: ChatStreamEvent) => void;
+      signal?: AbortSignal;
+    },
+  ): Promise<void> => {
+    const response = await fetch(`${http.defaults.baseURL}/chat/sessions/${sessionId}/messages/stream`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'text/event-stream',
+        ...(http.defaults.headers.common.Authorization ? { Authorization: String(http.defaults.headers.common.Authorization) } : {}),
+      },
+      body: JSON.stringify(payload),
+      signal: handlers.signal,
+    });
+    if (!response.ok || !response.body) {
+      throw new Error(`Streaming failed (${response.status})`);
+    }
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const frames = buffer.split('\n\n');
+      buffer = frames.pop() ?? '';
+      for (const frame of frames) {
+        const dataLine = frame
+          .split('\n')
+          .map((line) => line.trim())
+          .find((line) => line.startsWith('data:'));
+        if (!dataLine) continue;
+        const raw = dataLine.replace(/^data:\s?/, '');
+        try {
+          const event = JSON.parse(raw) as ChatStreamEvent;
+          handlers.onEvent(event);
+        } catch {
+          // Ignore malformed stream event payloads and keep stream alive.
+        }
+      }
+    }
+  },
   createReport: async (payload: ReportCreateRequest): Promise<GeneratedReport> => (await http.post('/reports', payload)).data,
   listReports: async (): Promise<GeneratedReport[]> => (await http.get('/reports')).data,
   getReport: async (reportId: string): Promise<GeneratedReport> => (await http.get(`/reports/${reportId}`)).data,
