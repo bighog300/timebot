@@ -31,6 +31,7 @@ describe('reports page', () => {
         source_refs: [],
         prompt: 'p',
         created_at: 'x',
+        insights: [{ type: 'risk', title: 'Risk flagged', description: 'Potential delay', severity: 'medium' }],
         sections: {
           executive_summary: 'Executive summary content',
           timeline_analysis: 'Timeline analysis content',
@@ -46,6 +47,9 @@ describe('reports page', () => {
     expect(screen.getByText('Timeline Analysis')).toBeInTheDocument();
     expect(screen.getByText('Relationship Analysis')).toBeInTheDocument();
     expect(screen.queryByText('markdown fallback')).not.toBeInTheDocument();
+    expect(screen.getByText('Key Insights')).toBeInTheDocument();
+    expect(screen.getByText(/type:/)).toBeInTheDocument();
+    expect(screen.getByText(/Risk flagged/)).toBeInTheDocument();
   });
 
   it('renders markdown fallback when sections are missing', () => {
@@ -57,6 +61,7 @@ describe('reports page', () => {
 
     expect(screen.getByText('md fallback')).toBeInTheDocument();
     expect(screen.queryByText('Executive Summary / Summary')).not.toBeInTheDocument();
+    expect(screen.getByText('No structured insights available.')).toBeInTheDocument();
   });
 
   it('shows markdown and pdf download actions', () => {

@@ -444,6 +444,7 @@ export interface GeneratedReport {
     relationships?: string | null;
     relationship_analysis?: string | null;
   } | null;
+  insights?: StructuredInsight[];
   source_refs: SourceRef[];
   created_at: string;
 }

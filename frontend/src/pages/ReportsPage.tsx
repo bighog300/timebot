@@ -42,11 +42,12 @@ export function ReportsPage() {
   const timelineContent = sections?.timeline_analysis || sections?.timeline;
   const relationshipContent = sections?.relationship_analysis || sections?.relationships;
   const hasStructuredSections = Boolean(summaryContent || timelineContent || relationshipContent);
+  const insights = detail.data?.insights ?? [];
   const saveSection = async (keys: string[], value: string) => {
     if (!detail.data || !detail.data.sections) return;
     const nextSections: Record<string, string> = {};
     Object.entries(detail.data.sections).forEach(([key, current]) => {
-      nextSections[key] = String(current ?? '');
+      if (typeof current === 'string') nextSections[key] = current;
     });
     keys.forEach((key) => { nextSections[key] = value; });
     await update.mutateAsync({ reportId: detail.data.id, payload: { sections: nextSections } });
@@ -66,5 +67,17 @@ export function ReportsPage() {
     {summaryContent && <ReportSection title='Executive Summary / Summary' content={summaryContent} canEdit={hasStructuredSections} isSaving={update.isPending} onSave={(value)=>saveSection(['executive_summary', 'summary'], value)} />}
     {timelineContent && <ReportSection title='Timeline Analysis' content={timelineContent} canEdit={hasStructuredSections} isSaving={update.isPending} onSave={(value)=>saveSection(['timeline_analysis', 'timeline'], value)} />}
     {relationshipContent && <ReportSection title='Relationship Analysis' content={relationshipContent} canEdit={hasStructuredSections} isSaving={update.isPending} onSave={(value)=>saveSection(['relationship_analysis', 'relationships'], value)} />}
-  </div> : <pre className='mt-3 max-w-full overflow-x-auto whitespace-pre-wrap break-words'>{detail.data.markdown_content}</pre>}</div>}</div></ResponsiveGrid></ResponsivePage>;
+  </div> : <pre className='mt-3 max-w-full overflow-x-auto whitespace-pre-wrap break-words'>{detail.data.markdown_content}</pre>}
+    <section className='mt-4 rounded border border-slate-700 bg-slate-900/50 p-3'>
+      <h3 className='text-sm font-semibold text-slate-100'>Key Insights</h3>
+      {insights.length === 0 ? <p className='mt-2 text-sm text-slate-300'>No structured insights available.</p> : <ul className='mt-2 space-y-2'>
+        {insights.map((insight, idx) => <li key={`${insight.title}-${idx}`} className='rounded border border-slate-700 p-2 text-sm text-slate-200'>
+          <p><span className='font-semibold'>type:</span> {insight.type}</p>
+          <p><span className='font-semibold'>title:</span> {insight.title}</p>
+          <p><span className='font-semibold'>description:</span> {insight.description}</p>
+          <p><span className='font-semibold'>severity:</span> {insight.severity}</p>
+        </li>)}
+      </ul>}
+    </section>
+    </div>}</div></ResponsiveGrid></ResponsivePage>;
 }
