@@ -4,8 +4,25 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { DocumentDetailPage } from '@/pages/DocumentDetailPage';
 
+type MockCluster = {
+  cluster_id: string;
+  document_ids: string[];
+};
+
+type MockDocumentClustersResult = {
+  isLoading: boolean;
+  isError: boolean;
+  isSuccess: boolean;
+  data: MockCluster[];
+};
+
 const mockUseDocumentRelationships = vi.fn();
-const mockUseDocumentClusters = vi.fn(() => ({ isLoading: false, isError: false, isSuccess: true, data: [] }));
+const mockUseDocumentClusters = vi.fn<() => MockDocumentClustersResult>(() => ({
+  isLoading: false,
+  isError: false,
+  isSuccess: true,
+  data: [],
+}));
 
 vi.mock('@/services/api', () => ({
   api: {
@@ -101,7 +118,7 @@ describe('DocumentDetailPage related documents panel', () => {
       isError: false,
       isSuccess: true,
       data: [{ cluster_id: 'cluster-1', document_ids: ['doc-1'] }],
-    } as any);
+    });
     renderPage();
     expect(await screen.findByText('Doc 6')).toBeInTheDocument();
     expect(screen.getByTestId('relationship-actions')).toBeInTheDocument();
