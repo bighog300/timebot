@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from pathlib import Path
+import copy
+import json
 import logging
+import time
 from time import perf_counter
 from typing import Any
-
 
 from sqlalchemy.orm import Session, joinedload, selectinload
 
@@ -88,6 +90,23 @@ def retrieve_chat_context(
     session_id: Any | None = None,
 ) -> dict[str, Any]:
 
+    cache_enabled = bool(getattr(settings, "CHAT_RETRIEVAL_CACHE_ENABLED", True))
+    cache_key = None
+    if cache_enabled:
+        cache_key = _build_cache_key(
+            user_id=user_id,
+            session_id=session_id,
+            query=query,
+            document_ids=document_ids,
+            include_timeline=include_timeline,
+            include_full_text=include_full_text,
+            max_documents=max_documents,
+        )
+        cached = _cache_get(cache_key)
+        if cached is not None:
+            return cached
+
+    started = perf_counter()
     query_terms = [t.strip().lower() for t in query.split() if t.strip()]
     base_q = (
         db.query(Document)
@@ -191,6 +210,13 @@ def retrieve_chat_context(
     documents = [item[2] for item in selected]
     source_refs = [ref for _, _, d in selected for ref in d.pop("_source_refs", [])]
 
+    result = {"documents": documents, "source_refs": source_refs}
+    if cache_enabled and cache_key is not None:
+        _cache_set(cache_key, result)
+
+    elapsed_ms = round((perf_counter() - started) * 1000, 2)
+    logger.info("chat_retrieval_complete", extra={"event": "chat_retrieval_complete", "documents": len(documents), "source_refs": len(source_refs), "elapsed_ms": elapsed_ms})
+    return result
 
 
 def format_chat_context(context: dict[str, Any], max_items_per_section: int = 25) -> str:
