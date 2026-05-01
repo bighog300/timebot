@@ -44,6 +44,24 @@ class InsightsResponse(BaseModel):
     recent_activity: List[dict]
 
 
+class StructuredInsight(BaseModel):
+    id: str
+    type: str
+    title: str
+    description: str
+    severity: str
+    related_document_ids: List[str]
+    related_event_ids: List[str] = []
+    evidence: List[str] = []
+    created_at: str
+
+
+class StructuredInsightsResponse(BaseModel):
+    generated_at: str
+    count: int
+    insights: List[StructuredInsight]
+
+
 class CategoryIntelligenceResponse(BaseModel):
     analytics: List[dict]
     merge_recommendations: List[dict]

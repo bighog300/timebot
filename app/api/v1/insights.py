@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
-from app.schemas.intelligence import InsightsResponse
+from app.schemas.intelligence import InsightsResponse, StructuredInsightsResponse
 from app.models.user import User
 from app.services.insights_service import insights_service
 
@@ -30,3 +30,8 @@ def insights_rollups(lookback_days: int = Query(30, ge=1, le=365), db: Session =
         "source_distribution": dashboard["source_distribution"],
         "relationship_summary": dashboard["relationship_summary"],
     }
+
+
+@router.get('/structured', response_model=StructuredInsightsResponse)
+def structured_insights(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    return insights_service.build_structured_insights(db=db, user_id=current_user.id)
