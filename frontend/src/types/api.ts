@@ -88,6 +88,7 @@ export interface QueueItem {
 }
 
 export interface TimelineEvent {
+  event_id?: string | null;
   title: string;
   description?: string | null;
   date?: string | null;
@@ -146,6 +147,7 @@ export interface StructuredInsight {
   title: string;
   description: string;
   severity: string;
+  related_event_ids?: string[] | null;
   related_documents?: StructuredInsightDocumentRef[] | null;
   evidence_refs?: StructuredInsightEvidenceRef[] | null;
 }
