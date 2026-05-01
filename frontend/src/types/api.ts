@@ -314,6 +314,8 @@ export type PromptTemplateType = 'chat' | 'retrieval' | 'report' | 'timeline_ext
 export interface PromptTemplate { id: string; prompt_type: PromptTemplateType; name: string; content: string; version: number; is_active: boolean; created_at: string; updated_at: string; }
 export interface PromptTemplateCreateRequest { prompt_type: PromptTemplateType; name: string; content: string; }
 export interface PromptTemplateUpdateRequest { name: string; content: string; }
+export interface PromptTemplateTestRequest { prompt_type: PromptTemplateType; prompt_content: string; sample_context: string; }
+export interface PromptTemplateTestResponse { preview: string; }
 
 
 export interface ChatbotSettings {

@@ -30,3 +30,13 @@ class PromptTemplateResponse(PromptTemplateBase):
 
     class Config:
         from_attributes = True
+
+
+class PromptTemplateTestRequest(BaseModel):
+    type: str = Field(pattern="^(chat|retrieval|report|timeline_extraction|relationship_detection)$")
+    content: str = Field(min_length=1)
+    sample_context: str = Field(min_length=1)
+
+
+class PromptTemplateTestResponse(BaseModel):
+    preview: str
