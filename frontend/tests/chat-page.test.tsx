@@ -30,13 +30,18 @@ afterEach(() => {
 
 describe('chat page streaming', () => {
   it('uses streaming endpoint and renders chunks/final sources', async () => {
+    let resolveStream!: () => void;
+    const streamDone = new Promise<void>((resolve) => {
+      resolveStream = resolve;
+    });
+
     mocks.streamMock.mockImplementationOnce(async (_sessionId, _payload, handlers) => {
       handlers.onEvent({ type: 'chunk', content: 'Hello ' });
       await Promise.resolve();
       handlers.onEvent({ type: 'chunk', content: 'world' });
       await Promise.resolve();
       handlers.onEvent({ type: 'final', content: 'Hello world', source_refs: [{ document_id: 'd1', document_title: 'Doc A', source_type: 'document', snippet: 'Snippet A' }] });
-      await new Promise((resolve) => setTimeout(resolve, 20));
+      await streamDone;
     });
 
     render(<MemoryRouter><ChatPage /></MemoryRouter>);
@@ -48,6 +53,8 @@ describe('chat page streaming', () => {
     expect(screen.getByText(/^(Citations|Sources) \(1\)$/)).toBeInTheDocument();
     expect(screen.getByText('Doc A')).toBeInTheDocument();
     expect(screen.getByText('Snippet A')).toBeInTheDocument();
+
+    resolveStream();
     await waitFor(() => expect(mocks.invalidateChat).toHaveBeenCalledWith('s1'));
     expect(mocks.streamMock).toHaveBeenCalledWith('s1', expect.objectContaining({ message: 'hi' }), expect.any(Object));
   });
