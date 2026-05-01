@@ -149,7 +149,7 @@ export function DocumentDetailPage() {
         <span className="rounded bg-slate-800 px-2 py-1 text-xs">{item.status}</span>
         <span className="text-xs text-slate-400">{(item.explanation_metadata?.confidence ?? item.confidence) != null ? `${Math.round((item.explanation_metadata?.confidence ?? item.confidence ?? 0) * 100)}% confidence` : 'n/a confidence'}</span>
       </div>
-      <p className="mt-2 text-slate-300">{item.related_document_snippet || 'No summary/snippet available.'}</p>
+      <p className="mt-2 break-words text-slate-300">{item.related_document_snippet || 'No summary/snippet available.'}</p>
       {item.explanation_metadata && (item.explanation_metadata.reason || (item.explanation_metadata.signals?.length ?? 0) > 0) && (
         <p className="mt-2 text-xs text-slate-400">
           <span className="font-medium text-slate-300">Why related:</span>{' '}
@@ -157,14 +157,14 @@ export function DocumentDetailPage() {
         </p>
       )}
       {item.explanation_metadata && (
-        <details className="mt-2 rounded border border-slate-800 p-2 text-xs text-slate-300">
+        <details className="mt-2 rounded border border-slate-800 p-2 text-xs text-slate-300" data-testid="why-related-details">
           <summary className="cursor-pointer list-none font-medium text-slate-200">
             <span className="inline-flex items-center gap-1">
               <span aria-hidden>▸</span>
               Why related details
             </span>
           </summary>
-          <div className="mt-2 space-y-2">
+            <div className="mt-2 space-y-2 break-words leading-relaxed">
             {item.explanation_metadata.reason && (
               <p>
                 <span className="font-medium text-slate-200">Reason:</span> {item.explanation_metadata.reason}
@@ -199,16 +199,16 @@ export function DocumentDetailPage() {
         </div>
       )}
       {item.status === 'pending' && item.relationship_type !== 'thread' && item.relationship_type !== 'attachment' && (
-        <div className="mt-3 flex flex-wrap gap-2">
+        <div className="mt-3 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap" data-testid="relationship-actions">
           <Button
-            className="bg-emerald-700 hover:bg-emerald-600"
+            className="min-h-10 bg-emerald-700 hover:bg-emerald-600"
             disabled={confirmRelationship.isPending || dismissRelationship.isPending}
             onClick={() => confirmRelationship.mutate(item.id, { onError: () => pushToast('Failed to confirm relationship') })}
           >
             Confirm
           </Button>
           <Button
-            className="bg-slate-700 hover:bg-slate-600"
+            className="min-h-10 bg-slate-700 hover:bg-slate-600"
             disabled={confirmRelationship.isPending || dismissRelationship.isPending}
             onClick={() => dismissRelationship.mutate(item.id, { onError: () => pushToast('Failed to reject relationship') })}
           >
@@ -337,12 +337,12 @@ export function DocumentDetailPage() {
         {relationshipsQuery.isSuccess && (relationshipsQuery.data?.length ?? 0) === 0 && <EmptyState label="No related documents yet." />}
         {relationshipsQuery.isSuccess && (relationshipsQuery.data?.length ?? 0) > 0 && (
           <div className="space-y-4 text-sm">
-            <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Relationship filters">
-              <Button className={relationshipFilter === 'all' ? '' : 'bg-slate-700 hover:bg-slate-600'} onClick={() => setRelationshipFilter('all')}>All</Button>
-              <Button className={relationshipFilter === 'structural' ? '' : 'bg-slate-700 hover:bg-slate-600'} onClick={() => setRelationshipFilter('structural')}>Structural</Button>
-              <Button className={relationshipFilter === 'ai_detected' ? '' : 'bg-slate-700 hover:bg-slate-600'} onClick={() => setRelationshipFilter('ai_detected')}>AI-detected</Button>
-              <Button className={relationshipFilter === 'confirmed' ? '' : 'bg-slate-700 hover:bg-slate-600'} onClick={() => setRelationshipFilter('confirmed')}>Confirmed</Button>
-              <Button className={relationshipFilter === 'pending' ? '' : 'bg-slate-700 hover:bg-slate-600'} onClick={() => setRelationshipFilter('pending')}>Pending</Button>
+            <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center" role="group" aria-label="Relationship filters" data-testid="relationship-filters">
+              <Button className={`w-full ${relationshipFilter === 'all' ? '' : 'bg-slate-700 hover:bg-slate-600'}`} onClick={() => setRelationshipFilter('all')}>All</Button>
+              <Button className={`w-full ${relationshipFilter === 'structural' ? '' : 'bg-slate-700 hover:bg-slate-600'}`} onClick={() => setRelationshipFilter('structural')}>Structural</Button>
+              <Button className={`w-full ${relationshipFilter === 'ai_detected' ? '' : 'bg-slate-700 hover:bg-slate-600'}`} onClick={() => setRelationshipFilter('ai_detected')}>AI-detected</Button>
+              <Button className={`w-full ${relationshipFilter === 'confirmed' ? '' : 'bg-slate-700 hover:bg-slate-600'}`} onClick={() => setRelationshipFilter('confirmed')}>Confirmed</Button>
+              <Button className={`col-span-2 w-full sm:col-span-1 ${relationshipFilter === 'pending' ? '' : 'bg-slate-700 hover:bg-slate-600'}`} onClick={() => setRelationshipFilter('pending')}>Pending</Button>
             </div>
             <div>
               <h4 className="mb-2 font-medium">Email Thread</h4>

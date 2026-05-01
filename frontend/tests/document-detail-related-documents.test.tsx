@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { DocumentDetailPage } from '@/pages/DocumentDetailPage';
 
 const mockUseDocumentRelationships = vi.fn();
+const mockUseDocumentClusters = vi.fn(() => ({ isLoading: false, isError: false, isSuccess: true, data: [] }));
 
 vi.mock('@/services/api', () => ({
   api: {
@@ -23,7 +24,7 @@ vi.mock('@/hooks/useApi', () => ({
   useApproveDocumentCategory: () => ({ mutate: vi.fn() }),
   useOverrideDocumentCategory: () => ({ mutate: vi.fn() }),
   useDocumentRelationships: () => mockUseDocumentRelationships(),
-  useDocumentClusters: () => ({ isLoading: false, isError: false, isSuccess: true, data: [] }),
+  useDocumentClusters: () => mockUseDocumentClusters(),
   useConfirmDocumentRelationship: () => ({ isPending: false, mutate: vi.fn() }),
   useDismissDocumentRelationship: () => ({ isPending: false, mutate: vi.fn() }),
 }));
@@ -78,7 +79,35 @@ describe('DocumentDetailPage related documents panel', () => {
     expect(await screen.findByText('Doc 2')).toBeInTheDocument();
     expect(screen.getByText('Snippet 2')).toBeInTheDocument();
     expect(screen.getByText(/Why related:/)).toBeInTheDocument();
+    expect(screen.getByTestId('relationship-filters')).toBeInTheDocument();
+    expect(screen.getByText('Why related details')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Doc 2' })).toHaveAttribute('href', '/documents/doc-2');
+  });
+
+  it('renders pending confirm/reject actions and cluster link when available', async () => {
+    mockUseDocumentRelationships.mockReturnValue({
+      isLoading: false, isError: false, isSuccess: true,
+      data: [
+        {
+          id: 'rel-6', status: 'pending', relationship_type: 'related', confidence: 0.72,
+          related_document_id: 'doc-6', related_document_title: 'Doc 6', related_document_name: 'Doc 6',
+          related_document_snippet: 'Snippet 6', direction: 'source', created_at: new Date().toISOString(), updated_at: null,
+          explanation_metadata: { reason: 'Close timeline overlap.', signals: ['timeline_proximity'] },
+        },
+      ],
+    });
+    mockUseDocumentClusters.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      isSuccess: true,
+      data: [{ cluster_id: 'cluster-1', document_ids: ['doc-1'] }],
+    } as any);
+    renderPage();
+    expect(await screen.findByText('Doc 6')).toBeInTheDocument();
+    expect(screen.getByTestId('relationship-actions')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Confirm' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Reject' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'View related cluster' })).toHaveAttribute('href', '/documents?cluster=cluster-1');
   });
 
   it('does not crash when explanation metadata is missing', async () => {
