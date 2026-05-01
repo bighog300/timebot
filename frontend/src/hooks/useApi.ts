@@ -39,6 +39,7 @@ export const keys = {
   documentActionItems: (documentId: string) => ['document-action-items', documentId] as const,
   documentAuditHistory: (documentId: string) => ['document-audit-history', documentId] as const,
   documentRelationships: (documentId: string) => ['document-relationships', documentId] as const,
+  documentClusters: ['document-clusters'] as const,
   categories: ['categories'] as const,
   connections: ['connections'] as const,
   adminUsers: (page:number,limit:number)=>['admin-users',page,limit] as const,
@@ -70,6 +71,15 @@ export function useDocuments() {
       const hasInFlight = (docs ?? []).some((doc) => doc.processing_status === 'uploading' || doc.processing_status === 'processing');
       return hasInFlight ? 3000 : false;
     },
+  });
+}
+
+export function useDocumentClusters() {
+  const authReady = useAuthReady();
+  return useQuery({
+    queryKey: keys.documentClusters,
+    queryFn: api.listDocumentClusters,
+    enabled: authReady,
   });
 }
 

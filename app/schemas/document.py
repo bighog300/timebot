@@ -69,6 +69,14 @@ class DocumentSearchResponse(BaseModel):
     query: str
 
 
+class DocumentClusterResponse(BaseModel):
+    cluster_id: str
+    document_ids: List[str]
+    document_titles: List[str]
+    relationship_count: int
+    dominant_signals: List[str] = []
+
+
 class DocumentReviewRequest(BaseModel):
     action: str
     override_summary: Optional[str] = None

@@ -2,7 +2,7 @@ import axios from 'axios';
 import { type ChangeEvent, type DragEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '@/auth/AuthContext';
-import { useConnections, useDocuments, useGmailImport, useGmailPreview, useUploadDocument } from '@/hooks/useApi';
+import { useConnections, useDocumentClusters, useDocuments, useGmailImport, useGmailPreview, useUploadDocument } from '@/hooks/useApi';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui/States';
@@ -14,6 +14,7 @@ export function DocumentsPage() {
   const location = useLocation();
   const onboardingAction = new URLSearchParams(location.search).get('onboardingAction');
   const { data, isLoading, isError } = useDocuments();
+  const clustersQuery = useDocumentClusters();
   const { token, loading: authLoading } = useAuth();
   const upload = useUploadDocument();
   const pushToast = useUIStore((s) => s.pushToast);
@@ -213,6 +214,28 @@ export function DocumentsPage() {
           </Card>
         ))}
       </div>
+
+      {Boolean(data?.length) && (
+        <Card>
+          <div className="space-y-2">
+            <h2 className="text-base font-semibold">Document clusters</h2>
+            {clustersQuery.isSuccess && (clustersQuery.data?.length ?? 0) === 0 && <EmptyState label="No clusters yet." />}
+            {clustersQuery.isSuccess && (clustersQuery.data?.length ?? 0) > 0 && (
+              <div className="space-y-2">
+                {clustersQuery.data?.map((cluster) => (
+                  <div key={cluster.cluster_id} className="rounded border border-slate-700 p-2">
+                    <div className="text-sm font-medium">Cluster ({cluster.document_ids.length} documents)</div>
+                    <div className="text-xs text-slate-300">{cluster.document_titles.join(', ')}</div>
+                    {cluster.dominant_signals.length > 0 && (
+                      <div className="text-xs text-slate-400">Signals: {cluster.dominant_signals.join(', ')}</div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </Card>
+      )}
 
       {Boolean(data?.length) && (
         showFirstDocumentSuccessPanel ? (

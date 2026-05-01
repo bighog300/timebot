@@ -14,6 +14,7 @@ vi.mock('@/auth/AuthContext', () => ({ useAuth: () => ({ token: 'token-abc', loa
 vi.mock('@/store/uiStore', () => ({ useUIStore: (selector: (s: { pushToast: typeof pushToast }) => unknown) => selector({ pushToast }) }));
 vi.mock('@/hooks/useApi', () => ({
   useDocuments: () => ({ data: documentsData, isLoading: false, isError: false }),
+  useDocumentClusters: () => ({ data: [], isSuccess: true }),
   useUploadDocument: () => ({ mutateAsync, isPending: false }),
   useConnections: () => ({ data: [{ type: 'gmail', is_authenticated: true, provider_is_configured: true }] }),
   useGmailPreview: () => ({ mutateAsync: gmailPreviewMutateAsync, isPending: false }),
