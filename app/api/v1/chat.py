@@ -12,7 +12,7 @@ from app.api.deps import get_current_user, get_db
 from app.api.v1.admin import _get_or_create_chatbot_settings
 from app.models.chat import ChatMessage, ChatSession
 from app.models.user import User
-from app.services.chat_retrieval import retrieve_chat_context
+from app.services.chat_retrieval import format_chat_context, retrieve_chat_context
 from app.services.openai_client import APIError, openai_client_service
 from app.config import settings
 from app.services.prompt_templates import get_active_prompt_content
@@ -78,7 +78,7 @@ def _build_chat_payload(db: Session, user: User, payload: MessageRequest):
     retrieval_prompt_content = get_active_prompt_content(db, "retrieval", bot_settings.retrieval_prompt)
     prompt = (
         f"{retrieval_prompt_content}\n\n"
-        f"Context:\n{context}\n\n"
+        f"Context:\n{format_chat_context(context)}\n\n"
         f"Question:\n{payload.message}\n\n"
         f"{bot_settings.citation_prompt}\n"
         "Only answer using provided context. If uncertain, explicitly say evidence is insufficient."

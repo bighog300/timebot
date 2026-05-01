@@ -579,3 +579,84 @@ def test_chat_stream_success_emits_structured_log(client, monkeypatch, db, caplo
     rec = records[-1]
     assert rec.endpoint_type == "streaming"
     assert rec.success is True
+
+
+def test_format_chat_context_includes_labeled_sections_and_metadata(db, test_user):
+    from app.models.relationships import DocumentRelationship
+    from app.services.chat_retrieval import format_chat_context
+
+    source = _mk_doc(
+        db,
+        test_user.id,
+        "source.txt",
+        "Source summary for alpha",
+        {"timeline_events": [{"title": "Kickoff", "date": "2025-01-01", "description": "Project kickoff"}]},
+    )
+    target = _mk_doc(db, test_user.id, "target.txt", "Target summary")
+    source.extracted_metadata = {
+        "thread_outcome": {"status": "approved", "reason": "manager confirmed", "confidence": 0.92}
+    }
+    rel = DocumentRelationship(
+        source_doc_id=source.id,
+        target_doc_id=target.id,
+        relationship_type="related_to",
+        relationship_metadata={"explanation": {"reason": "same customer request", "signals": ["thread"]}},
+    )
+    db.add(rel)
+    db.commit()
+
+    ctx = retrieve_chat_context(db, "kickoff source related_to", test_user.id, None, True, False, 5)
+    formatted = format_chat_context(ctx)
+
+    assert "Document Summaries" in formatted
+    assert "Timeline Events" in formatted
+    assert "Relationships" in formatted
+    assert "Email Thread Outcomes" in formatted
+    assert "Full Text Excerpts" in formatted
+    assert "source.txt" in formatted
+    assert "[2025-01-01]" in formatted
+    assert "explanation:" in formatted
+    assert "approved" in formatted
+    assert ctx["source_refs"]
+
+
+def test_streaming_and_non_streaming_use_same_formatted_context(client, monkeypatch, db):
+    from app.models.user import User
+
+    user = db.query(User).first()
+    _mk_doc(db, user.id, "alpha.txt", "Alpha summary with milestone")
+
+    captured: dict[str, str] = {}
+
+    class DummyChunk:
+        def __init__(self, text):
+            self.choices = [type("Choice", (), {"delta": type("Delta", (), {"content": text})()})()]
+
+    class DummyComp:
+        def create(self, **kwargs):
+            user_prompt = kwargs["messages"][-1]["content"]
+            if kwargs.get("stream"):
+                captured["stream"] = user_prompt
+                return [DummyChunk("stream"), DummyChunk("ed")]
+            captured["non_stream"] = user_prompt
+            return type("DummyResp", (), {"choices": [type("DummyChoice", (), {"message": type("M", (), {"content": "Grounded response"})()})()]})()
+
+    class DummyChat:
+        completions = DummyComp()
+
+    monkeypatch.setattr("app.config.settings.OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr("app.api.v1.chat.openai_client_service._client", type("C", (), {"chat": DummyChat()})())
+
+    s = client.post("/api/v1/chat/sessions", json={"title": "ctx-shared"}).json()
+    non_stream = client.post(f"/api/v1/chat/sessions/{s['id']}/messages", json={"message": "alpha"})
+    assert non_stream.status_code == 200
+
+    with client.stream("POST", f"/api/v1/chat/sessions/{s['id']}/messages/stream", json={"message": "alpha"}) as response:
+        assert response.status_code == 200
+        _ = "".join(list(response.iter_text()))
+
+    assert "Context:\n" in captured["non_stream"]
+    assert "Context:\n" in captured["stream"]
+    non_stream_context = captured["non_stream"].split("Question:\n", 1)[0]
+    stream_context = captured["stream"].split("Question:\n", 1)[0]
+    assert non_stream_context == stream_context
