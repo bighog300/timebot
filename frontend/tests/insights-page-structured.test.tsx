@@ -116,4 +116,70 @@ describe('insights structured panel', () => {
     expect(screen.getByText('Missing evidence fields')).toBeInTheDocument();
     expect(screen.getByText('Evidence reference')).toBeInTheDocument();
   });
+
+  it('renders document links from related_document_ids when available', () => {
+    mockUseInsightsOverview.mockReturnValue({ data: { action_item_summary: {}, category_distribution: [], recent_activity: [] }, isLoading: false, isError: false });
+    mockUseStructuredInsights.mockReturnValue({
+      data: [
+        {
+          type: 'risk',
+          title: 'Document id references',
+          description: 'Links should be generated from ids.',
+          severity: 'medium',
+          related_document_ids: ['doc-11', 'doc-12'],
+        },
+      ],
+      isLoading: false,
+      isError: false,
+    });
+
+    render(<InsightsPage />);
+
+    expect(screen.getByRole('link', { name: 'doc-11' })).toHaveAttribute('href', '/documents/doc-11');
+    expect(screen.getByRole('link', { name: 'doc-12' })).toHaveAttribute('href', '/documents/doc-12');
+  });
+
+  it('renders timeline navigation from related_event_ids when available', () => {
+    mockUseInsightsOverview.mockReturnValue({ data: { action_item_summary: {}, category_distribution: [], recent_activity: [] }, isLoading: false, isError: false });
+    mockUseStructuredInsights.mockReturnValue({
+      data: [
+        {
+          type: 'milestone',
+          title: 'Timeline references',
+          description: 'Timeline links should be rendered from event ids.',
+          severity: 'low',
+          related_event_ids: ['event-1', 'event 2'],
+        },
+      ],
+      isLoading: false,
+      isError: false,
+    });
+
+    render(<InsightsPage />);
+
+    expect(screen.getByRole('link', { name: 'View event event-1' })).toHaveAttribute('href', '/timeline?eventId=event-1');
+    expect(screen.getByRole('link', { name: 'View event event 2' })).toHaveAttribute('href', '/timeline?eventId=event%202');
+  });
+
+  it('does not crash when related ids are missing', () => {
+    mockUseInsightsOverview.mockReturnValue({ data: { action_item_summary: {}, category_distribution: [], recent_activity: [] }, isLoading: false, isError: false });
+    mockUseStructuredInsights.mockReturnValue({
+      data: [
+        {
+          type: 'change',
+          title: 'No related ids',
+          description: 'Renders without related id arrays.',
+          severity: 'low',
+        },
+      ],
+      isLoading: false,
+      isError: false,
+    });
+
+    render(<InsightsPage />);
+
+    expect(screen.getByText('No related ids')).toBeInTheDocument();
+    expect(screen.queryByText('Document links')).not.toBeInTheDocument();
+    expect(screen.queryByText('Timeline')).not.toBeInTheDocument();
+  });
 });

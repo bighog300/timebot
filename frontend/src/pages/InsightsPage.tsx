@@ -110,6 +110,34 @@ export function InsightsPage() {
                     </ul>
                   </div>
                 )}
+                {!!insight.related_document_ids?.length && (
+                  <div>
+                    <p className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-500">Document links</p>
+                    <ul className="space-y-1">
+                      {insight.related_document_ids.map((documentId) => (
+                        <li key={documentId}>
+                          <a className="text-blue-600 underline" href={`/documents/${documentId}`}>
+                            {documentId}
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {!!insight.related_event_ids?.length && (
+                  <div>
+                    <p className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-500">Timeline</p>
+                    <ul className="space-y-1">
+                      {insight.related_event_ids.map((eventId) => (
+                        <li key={eventId}>
+                          <a className="text-blue-600 underline" href={`/timeline?eventId=${encodeURIComponent(eventId)}`}>
+                            View event {eventId}
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
                 {!!insight.evidence_refs?.length && (
                   <div>
                     <p className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-500">Evidence</p>
