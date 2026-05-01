@@ -3,6 +3,7 @@ import logging
 from celery.exceptions import MaxRetriesExceededError
 
 from app.config import settings
+from app.services.error_sanitizer import sanitize_processing_error
 from app.workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
@@ -69,24 +70,25 @@ def process_document_task(self, document_id: str):
                 db,
                 queue_entry,
                 status="queued",
-                error_message=str(exc),
+                error_message=sanitize_processing_error(str(exc)),
             )
-            _notify(document_id, "queued", error=str(exc))
+            _notify(document_id, "queued", error=sanitize_processing_error(str(exc)))
             raise self.retry(
                 exc=exc,
                 countdown=settings.CELERY_TASK_DEFAULT_RETRY_DELAY * (self.request.retries + 1),
             )
         except MaxRetriesExceededError:
-            _mark_failed(db, document_id, str(exc))
+            safe_error = sanitize_processing_error(str(exc))
+            _mark_failed(db, document_id, safe_error)
             _update_queue_entry(
                 db,
                 queue_entry,
                 status="failed",
                 completed_at=True,
-                error_message=str(exc),
+                error_message=safe_error,
             )
-            _notify(document_id, "failed", progress=100, error=str(exc))
-            return {"status": "failed", "error": str(exc)}
+            _notify(document_id, "failed", progress=100, error=safe_error)
+            return {"status": "failed", "error": safe_error}
     finally:
         db.close()
 
