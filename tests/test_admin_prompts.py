@@ -83,3 +83,68 @@ def test_chat_uses_fallback_prompt_when_none_configured(client, monkeypatch, db)
     r = client.post(f"/api/v1/chat/sessions/{s['id']}/messages", json={"message": "alpha"})
     assert r.status_code == 200
     assert captured["system_prompt"].startswith("You are Timebot")
+
+
+def test_admin_can_test_prompt_template(client, test_user, db, monkeypatch):
+    test_user.role = "admin"
+    db.commit()
+
+    class DummyChoice:
+        message = type("M", (), {"content": "preview output"})
+
+    class DummyResp:
+        choices = [DummyChoice()]
+
+    class DummyComp:
+        def create(self, **kwargs):
+            return DummyResp()
+
+    class DummyChat:
+        completions = DummyComp()
+
+    monkeypatch.setattr("app.config.settings.OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr("app.api.v1.admin.openai_client_service._client", type("C", (), {"chat": DummyChat()})())
+
+    r = client.post("/api/v1/admin/prompts/test", json={"type": "chat", "content": "You are helper", "sample_context": "Question: hello"})
+    assert r.status_code == 200
+    assert r.json()["preview"] == "preview output"
+
+
+def test_non_admin_cannot_test_prompt_template(client, test_user, db):
+    test_user.role = "viewer"
+    db.commit()
+    r = client.post("/api/v1/admin/prompts/test", json={"type": "chat", "content": "x", "sample_context": "y"})
+    assert r.status_code == 403
+
+
+def test_prompt_test_does_not_persist_or_activate(client, test_user, db, monkeypatch):
+    test_user.role = "admin"
+    existing = PromptTemplate(type="chat", name="seed", content="seed", version=1, is_active=True)
+    db.add(existing)
+    db.commit()
+
+    class DummyChoice:
+        message = type("M", (), {"content": "preview output"})
+
+    class DummyResp:
+        choices = [DummyChoice()]
+
+    class DummyComp:
+        def create(self, **kwargs):
+            return DummyResp()
+
+    class DummyChat:
+        completions = DummyComp()
+
+    monkeypatch.setattr("app.config.settings.OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr("app.api.v1.admin.openai_client_service._client", type("C", (), {"chat": DummyChat()})())
+
+    before_count = db.query(PromptTemplate).count()
+    r = client.post("/api/v1/admin/prompts/test", json={"type": "chat", "content": "new content", "sample_context": "ctx"})
+    assert r.status_code == 200
+
+    after_count = db.query(PromptTemplate).count()
+    db.refresh(existing)
+    assert before_count == after_count
+    assert existing.is_active is True
+    assert existing.content == "seed"

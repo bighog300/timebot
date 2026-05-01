@@ -19,7 +19,14 @@ from app.schemas.admin import (
     AdminUserResponse,
     AdminUsersPageResponse,
 )
-from app.schemas.prompt_template import PromptTemplateCreate, PromptTemplateResponse, PromptTemplateUpdate
+from app.schemas.prompt_template import (
+    PromptTemplateCreate,
+    PromptTemplateResponse,
+    PromptTemplateTestRequest,
+    PromptTemplateTestResponse,
+    PromptTemplateUpdate,
+)
+from app.services.openai_client import APIError, openai_client_service
 from app.services.prompt_templates import activate_prompt_template
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -158,6 +165,42 @@ def activate_prompt(prompt_id: str, _: str = Depends(require_admin), db: Session
     db.commit()
     db.refresh(prompt)
     return prompt
+
+
+@router.post("/prompts/test", response_model=PromptTemplateTestResponse)
+def test_prompt_template(payload: PromptTemplateTestRequest, _: str = Depends(require_admin)):
+    if not openai_client_service.enabled:
+        raise HTTPException(status_code=503, detail="AI service unavailable")
+
+    system_prompt = (
+        "You are a prompt sandbox for Timebot admins. "
+        "Use only the provided sample context. "
+        "Do not invent or fetch external information. "
+        "If information is missing in sample context, explicitly say so."
+    )
+    user_prompt = (
+        f"Prompt type: {payload.type}\n\n"
+        "Candidate prompt template:\n"
+        f"{payload.content}\n\n"
+        "Sample context/query/document text:\n"
+        f"{payload.sample_context}\n\n"
+        "Return the assistant response preview only."
+    )
+
+    try:
+        response = openai_client_service.client.chat.completions.create(
+            model="gpt-4.1-mini",
+            temperature=0.2,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+        )
+    except APIError as exc:
+        raise HTTPException(status_code=502, detail=f"AI request failed: {exc}") from exc
+
+    preview = (response.choices[0].message.content or "").strip() if response.choices else ""
+    return PromptTemplateTestResponse(preview=preview)
 
 
 DEFAULT_CHATBOT_SETTINGS = {

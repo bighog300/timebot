@@ -37,6 +37,8 @@ import type {
   PromptTemplate,
   PromptTemplateCreateRequest,
   PromptTemplateUpdateRequest,
+  PromptTemplateTestRequest,
+  PromptTemplateTestResponse,
 } from '@/types/api';
 
 
@@ -142,6 +144,7 @@ export const api = {
   createPromptTemplate: async (payload: PromptTemplateCreateRequest): Promise<PromptTemplate> => (await http.post('/admin/prompts', payload)).data,
   updatePromptTemplate: async (promptId: string, payload: PromptTemplateUpdateRequest): Promise<PromptTemplate> => (await http.put(`/admin/prompts/${promptId}`, payload)).data,
   activatePromptTemplate: async (promptId: string): Promise<PromptTemplate> => (await http.post(`/admin/prompts/${promptId}/activate`)).data,
+  testPromptTemplate: async (payload: PromptTemplateTestRequest): Promise<PromptTemplateTestResponse> => (await http.post(`/admin/prompts/test`, { type: payload.prompt_type, content: payload.prompt_content, sample_context: payload.sample_context })).data,
   listDocuments: async (includeArchived = false): Promise<Document[]> =>
     (await http.get('/documents/', { params: { include_archived: includeArchived } })).data,
   getDocument: async (id: string): Promise<Document> => (await http.get(`/documents/${id}`)).data,

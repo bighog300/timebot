@@ -5,6 +5,7 @@ import { AdminPromptTemplatesPage } from '@/pages/AdminPromptTemplatesPage';
 const mutateCreate = vi.fn(async () => ({}));
 const mutateUpdate = vi.fn(async () => ({}));
 const mutateActivate = vi.fn(async () => ({}));
+const mutateTest = vi.fn(async () => ({ preview: 'Preview output' }));
 
 vi.mock('@/hooks/useApi', () => ({
   useAdminPromptTemplates: () => ({ data: [
@@ -14,10 +15,11 @@ vi.mock('@/hooks/useApi', () => ({
   useCreatePromptTemplate: () => ({ mutateAsync: mutateCreate }),
   useUpdatePromptTemplate: () => ({ mutateAsync: mutateUpdate }),
   useActivatePromptTemplate: () => ({ mutateAsync: mutateActivate }),
+  useTestPromptTemplate: () => ({ mutateAsync: mutateTest, isPending: false }),
 }));
 vi.mock('@/store/uiStore', () => ({ useUIStore: () => ({ pushToast: vi.fn() }) }));
 
-afterEach(() => { cleanup(); mutateCreate.mockClear(); mutateUpdate.mockClear(); mutateActivate.mockClear(); });
+afterEach(() => { cleanup(); mutateCreate.mockClear(); mutateUpdate.mockClear(); mutateActivate.mockClear(); mutateTest.mockClear(); });
 
 describe('admin prompt templates', () => {
   it('lists templates and active badge', () => {
@@ -48,4 +50,37 @@ describe('admin prompt templates', () => {
     fireEvent.click(screen.getAllByText('Activate')[0]);
     expect(mutateActivate).toHaveBeenCalledWith('p1');
   });
+
+  it('sandbox form renders', () => {
+    render(<AdminPromptTemplatesPage />);
+    expect(screen.getByText('Test prompt')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Prompt content for preview')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Sample context/query/document text')).toBeInTheDocument();
+  });
+
+  it('running preview calls test endpoint hook', async () => {
+    render(<AdminPromptTemplatesPage />);
+    fireEvent.change(screen.getByPlaceholderText('Prompt content for preview'), { target: { value: 'Prompt body' } });
+    fireEvent.change(screen.getByPlaceholderText('Sample context/query/document text'), { target: { value: 'Sample question' } });
+    fireEvent.click(screen.getByText('Run preview'));
+    expect(mutateTest).toHaveBeenCalled();
+  });
+
+  it('preview response renders', async () => {
+    render(<AdminPromptTemplatesPage />);
+    fireEvent.change(screen.getByPlaceholderText('Prompt content for preview'), { target: { value: 'Prompt body' } });
+    fireEvent.change(screen.getByPlaceholderText('Sample context/query/document text'), { target: { value: 'Sample question' } });
+    fireEvent.click(screen.getByText('Run preview'));
+    expect(await screen.findByText('Preview output')).toBeInTheDocument();
+  });
+
+  it('error state renders', async () => {
+    mutateTest.mockImplementationOnce(async () => { throw new Error('preview failed'); });
+    render(<AdminPromptTemplatesPage />);
+    fireEvent.change(screen.getByPlaceholderText('Prompt content for preview'), { target: { value: 'Prompt body' } });
+    fireEvent.change(screen.getByPlaceholderText('Sample context/query/document text'), { target: { value: 'Sample question' } });
+    fireEvent.click(screen.getByText('Run preview'));
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+  });
+
 });

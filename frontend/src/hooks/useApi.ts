@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { useAuth } from '@/auth/AuthContext';
 import { api } from '@/services/api';
-import type { ActionItem, PromptTemplateCreateRequest, PromptTemplateUpdateRequest, RelationshipReviewItem, ReviewItem } from '@/types/api';
+import type { ActionItem, PromptTemplateCreateRequest, PromptTemplateTestRequest, PromptTemplateUpdateRequest, RelationshipReviewItem, ReviewItem } from '@/types/api';
 import type { DocumentRelationshipListItem } from '@/types/api';
 
 type PaginatedData<T> = { items: T[]; total_count: number; limit: number; offset: number };
@@ -529,4 +529,9 @@ export function useUpdatePromptTemplate() {
 export function useActivatePromptTemplate() {
   const qc = useQueryClient();
   return useMutation({ mutationFn: (promptId: string) => api.activatePromptTemplate(promptId), onSuccess: () => qc.invalidateQueries({ queryKey: keys.adminPrompts }) });
+}
+
+
+export function useTestPromptTemplate() {
+  return useMutation({ mutationFn: (payload: PromptTemplateTestRequest) => api.testPromptTemplate(payload) });
 }

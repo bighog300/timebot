@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useActivatePromptTemplate, useAdminPromptTemplates, useCreatePromptTemplate, useUpdatePromptTemplate } from '@/hooks/useApi';
+import { useActivatePromptTemplate, useAdminPromptTemplates, useCreatePromptTemplate, useTestPromptTemplate, useUpdatePromptTemplate } from '@/hooks/useApi';
 import { getErrorDetail } from '@/services/api';
 import { useUIStore } from '@/store/uiStore';
 import type { PromptTemplateType } from '@/types/api';
@@ -11,11 +11,15 @@ export function AdminPromptTemplatesPage() {
   const createPrompt = useCreatePromptTemplate();
   const updatePrompt = useUpdatePromptTemplate();
   const activatePrompt = useActivatePromptTemplate();
+  const testPrompt = useTestPromptTemplate();
   const { pushToast } = useUIStore();
   const [createForm, setCreateForm] = useState({ prompt_type: 'chat' as PromptTemplateType, name: '', content: '' });
   const [selectedId, setSelectedId] = useState<string>('');
   const selectedPrompt = useMemo(() => prompts.data?.find((item) => item.id === selectedId) ?? null, [prompts.data, selectedId]);
   const [editForm, setEditForm] = useState({ name: '', content: '' });
+  const [testForm, setTestForm] = useState({ prompt_type: 'chat' as PromptTemplateType, prompt_content: '', sample_context: '' });
+  const [preview, setPreview] = useState('');
+  const [previewError, setPreviewError] = useState('');
 
   if (prompts.isLoading) return <div>Loading prompt templates...</div>;
   if (prompts.isError) return <div>Failed to load prompt templates</div>;
@@ -37,6 +41,28 @@ export function AdminPromptTemplatesPage() {
       <input placeholder='Template name' value={createForm.name} onChange={(e) => setCreateForm((v) => ({ ...v, name: e.target.value }))} className='w-full rounded border border-slate-700 bg-slate-900 p-2 text-sm' />
       <textarea placeholder='Prompt content' value={createForm.content} onChange={(e) => setCreateForm((v) => ({ ...v, content: e.target.value }))} className='h-40 w-full rounded border border-slate-700 bg-slate-900 p-2 text-sm' />
       <button className='rounded bg-emerald-700 px-3 py-2 text-sm' onClick={async () => { try { await createPrompt.mutateAsync(createForm); pushToast('Prompt template created'); setCreateForm({ prompt_type: 'chat', name: '', content: '' }); } catch (e) { pushToast(getErrorDetail(e), 'error'); } }}>Create template</button>
+    </div>
+
+
+    <div className='rounded border border-slate-800 p-3 space-y-2'>
+      <h2 className='font-semibold'>Test prompt</h2>
+      <select value={testForm.prompt_type} onChange={(e) => setTestForm((v) => ({ ...v, prompt_type: e.target.value as PromptTemplateType }))} className='rounded border border-slate-700 bg-slate-900 p-2 text-sm'>
+        {promptTypes.map((type) => <option key={type} value={type}>{type}</option>)}
+      </select>
+      <textarea placeholder='Prompt content for preview' value={testForm.prompt_content} onChange={(e) => setTestForm((v) => ({ ...v, prompt_content: e.target.value }))} className='h-32 w-full rounded border border-slate-700 bg-slate-900 p-2 text-sm' />
+      <textarea placeholder='Sample context/query/document text' value={testForm.sample_context} onChange={(e) => setTestForm((v) => ({ ...v, sample_context: e.target.value }))} className='h-32 w-full rounded border border-slate-700 bg-slate-900 p-2 text-sm' />
+      <button className='rounded bg-indigo-700 px-3 py-2 text-sm' onClick={async () => {
+        setPreview(''); setPreviewError('');
+        try {
+          const resp = await testPrompt.mutateAsync(testForm);
+          setPreview(resp.preview);
+        } catch (e) {
+          setPreviewError(getErrorDetail(e));
+        }
+      }}>Run preview</button>
+      {testPrompt.isPending && <div className='text-sm text-slate-300'>Generating preview...</div>}
+      {previewError && <div className='text-sm text-rose-400' role='alert'>{previewError}</div>}
+      {preview && <pre className='whitespace-pre-wrap rounded border border-slate-700 bg-slate-950 p-2 text-sm'>{preview}</pre>}
     </div>
 
     {selectedPrompt && <div className='rounded border border-slate-800 p-3 space-y-2'>
