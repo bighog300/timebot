@@ -19,6 +19,7 @@ class DocumentIntelligenceService:
     _TIMELINE_STOPWORDS = {
         "a", "an", "and", "are", "as", "at", "be", "by", "for", "from", "in", "is", "it", "of", "on", "or", "that", "the", "to", "was", "were", "with",
     }
+    _OUTCOME_STATUSES = {"scheduled", "approved", "rejected", "pending", "unknown"}
 
     def get_for_document(self, db: Session, document: Document) -> DocumentIntelligence | None:
         return db.query(DocumentIntelligence).filter(DocumentIntelligence.document_id == document.id).first()
@@ -150,15 +151,68 @@ class DocumentIntelligenceService:
             return
 
         thread_summary = " | ".join(summary_parts)
+        thread_outcome = self._detect_thread_outcome(thread_summary, thread_docs)
         for thread_doc in thread_docs:
             doc_metadata = thread_doc.extracted_metadata if isinstance(thread_doc.extracted_metadata, dict) else {}
-            if doc_metadata.get("thread_summary") == thread_summary:
+            if (
+                doc_metadata.get("thread_summary") == thread_summary
+                and doc_metadata.get("thread_outcome") == thread_outcome
+            ):
                 continue
             updated_metadata = dict(doc_metadata)
             updated_metadata["thread_summary"] = thread_summary
+            updated_metadata["thread_outcome"] = thread_outcome
             thread_doc.extracted_metadata = updated_metadata
             db.add(thread_doc)
         db.commit()
+
+    def _detect_thread_outcome(self, thread_summary: str, thread_docs: list[Document]) -> dict:
+        text_parts: list[str] = [thread_summary or ""]
+        for doc in thread_docs:
+            text_parts.extend([
+                doc.summary or "",
+                (doc.raw_text or "")[:500],
+            ])
+        corpus = " ".join(part.strip() for part in text_parts if part and part.strip())
+        normalized = re.sub(r"\s+", " ", corpus).lower()
+
+        has_scheduled = self._contains_any(
+            normalized,
+            ["meeting is scheduled", "scheduled for", "calendar invite sent", "booked for", "confirmed for"],
+        )
+        has_approved = self._contains_any(
+            normalized,
+            ["approved", "approval granted", "sign off", "signed off", "go ahead approved"],
+        )
+        has_rejected = self._contains_any(
+            normalized,
+            ["rejected", "declined", "not approved", "denied", "cannot approve"],
+        )
+        has_pending = self._contains_any(
+            normalized,
+            ["pending", "awaiting approval", "waiting for approval", "to be decided", "under review"],
+        )
+
+        matched_statuses = [s for s, v in {
+            "scheduled": has_scheduled,
+            "approved": has_approved,
+            "rejected": has_rejected,
+            "pending": has_pending,
+        }.items() if v]
+        if len(matched_statuses) > 1:
+            return {"status": "unknown", "reason": "conflicting outcome signals detected", "confidence": 0.35}
+        if has_scheduled:
+            return {"status": "scheduled", "reason": "clear scheduling language found in thread text", "confidence": 0.9}
+        if has_approved:
+            return {"status": "approved", "reason": "clear approval language found in thread text", "confidence": 0.88}
+        if has_rejected:
+            return {"status": "rejected", "reason": "clear rejection language found in thread text", "confidence": 0.88}
+        if has_pending:
+            return {"status": "pending", "reason": "pending/awaiting language found in thread text", "confidence": 0.7}
+        return {"status": "unknown", "reason": "no deterministic outcome language found", "confidence": 0.2}
+
+    def _contains_any(self, text: str, phrases: list[str]) -> bool:
+        return any(phrase in text for phrase in phrases)
 
     def _deduplicate_timeline_events(self, db: Session, document: Document, incoming_events: list[dict]) -> list[dict]:
         existing_norm = self._existing_timeline_event_signatures(db, document)
