@@ -282,6 +282,13 @@ class RelationshipDetectionService:
                 .first()
             )
             if structural_existing:
+                logger.info(
+                    "relationship_skip_structural_existing source=%s target=%s type=%s existing_type=%s",
+                    candidate.source_doc_id,
+                    candidate.target_doc_id,
+                    candidate.relationship_type,
+                    structural_existing.relationship_type,
+                )
                 continue
             existing = (
                 db.query(DocumentRelationship)
@@ -294,6 +301,12 @@ class RelationshipDetectionService:
             )
             if existing:
                 duplicates_skipped += 1
+                logger.info(
+                    "relationship_skip_duplicate source=%s target=%s type=%s",
+                    candidate.source_doc_id,
+                    candidate.target_doc_id,
+                    candidate.relationship_type,
+                )
                 if (existing.confidence or 0.0) < candidate.confidence:
                     existing.confidence = candidate.confidence
                     existing.relationship_metadata = candidate.metadata

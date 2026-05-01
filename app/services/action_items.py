@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+import logging
 from uuid import UUID
 
 from sqlalchemy import asc, desc, func
@@ -145,6 +146,7 @@ class ActionItemsService:
         )
 
     def refresh_from_analysis(self, db: Session, document_id: UUID, action_items: list[str]) -> None:
+        logger = logging.getLogger(__name__)
         existing = {
             item.content: item
             for item in db.query(DocumentActionItem).filter(DocumentActionItem.document_id == document_id).all()
@@ -155,7 +157,10 @@ class ActionItemsService:
             if content in existing:
                 item = existing[content]
                 if item.state == "dismissed":
+                    logger.info("action_item_skip_dismissed document_id=%s content=%s", document_id, content[:80])
                     continue
+                if item.state == "open":
+                    logger.info("action_item_skip_existing_open document_id=%s content=%s", document_id, content[:80])
                 item.state = "open"
                 db.add(item)
             else:
