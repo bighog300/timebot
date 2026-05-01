@@ -256,6 +256,7 @@ def format_chat_context(context: dict[str, Any], max_items_per_section: int = 25
 
     lines.extend(["", "Timeline Events", "-"])
     has_timeline = False
+    timeline_gaps: list[dict[str, Any]] = []
     for d in docs[:max_items_per_section]:
         title = d.get("title") or d.get("document_id")
         for event in (d.get("timeline_events") or [])[:max_items_per_section]:
@@ -265,9 +266,31 @@ def format_chat_context(context: dict[str, Any], max_items_per_section: int = 25
             date = event.get("date") or event.get("start_date") or "unknown-date"
             event_title = event.get("title") or "(untitled event)"
             description = event.get("description") or ""
-            lines.append(f"- [{date}] {title}: {event_title} — {description}".strip())
+            milestone_indicator = "yes" if event.get("is_milestone") else "no"
+            signal_strength = event.get("signal_strength") or "unknown"
+            milestone_reason = event.get("milestone_reason") or "n/a"
+            lines.append(
+                f"- [{date}] {title}: {event_title} — {description} "
+                f"(milestone={milestone_indicator}; reason={milestone_reason}; signal_strength={signal_strength})"
+            )
+        for gap in (d.get("timeline_gaps") or [])[:max_items_per_section]:
+            if isinstance(gap, dict):
+                timeline_gaps.append(gap)
     if not has_timeline:
         lines.append("- None")
+    if not timeline_gaps:
+        for gap in (context.get("timeline_gaps") or [])[: max_items_per_section * 2]:
+            if isinstance(gap, dict):
+                timeline_gaps.append(gap)
+
+    if timeline_gaps:
+        lines.extend(["", "Timeline Gaps", "-"])
+        for gap in timeline_gaps[:max_items_per_section]:
+            start_date = gap.get("start_date") or "unknown-start"
+            end_date = gap.get("end_date") or "unknown-end"
+            duration = gap.get("gap_duration_days")
+            duration_text = f"{duration} days" if duration is not None else "unknown duration"
+            lines.append(f"- {start_date} -> {end_date} ({duration_text})")
 
     lines.extend(["", "Relationships", "-"])
     has_relationships = False
