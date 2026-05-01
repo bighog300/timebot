@@ -13,7 +13,7 @@ vi.mock('react-router-dom', async () => {
   return { ...actual, useNavigate: () => navigateMock };
 });
 
-vi.mock('@/services/api', () => ({ api: { getTimeline: vi.fn() } }));
+vi.mock('@/services/api', () => ({ api: { getTimeline: vi.fn(), getStructuredInsights: vi.fn() } }));
 
 
 const mockMatchMedia = (matches: boolean) => {
@@ -57,6 +57,8 @@ describe('TimelinePage', () => {
   beforeEach(() => {
     vi.stubGlobal('ResizeObserver', ResizeObserverMock);
     vi.mocked(api.getTimeline).mockReset();
+    vi.mocked(api.getStructuredInsights).mockReset();
+    vi.mocked(api.getStructuredInsights).mockResolvedValue([]);
     mockMatchMedia(false);
     navigateMock.mockReset();
   });
@@ -293,5 +295,50 @@ describe('TimelinePage', () => {
     renderPage();
     expect(await screen.findByText('Kickoff')).toBeTruthy();
     expect(screen.queryByText(/No activity for/)).toBeNull();
+  });
+
+  it('marks timeline events linked to structured insights and shows insight types', async () => {
+    vi.mocked(api.getTimeline).mockResolvedValue(
+      makeTimelineResponse([
+        { event_id: 'evt-1', title: 'Linked Event', date: '2025-01-01', confidence: 0.9, document_id: 'd1', document_title: 'Doc A', source_quote: 'L', start_date: null, end_date: null },
+      ]),
+    );
+    vi.mocked(api.getStructuredInsights).mockResolvedValue([
+      { type: 'risk', title: 'Risky', description: 'desc', severity: 'high', related_event_ids: ['evt-1'] },
+      { type: 'change', title: 'Changed', description: 'desc', severity: 'medium', related_event_ids: ['evt-1'] },
+    ]);
+    renderPage();
+    expect(await screen.findByText('Insight-linked')).toBeTruthy();
+    expect(screen.getAllByText('Insight: risk').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Insight: change').length).toBeGreaterThan(0);
+  });
+
+  it('leaves non-linked timeline events unaffected', async () => {
+    vi.mocked(api.getTimeline).mockResolvedValue(
+      makeTimelineResponse([
+        { event_id: 'evt-2', title: 'Unlinked Event', date: '2025-01-02', confidence: 0.7, document_id: 'd2', document_title: 'Doc B', source_quote: 'U', start_date: null, end_date: null },
+      ]),
+    );
+    vi.mocked(api.getStructuredInsights).mockResolvedValue([
+      { type: 'risk', title: 'Risky', description: 'desc', severity: 'high', related_event_ids: ['evt-1'] },
+    ]);
+    renderPage();
+    await screen.findByText('Unlinked Event');
+    expect(screen.queryByText('Insight-linked')).toBeNull();
+    expect(screen.queryByText('Insight: risk')).toBeNull();
+  });
+
+  it('does not crash when related_event_ids are missing from insights', async () => {
+    vi.mocked(api.getTimeline).mockResolvedValue(
+      makeTimelineResponse([
+        { event_id: 'evt-3', title: 'Event C', date: '2025-01-03', confidence: 0.8, document_id: 'd3', document_title: 'Doc C', source_quote: 'C', start_date: null, end_date: null },
+      ]),
+    );
+    vi.mocked(api.getStructuredInsights).mockResolvedValue([
+      { type: 'risk', title: 'Risky', description: 'desc', severity: 'high' },
+    ]);
+    renderPage();
+    expect(await screen.findByText('Event C')).toBeTruthy();
+    expect(screen.queryByText('Insight-linked')).toBeNull();
   });
 });

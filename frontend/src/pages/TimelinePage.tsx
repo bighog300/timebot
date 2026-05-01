@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/services/api';
-import type { TimelineEvent } from '@/types/api';
+import type { StructuredInsight, TimelineEvent } from '@/types/api';
 
 type NormalizedTimelineEvent = {
   event: TimelineEvent;
@@ -70,6 +70,7 @@ const ZOOM_OPTIONS: Array<{ mode: TimelineZoom; label: string }> = [
 export function TimelinePage() {
   const navigate = useNavigate();
   const { data, isLoading, isError } = useQuery({ queryKey: ['timeline'], queryFn: api.getTimeline });
+  const insightsQuery = useQuery({ queryKey: ['insights-structured'], queryFn: api.getStructuredInsights });
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const [containerWidth, setContainerWidth] = useState<number>(0);
   const [zoomMode, setZoomMode] = useState<TimelineZoom>('fit');
@@ -144,6 +145,19 @@ export function TimelinePage() {
 
     return Array.from(groups.values());
   }, [normalizedEvents]);
+  const linkedInsightTypesByEventId = useMemo(() => {
+    const map = new Map<string, Set<string>>();
+    const insights = (insightsQuery.data ?? []) as StructuredInsight[];
+    insights.forEach((insight) => {
+      insight.related_event_ids?.forEach((eventId) => {
+        const normalizedEventId = eventId?.trim();
+        if (!normalizedEventId) return;
+        if (!map.has(normalizedEventId)) map.set(normalizedEventId, new Set());
+        map.get(normalizedEventId)?.add(insight.type);
+      });
+    });
+    return map;
+  }, [insightsQuery.data]);
   const gaps = data?.gaps ?? [];
 
   const chart = useMemo(() => {
@@ -236,9 +250,12 @@ export function TimelinePage() {
           const primaryDocumentId = item.event.document_id?.trim();
           const primaryDocumentPath = primaryDocumentId ? `/documents/${primaryDocumentId}` : null;
           const dateLabel = `${item.event.start_date || item.event.date}${item.event.end_date ? ` → ${item.event.end_date}` : ''}`;
+          const linkedEventId = item.event.event_id?.trim();
+          const linkedInsightTypes = linkedEventId ? Array.from(linkedInsightTypesByEventId.get(linkedEventId) ?? []) : [];
+          const hasLinkedInsight = linkedInsightTypes.length > 0;
 
           return (
-            <article key={`mobile-${group.normalizedKey}-${item.event.document_id}-${idx}`} className="rounded-xl border border-slate-700 bg-slate-900/80 p-3">
+            <article key={`mobile-${group.normalizedKey}-${item.event.document_id}-${idx}`} className={`rounded-xl border bg-slate-900/80 p-3 ${hasLinkedInsight ? 'border-violet-500/70 shadow-[0_0_0_1px_rgba(139,92,246,0.35)]' : 'border-slate-700'}`}>
               <button
                 type="button"
                 className={`w-full space-y-1 text-left ${primaryDocumentPath ? 'cursor-pointer' : 'cursor-default'}`}
@@ -257,6 +274,8 @@ export function TimelinePage() {
                 {primaryConfidenceLabel ? <span>Confidence: {primaryConfidenceLabel}</span> : null}
                 {signalStrengthLabel ? <span>Signal: {signalStrengthLabel}</span> : null}
                 {item.event.is_milestone ? <span className="rounded-full border border-emerald-500/60 px-2 py-0.5 text-emerald-200">Milestone</span> : null}
+                {hasLinkedInsight ? <span className="rounded-full border border-violet-500/60 px-2 py-0.5 text-violet-200">Insight-linked</span> : null}
+                {linkedInsightTypes.map((insightType) => <span key={`mobile-${group.normalizedKey}-${insightType}`} className="rounded-full border border-violet-700/70 px-2 py-0.5 text-violet-100">Insight: {insightType}</span>)}
                 {uncertaintyLabel ? <span className="rounded-full border border-amber-600/60 px-2 py-0.5 text-amber-200">{uncertaintyLabel}</span> : null}
               </div>
               {group.events.length > 1 ? (
@@ -400,11 +419,14 @@ export function TimelinePage() {
               const rowAriaLabel = primaryDocumentPath
                 ? `Open document for timeline event ${item.event.title}`
                 : `Timeline event ${item.event.title}`;
+              const linkedEventId = item.event.event_id?.trim();
+              const linkedInsightTypes = linkedEventId ? Array.from(linkedInsightTypesByEventId.get(linkedEventId) ?? []) : [];
+              const hasLinkedInsight = linkedInsightTypes.length > 0;
 
               return (
                 <div
                   key={`${group.normalizedKey}-${item.event.document_id}-${idx}`}
-                  className={`flex w-full min-w-0 border-b border-slate-700 text-left hover:bg-slate-800/60 ${primaryDocumentPath ? 'cursor-pointer' : ''}`}
+                  className={`flex w-full min-w-0 border-b text-left hover:bg-slate-800/60 ${hasLinkedInsight ? 'border-violet-500/40 bg-violet-950/20' : 'border-slate-700'} ${primaryDocumentPath ? 'cursor-pointer' : ''}`}
                   onClick={() => {
                     if (!primaryDocumentPath) return;
                     navigate(primaryDocumentPath);
@@ -432,6 +454,16 @@ export function TimelinePage() {
                         Milestone
                       </span>
                     ) : null}
+                    {hasLinkedInsight ? (
+                      <span className="mt-1 inline-flex rounded-full border border-violet-500/60 bg-violet-500/10 px-2 py-0.5 text-[11px] text-violet-200">
+                        Insight-linked
+                      </span>
+                    ) : null}
+                    {linkedInsightTypes.map((insightType) => (
+                      <span key={`${group.normalizedKey}-${insightType}`} className="mt-1 inline-flex max-w-full rounded-full border border-violet-700/60 bg-violet-700/10 px-2 py-0.5 text-[11px] text-violet-100">
+                        Insight: {insightType}
+                      </span>
+                    ))}
                     {uncertaintyLabel ? (
                       <span className="mt-1 inline-flex max-w-full rounded-full border border-amber-600/60 bg-amber-500/10 px-2 py-0.5 text-[11px] text-amber-200">
                         {uncertaintyLabel}
