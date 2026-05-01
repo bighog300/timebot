@@ -85,7 +85,7 @@ def test_timeline_and_relationship_fallbacks_without_active_prompt(monkeypatch, 
 
     monkeypatch.setattr("app.services.ai_analyzer.openai_client_service._client", SimpleNamespace(chat=SimpleNamespace(completions=_Completions())))
     analyzer.analyze_document("sample text", filename="sample.txt", file_type="txt", db=db)
-    assert "Analyze the following document" in captured["user_prompt"]
+    assert "You are analyzing a document." in captured["user_prompt"]
 
     a = _mk(db, test_user.id, "one.pdf", summary="Alpha kickoff")
     _mk(db, test_user.id, "two.pdf", summary="Contains follow up details")

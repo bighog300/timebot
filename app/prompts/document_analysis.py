@@ -63,6 +63,25 @@ Rules:
 - include source_quote/evidence snippet from source text for each timeline event when available"""
 
 
+DEFAULT_SUMMARY_PROMPT_TEMPLATE = """\
+You are analyzing a document.
+
+Filename: {filename}
+File type: {file_type}
+Content (up to {char_limit} characters):
+
+{text}
+
+Return ONLY valid JSON:
+{
+  "summary": string,
+  "timeline_events": array,
+  "relationships": array
+}
+
+Do not include explanation text."""
+
+
 def build_document_analysis_prompt(
     *,
     filename: str,
@@ -80,6 +99,25 @@ def build_document_analysis_prompt(
         "{char_limit}": str(char_limit),
         "{text}": text,
         "{categories}": categories,
+    }
+    for token, value in replacements.items():
+        prompt = prompt.replace(token, value)
+    return prompt
+
+
+def build_default_summary_prompt(
+    *,
+    filename: str,
+    file_type: str,
+    char_limit: int,
+    text: str,
+) -> str:
+    prompt = DEFAULT_SUMMARY_PROMPT_TEMPLATE
+    replacements = {
+        "{filename}": filename,
+        "{file_type}": file_type,
+        "{char_limit}": str(char_limit),
+        "{text}": text,
     }
     for token, value in replacements.items():
         prompt = prompt.replace(token, value)

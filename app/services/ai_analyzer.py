@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.prompts.document_analysis import DOCUMENT_ANALYSIS_SYSTEM, build_document_analysis_prompt
+from app.prompts.document_analysis import DOCUMENT_ANALYSIS_SYSTEM, build_default_summary_prompt
 from app.services.openai_client import APIError, openai_client_service
 from app.services.prompt_templates import get_active_prompt_content
 
@@ -37,14 +37,13 @@ class AIAnalyzer:
         try:
             categories_str = ", ".join(existing_categories) if existing_categories else "none yet"
             try:
-                base_prompt = build_document_analysis_prompt(
+                base_prompt = build_default_summary_prompt(
                     filename=filename,
                     file_type=file_type,
                     char_limit=MAX_TEXT_CHARS,
                     text=text[:MAX_TEXT_CHARS],
-                    categories=categories_str,
                 )
-                prompt = get_active_prompt_content(db, "timeline_extraction", base_prompt) if db is not None else base_prompt
+                prompt = self.get_prompt_template("timeline_extraction", base_prompt, db=db)
             except Exception as render_exc:
                 logger.error(
                     "AI prompt rendering failed: exception_type=%s message=%s",
@@ -53,6 +52,7 @@ class AIAnalyzer:
                 )
                 raise
 
+            logger.info("ai_summary_prompt_used prompt_type=%s provider_used=%s", "timeline_extraction", openai_client_service.selected_provider_name)
             response = openai_client_service.generate_completion({
                 "model": settings.OPENAI_MODEL,
                 "max_tokens": settings.AI_MAX_TOKENS,
@@ -62,8 +62,8 @@ class AIAnalyzer:
                     {"role": "user", "content": prompt},
                 ],
             })
-            content = (response.choices[0].message.content or "").strip()
-            analysis = self._normalize_analysis(self._parse_json(content))
+            content = openai_client_service.extract_response_text(response)
+            analysis = self._parse_and_normalize(content, filename=filename)
             logger.info("ai_analysis_complete filename=%s timeline_event_count=%s", filename, len(analysis.get("timeline_events", [])))
             summary = (analysis.get("summary") or "").strip()
             if not summary:
@@ -89,6 +89,42 @@ class AIAnalyzer:
         except json.JSONDecodeError as e:
             logger.error("JSON parse error in AI response: %s", e)
             raise AIAnalysisError("AI enrichment failed: invalid JSON response.") from e
+
+    def get_prompt_template(self, prompt_type: str, default_prompt: str, db: Optional[Session] = None) -> str:
+        if db is None:
+            return default_prompt
+        return get_active_prompt_content(db, prompt_type, default_prompt)
+
+    def _parse_and_normalize(self, content: str, *, filename: str) -> Dict[str, Any]:
+        try:
+            analysis = self._normalize_analysis(self._parse_json(content))
+            logger.info("ai_summary_parse_success filename=%s parse_success=true", filename)
+            return analysis
+        except AIAnalysisError:
+            logger.warning("ai_summary_parse_failure filename=%s parse_success=false", filename)
+            retry_content = self._retry_json_only(content)
+            if retry_content is not None:
+                try:
+                    analysis = self._normalize_analysis(self._parse_json(retry_content))
+                    logger.info("ai_summary_parse_success filename=%s parse_success=true retry=true", filename)
+                    return analysis
+                except AIAnalysisError:
+                    logger.warning("ai_summary_parse_failure filename=%s parse_success=false retry=true", filename)
+
+            fallback_summary = (content or "").strip()[:500]
+            return self._normalize_analysis({"summary": fallback_summary, "timeline_events": [], "relationships": []})
+
+    def _retry_json_only(self, content: str) -> Optional[str]:
+        response = openai_client_service.generate_completion({
+            "model": settings.OPENAI_MODEL,
+            "max_tokens": settings.AI_MAX_TOKENS,
+            "response_format": {"type": "json_object"},
+            "messages": [
+                {"role": "system", "content": DOCUMENT_ANALYSIS_SYSTEM},
+                {"role": "user", "content": f"Return ONLY valid JSON. No extra text.\n\n{content}"},
+            ],
+        })
+        return openai_client_service.extract_response_text(response)
 
     def _normalize_analysis(self, analysis: Dict[str, Any]) -> Dict[str, Any]:
         normalized = dict(analysis or {})
