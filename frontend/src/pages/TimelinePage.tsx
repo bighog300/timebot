@@ -10,6 +10,11 @@ type NormalizedTimelineEvent = {
   end: Date;
   isMilestone: boolean;
 };
+
+const formatConfidence = (confidence?: number | null) => {
+  if (typeof confidence !== 'number' || Number.isNaN(confidence)) return null;
+  return `${Math.round(confidence * 100)}%`;
+};
 type TimelineEventGroup = {
   normalizedKey: string;
   primary: NormalizedTimelineEvent;
@@ -233,6 +238,14 @@ export function TimelinePage() {
               const width = Math.max(MIN_BAR_WIDTH, endX - startX);
               const similarCount = group.events.length - 1;
               const isExpanded = Boolean(expandedGroups[group.normalizedKey]);
+              const distinctDocuments = new Set(group.events.map((source) => source.event.document_id));
+              const groupMaxConfidence = group.events.reduce<number | null>((max, sourceEvent) => {
+                const value = sourceEvent.event.confidence;
+                if (typeof value !== 'number' || Number.isNaN(value)) return max;
+                return max === null ? value : Math.max(max, value);
+              }, null);
+              const primaryConfidenceLabel = formatConfidence(group.events.length > 1 ? groupMaxConfidence : item.event.confidence);
+              const categoryLabel = item.event.category?.trim() || null;
 
               return (
                 <div
@@ -252,10 +265,12 @@ export function TimelinePage() {
                   <div className="sticky left-0 z-30 shrink-0 border-r border-slate-700 bg-slate-900 p-3" style={{ width: LABEL_WIDTH }}>
                     <div className="truncate text-sm font-medium">{item.event.title}</div>
                     <div className="truncate text-xs text-slate-400">{item.event.document_title}</div>
-                    <div className="text-xs text-slate-500">confidence: {Math.round(item.event.confidence * 100)}%</div>
+                    {categoryLabel ? <div className="truncate text-[11px] text-slate-500">Type: {categoryLabel}</div> : null}
+                    {primaryConfidenceLabel ? <div className="text-xs text-slate-500">Confidence: {primaryConfidenceLabel}</div> : null}
                     {group.events.length > 1 ? (
-                      <div className="mt-2 flex items-center gap-2">
-                        <span className="text-xs text-slate-400">{group.events.length} sources</span>
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <span className="text-xs text-slate-400">{group.events.length} events</span>
+                        <span className="text-xs text-slate-400">{distinctDocuments.size} documents</span>
                         <span className="text-xs text-slate-500">+{similarCount} similar events</span>
                         <button
                           type="button"
@@ -273,8 +288,13 @@ export function TimelinePage() {
                     {isExpanded ? (
                       <ul className="mt-2 space-y-1 text-xs text-slate-400">
                         {group.events.map((sourceEvent, sourceIdx) => (
-                          <li key={`${sourceEvent.event.document_id}-${sourceIdx}`} className="truncate">
-                            {sourceEvent.event.document_title}: {sourceEvent.event.start_date || sourceEvent.event.date}
+                          <li key={`${sourceEvent.event.document_id}-${sourceIdx}`} className="space-y-0.5">
+                            <div className="truncate">{sourceEvent.event.document_title}: {sourceEvent.event.start_date || sourceEvent.event.date}</div>
+                            <div className="truncate text-[11px] text-slate-500">
+                              {sourceEvent.event.category ? `Type: ${sourceEvent.event.category} • ` : ''}
+                              {sourceEvent.event.source ? `Source: ${sourceEvent.event.source} • ` : ''}
+                              {formatConfidence(sourceEvent.event.confidence) ? `Confidence: ${formatConfidence(sourceEvent.event.confidence)}` : ''}
+                            </div>
                           </li>
                         ))}
                       </ul>
