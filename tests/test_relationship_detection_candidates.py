@@ -70,6 +70,7 @@ def test_pending_review_created_from_raw_relationship(db, test_user):
     explanation = review.metadata_json.get("explanation", {})
     assert "ai_detected" in explanation.get("signals", [])
     assert isinstance(explanation.get("reason"), str)
+    assert 0.0 <= float(explanation.get("confidence", 0.0)) <= 1.0
 
 
 def test_detection_skips_when_thread_relationship_exists(db, test_user):
@@ -90,3 +91,17 @@ def test_detection_skips_when_thread_relationship_exists(db, test_user):
         DocumentRelationship.relationship_type.in_(("related_to", "similar_to", "follows_up", "duplicates")),
     ).all()
     assert generic == []
+
+
+def test_ai_relationship_explanation_metadata_is_normalized(db, test_user):
+    a = _mk(db, test_user.id, "alpha-a.pdf", summary="Alpha project roadmap launch and status update")
+    b = _mk(db, test_user.id, "alpha-b.pdf", summary="Status update for Alpha project roadmap launch")
+
+    relationship_detection_service.detect_for_document(db, a.id)
+    rel = db.query(DocumentRelationship).filter(DocumentRelationship.source_doc_id == min(a.id, b.id, key=str)).first()
+    assert rel is not None
+    explanation = (rel.relationship_metadata or {}).get("explanation", {})
+    assert 0.0 <= float(explanation.get("confidence", 0.0)) <= 1.0
+    assert isinstance(explanation.get("signals"), list)
+    assert "ai_detected" in explanation.get("signals", [])
+    assert isinstance(explanation.get("reason"), str)
