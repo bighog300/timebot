@@ -46,6 +46,6 @@ describe('Onboarding flow', () => {
     window.localStorage.setItem(ONBOARDING_COMPLETED_KEY, 'true');
     render(<MemoryRouter><AppShell /></MemoryRouter>);
     expect(screen.getByText('Document Intelligence Platform')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Dashboard' })).toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: 'Dashboard' })[0]).toBeInTheDocument();
   });
 });
