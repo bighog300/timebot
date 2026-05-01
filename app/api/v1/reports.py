@@ -1,7 +1,7 @@
 from pathlib import Path
 import json
 from uuid import UUID
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -14,6 +14,7 @@ from app.models.chat import GeneratedReport
 from app.models.user import User
 from app.services.chat_retrieval import retrieve_chat_context
 from app.services.openai_client import APIError, openai_client_service
+from app.services.report_export import generate_report_pdf
 
 router = APIRouter(prefix="/reports", tags=["reports"])
 
@@ -187,7 +188,12 @@ def update_report(report_id: UUID, payload: ReportUpdateRequest, db: Session = D
 
 
 @router.get("/{report_id}/download")
-def download_report(report_id: UUID, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def download_report(
+    report_id: UUID,
+    format: str = Query(default="md", pattern="^(md|markdown|pdf)$"),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
     report = db.query(GeneratedReport).filter(GeneratedReport.id == report_id, GeneratedReport.created_by_id == user.id).first()
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
@@ -195,13 +201,19 @@ def download_report(report_id: UUID, db: Session = Depends(get_db), user: User =
     report_dir.mkdir(parents=True, exist_ok=True)
     safe_name = "".join(c for c in report.title if c.isalnum() or c in (" ", "-", "_")).strip() or "report"
     safe_name = safe_name.replace(" ", "_")
-    target_path = Path(report.file_path) if report.file_path else (report_dir / f"{report.id}.md")
-    if not target_path.exists():
-        if not report.content_markdown:
-            raise HTTPException(status_code=404, detail="Report file unavailable")
-        target_path.write_text(report.content_markdown, encoding="utf-8")
-        if not report.file_path:
-            report.file_path = str(target_path)
-            db.add(report)
-            db.commit()
-    return FileResponse(str(target_path), media_type="text/markdown", filename=f"{safe_name}.md")
+    if format in {"md", "markdown"}:
+        target_path = Path(report.file_path) if report.file_path else (report_dir / f"{report.id}.md")
+        if not target_path.exists():
+            if not report.content_markdown:
+                raise HTTPException(status_code=404, detail="Report file unavailable")
+            target_path.write_text(report.content_markdown, encoding="utf-8")
+            if not report.file_path:
+                report.file_path = str(target_path)
+                db.add(report)
+                db.commit()
+        return FileResponse(str(target_path), media_type="text/markdown", filename=f"{safe_name}.md")
+
+    pdf_path = report_dir / f"{report.id}.pdf"
+    if not pdf_path.exists():
+        pdf_path.write_bytes(generate_report_pdf(report))
+    return FileResponse(str(pdf_path), media_type="application/pdf", filename=f"{safe_name}.pdf")

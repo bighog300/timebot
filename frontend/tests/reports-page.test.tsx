@@ -59,14 +59,15 @@ describe('reports page', () => {
     expect(screen.queryByText('Executive Summary / Summary')).not.toBeInTheDocument();
   });
 
-  it('keeps download action available', () => {
+  it('shows markdown and pdf download actions', () => {
     mockUseReport.mockReturnValue({
       data: { id: 'r1', title: 'R1', markdown_content: 'md', source_refs: [], prompt: 'p', created_at: 'x' },
     });
 
     render(<ReportsPage />);
 
-    expect(screen.getByText('Download report').getAttribute('href')).toContain('/reports/r1/download');
+    expect(screen.getByText('Download Markdown').getAttribute('href')).toContain('/reports/r1/download?format=md');
+    expect(screen.getByText('Download PDF').getAttribute('href')).toContain('/reports/r1/download?format=pdf');
   });
 
   it('renders long section content without breaking', () => {
