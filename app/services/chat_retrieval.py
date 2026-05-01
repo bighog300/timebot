@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import logging
 from time import perf_counter
 from typing import Any
 
@@ -10,9 +11,6 @@ from sqlalchemy.orm import Session, joinedload, selectinload
 from app.config import settings
 from app.models.document import Document
 from app.models.relationships import DocumentRelationship
-
-logger = logging.getLogger(__name__)
-
 
 logger = logging.getLogger(__name__)
 _CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
