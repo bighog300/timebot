@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { type ChangeEvent, type DragEvent, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '@/auth/AuthContext';
 import { useConnections, useDocuments, useGmailImport, useGmailPreview, useUploadDocument } from '@/hooks/useApi';
 import { Button } from '@/components/ui/Button';
@@ -10,6 +10,8 @@ import { ProcessingStatusIndicator } from '@/components/documents/ProcessingStat
 import { useUIStore } from '@/store/uiStore';
 
 export function DocumentsPage() {
+  const location = useLocation();
+  const onboardingAction = new URLSearchParams(location.search).get('onboardingAction');
   const { data, isLoading, isError } = useDocuments();
   const { token, loading: authLoading } = useAuth();
   const upload = useUploadDocument();
@@ -169,6 +171,11 @@ export function DocumentsPage() {
             </Button>
             <span>or choose files</span>
           </div>
+          {onboardingAction === 'upload' && (
+            <div className="rounded border border-blue-700/60 bg-blue-950/40 px-3 py-2 text-sm text-blue-100" data-testid="onboarding-upload-hint">
+              Start here: upload your first document to generate summaries, timelines, and chat answers.
+            </div>
+          )}
         </div>
       </div>
 
@@ -196,9 +203,33 @@ export function DocumentsPage() {
         ))}
       </div>
 
+      {Boolean(data?.length) && (
+        <Card>
+          <div className="space-y-2">
+            <h2 className="text-base font-semibold">Suggested next actions</h2>
+            <div className="flex flex-wrap gap-2 text-sm">
+              <Link className="rounded border border-slate-700 px-3 py-1.5 text-blue-300 hover:bg-slate-800" to="/reports">
+                View summary
+              </Link>
+              <Link className="rounded border border-slate-700 px-3 py-1.5 text-blue-300 hover:bg-slate-800" to="/timeline">
+                Open timeline
+              </Link>
+              <Link className="rounded border border-slate-700 px-3 py-1.5 text-blue-300 hover:bg-slate-800" to="/chat?q=What%20are%20the%20key%20events%20in%20these%20documents%3F">
+                Ask: What are the key events in these documents?
+              </Link>
+            </div>
+          </div>
+        </Card>
+      )}
+
       <Card>
         <div className="space-y-3">
           <h2 className="text-lg font-semibold">Import from Gmail</h2>
+          {onboardingAction === 'gmail' && (
+            <div className="rounded border border-blue-700/60 bg-blue-950/40 px-3 py-2 text-sm text-blue-100" data-testid="onboarding-gmail-hint">
+              Tip: enter a sender email, preview messages, and import your first conversation.
+            </div>
+          )}
           <div className="grid gap-2 md:grid-cols-4">
             <input className="rounded border border-slate-700 bg-slate-900 p-2 text-sm" placeholder="sender@example.com" value={senderEmail} onChange={(e) => setSenderEmail(e.target.value)} />
             <input className="rounded border border-slate-700 bg-slate-900 p-2 text-sm" type="number" min={1} max={100} value={maxResults} onChange={(e) => setMaxResults(Number(e.target.value) || 20)} />
