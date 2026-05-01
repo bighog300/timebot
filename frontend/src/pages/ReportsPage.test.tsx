@@ -74,4 +74,24 @@ describe('ReportsPage section editing', () => {
     await userEvent.click(screen.getAllByRole('button', { name: 'Report' })[0]);
     expect(screen.queryByRole('button', { name: 'Edit' })).toBeNull();
   });
+
+  it('renders wrapped download actions and markdown fallback', async () => {
+    vi.mocked(useReport).mockReturnValue({ data: { ...baseReport, sections: null, markdown_content: 'Long markdown content line' } } as never);
+    render(<ReportsPage />);
+    await userEvent.click(screen.getAllByRole('button', { name: 'Report' })[0]);
+    const actions = screen.getByRole('link', { name: 'Download Markdown' }).parentElement;
+    expect(actions?.className).toContain('flex-wrap');
+    expect(screen.getByText('Long markdown content line').closest('pre')?.className).toContain('overflow-x-auto');
+    expect(screen.getByRole('link', { name: 'Download PDF' })).toBeTruthy();
+  });
+
+  it('keeps section editor textarea usable and wrapped on mobile', async () => {
+    vi.mocked(useReport).mockReturnValue({ data: baseReport } as never);
+    render(<ReportsPage />);
+    await userEvent.click(screen.getAllByRole('button', { name: 'Report' })[0]);
+    await userEvent.click(screen.getAllByRole('button', { name: 'Edit' })[0]);
+    const textarea = screen.getAllByRole('textbox').at(-1)!;
+    expect(textarea.className).toContain('min-h-40');
+    expect(screen.getByRole('button', { name: 'Save' }).parentElement?.className).toContain('flex-wrap');
+  });
 });
