@@ -65,5 +65,5 @@ def test_malformed_json_fallback_summary_used(monkeypatch):
 def test_no_admin_template_uses_default_prompt(db):
     analyzer = AIAnalyzer()
     default = build_default_summary_prompt(filename="sample.txt", file_type="txt", char_limit=100, text="x")
-    prompt = analyzer.get_prompt_template("timeline_extraction", default, db=db)
+    prompt = analyzer.get_prompt_template("timeline_extraction", db=db, filename="sample.txt", file_type="txt", text="x", char_limit=100)
     assert prompt == default
