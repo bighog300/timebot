@@ -110,15 +110,15 @@ def create_report(payload: ReportRequest, db: Session = Depends(get_db), user: U
     )
     model_start = time.perf_counter()
     try:
-        response = openai_client_service.client.chat.completions.create(
-            model=bot_settings.model,
-            temperature=bot_settings.temperature,
-            max_tokens=bot_settings.max_tokens,
-            messages=[
+        response = openai_client_service.generate_completion({
+            "model": bot_settings.model,
+            "temperature": bot_settings.temperature,
+            "max_tokens": bot_settings.max_tokens,
+            "messages": [
                 {"role": "system", "content": get_active_prompt_content(db, "chat", bot_settings.system_prompt)},
                 {"role": "user", "content": prompt},
             ],
-        )
+        })
     except APIError as exc:
         logger.info("report_generation_timing", extra={"event": "report_generation_timing", "user_id": str(user.id), "report_id": None, "duration_ms": round((time.perf_counter() - start) * 1000, 2), "model_call_duration_ms": round((time.perf_counter() - model_start) * 1000, 2), "source_ref_count": len(context.get("source_refs", [])), "success": False})
         raise HTTPException(status_code=503, detail=f"Report AI request failed: {exc}") from exc
@@ -131,15 +131,15 @@ def create_report(payload: ReportRequest, db: Session = Depends(get_db), user: U
     )
     sections = None
     try:
-        sections_response = openai_client_service.client.chat.completions.create(
-            model=bot_settings.model,
-            temperature=bot_settings.temperature,
-            max_tokens=bot_settings.max_tokens,
-            messages=[
+        sections_response = openai_client_service.generate_completion({
+            "model": bot_settings.model,
+            "temperature": bot_settings.temperature,
+            "max_tokens": bot_settings.max_tokens,
+            "messages": [
                 {"role": "system", "content": get_active_prompt_content(db, "chat", bot_settings.system_prompt)},
                 {"role": "user", "content": sections_prompt},
             ],
-        )
+        })
         sections = _parse_sections((sections_response.choices[0].message.content or "").strip())
     except APIError:
         sections = None

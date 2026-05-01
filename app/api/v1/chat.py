@@ -209,12 +209,12 @@ def post_message(session_id: UUID, payload: MessageRequest, db: Session = Depend
     else:
         model_call_start = time.perf_counter()
         try:
-            response = openai_client_service.client.chat.completions.create(
-                model=bot_settings.model,
-                temperature=bot_settings.temperature,
-                max_tokens=bot_settings.max_tokens,
-                messages=_build_model_messages(db, bot_settings, prompt, prior_messages),
-            )
+            response = openai_client_service.generate_completion({
+                "model": bot_settings.model,
+                "temperature": bot_settings.temperature,
+                "max_tokens": bot_settings.max_tokens,
+                "messages": _build_model_messages(db, bot_settings, prompt, prior_messages),
+            })
         except APIError as exc:
             logger.info(
                 "chat_model_call_timing",
@@ -271,13 +271,12 @@ def stream_message(session_id: UUID, payload: MessageRequest, db: Session = Depe
             assistant_parts: list[str] = []
             model_call_start = time.perf_counter()
             try:
-                stream = openai_client_service.client.chat.completions.create(
-                    model=bot_settings.model,
-                    temperature=bot_settings.temperature,
-                    max_tokens=bot_settings.max_tokens,
-                    messages=_build_model_messages(db, bot_settings, prompt, prior_messages),
-                    stream=True,
-                )
+                stream = openai_client_service.stream_completion({
+                    "model": bot_settings.model,
+                    "temperature": bot_settings.temperature,
+                    "max_tokens": bot_settings.max_tokens,
+                    "messages": _build_model_messages(db, bot_settings, prompt, prior_messages),
+                })
             except APIError as exc:
                 logger.info(
                     "chat_model_call_timing",
