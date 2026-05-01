@@ -75,8 +75,9 @@ def _build_chat_payload(db: Session, user: User, payload: MessageRequest):
     )
     if not context["documents"]:
         return bot_settings, context, None
+    retrieval_prompt_content = get_active_prompt_content(db, "retrieval", bot_settings.retrieval_prompt)
     prompt = (
-        f"{get_active_prompt_content(db, "retrieval", bot_settings.retrieval_prompt)}\n\n"
+        f"{retrieval_prompt_content}\n\n"
         f"Context:\n{context}\n\n"
         f"Question:\n{payload.message}\n\n"
         f"{bot_settings.citation_prompt}\n"

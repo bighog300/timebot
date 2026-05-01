@@ -39,8 +39,9 @@ def create_report(payload: ReportRequest, db: Session = Depends(get_db), user: U
         include_full_text=payload.include_full_text and bot_settings.allow_full_text_retrieval,
         max_documents=bot_settings.max_documents,
     )
+    report_prompt_content = get_active_prompt_content(db, "report", bot_settings.report_prompt)
     prompt = (
-        f"{get_active_prompt_content(db, "report", bot_settings.report_prompt)}\n\nTemplate:\n{bot_settings.default_report_template}\n\n"
+        f"{report_prompt_content}\n\nTemplate:\n{bot_settings.default_report_template}\n\n"
         f"User request:\n{payload.prompt}\n\n"
         f"Context:\n{context}\n\n"
         "Ground strictly in context and cite sources."
