@@ -210,7 +210,7 @@ export function DocumentsPage() {
             <div className="divide-y divide-slate-700">
               {data?.map((doc) => (
                 <div key={doc.id} className="grid grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,3fr)_auto] gap-3 px-4 py-3 text-sm">
-                  <Link className="truncate font-medium text-blue-300 hover:underline" to={`/documents/${doc.id}`}>
+                  <Link className="min-w-0 truncate break-words font-medium text-blue-300 hover:underline" to={`/documents/${doc.id}`}>
                     {doc.filename}
                   </Link>
                   <ProcessingStatusIndicator status={doc.processing_status} processingError={doc.processing_error} />
@@ -230,8 +230,8 @@ export function DocumentsPage() {
             {data?.map((doc) => (
               <Card key={doc.id}>
                 <div className="space-y-2">
-                  <div className="flex justify-between gap-2">
-                    <Link className="font-medium text-blue-300 hover:underline" to={`/documents/${doc.id}`}>
+                  <div className="flex min-w-0 justify-between gap-2">
+                    <Link className="min-w-0 break-words font-medium text-blue-300 hover:underline" to={`/documents/${doc.id}`}>
                       {doc.filename}
                     </Link>
                     <ProcessingStatusIndicator status={doc.processing_status} processingError={doc.processing_error} />
@@ -258,7 +258,7 @@ export function DocumentsPage() {
                 {clustersQuery.data?.map((cluster) => (
                   <div key={cluster.cluster_id} className="rounded border border-slate-700 p-2">
                     <div className="text-sm font-medium">Cluster ({cluster.document_ids.length} documents)</div>
-                    <div className="text-xs text-slate-300">{cluster.document_titles.join(', ')}</div>
+                    <div className="break-words text-xs text-slate-300">{cluster.document_titles.join(', ')}</div>
                     {cluster.dominant_signals.length > 0 && (
                       <div className="text-xs text-slate-400">Signals: {cluster.dominant_signals.join(', ')}</div>
                     )}
@@ -349,9 +349,9 @@ export function DocumentsPage() {
                         onChange={(e) => setSelectedMessageIds((curr) => e.target.checked ? [...curr, message.gmail_message_id] : curr.filter((id) => id !== message.gmail_message_id))}
                       />
                       <div>
-                        <div className="font-medium">{message.subject}</div>
+                        <div className="break-words font-medium">{message.subject}</div>
                         <div className="text-xs text-slate-400">{message.sender} • {message.received_at ? new Date(message.received_at).toLocaleString() : 'Unknown date'}</div>
-                        <div className="text-sm text-slate-300">{message.snippet}</div>
+                        <div className="break-words text-sm text-slate-300">{message.snippet}</div>
                       </div>
                     </label>
                     {message.already_imported && <span className="rounded bg-slate-700 px-2 py-1 text-xs">already imported</span>}
