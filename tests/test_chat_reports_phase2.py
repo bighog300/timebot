@@ -736,3 +736,65 @@ def test_answer_mode_guidance_in_streaming_prompt(client, monkeypatch, db):
         _ = "".join(list(response.iter_text()))
 
     assert "Answer mode: inconsistency_check" in captured["messages"][-1]["content"]
+
+
+import uuid
+
+from app.services import chat_retrieval
+from app.services.chat_retrieval import retrieve_chat_context
+
+
+def test_retrieval_cache_hits_same_user_same_options(db, test_user, monkeypatch):
+    _mk_doc(db, test_user.id, "alpha-cache.txt", "alpha budget planning")
+    monkeypatch.setattr("app.services.chat_retrieval._CACHE", {})
+
+    out1 = retrieve_chat_context(db, "alpha budget", test_user.id, None, True, False, 5, session_id="s1")
+    out2 = retrieve_chat_context(db, "alpha budget", test_user.id, None, True, False, 5, session_id="s1")
+
+    assert out1 == out2
+    assert len(chat_retrieval._CACHE) == 1
+
+
+def test_retrieval_cache_user_isolated(db, test_user, monkeypatch):
+    _mk_doc(db, test_user.id, "alpha-user.txt", "alpha only user1")
+    other_user_id = uuid.uuid4()
+    _mk_doc(db, other_user_id, "beta-user.txt", "beta only user2")
+    monkeypatch.setattr("app.services.chat_retrieval._CACHE", {})
+
+    out1 = retrieve_chat_context(db, "alpha", test_user.id, None, True, False, 5, session_id="s1")
+    out2 = retrieve_chat_context(db, "alpha", other_user_id, None, True, False, 5, session_id="s1")
+
+    assert out1["documents"]
+    assert out2["documents"] == []
+    assert len(chat_retrieval._CACHE) == 2
+
+
+def test_retrieval_cache_options_isolated(db, test_user, monkeypatch):
+    _mk_doc(db, test_user.id, "opt.txt", "payment clause")
+    monkeypatch.setattr("app.services.chat_retrieval._CACHE", {})
+
+    out1 = retrieve_chat_context(db, "payment", test_user.id, None, True, False, 5, session_id="s1")
+    out2 = retrieve_chat_context(db, "payment", test_user.id, None, False, False, 5, session_id="s1")
+
+    assert out1["documents"]
+    assert out2["documents"]
+    assert len(chat_retrieval._CACHE) == 2
+
+
+def test_retrieval_cache_preserves_source_refs(db, test_user, monkeypatch):
+    _mk_doc(db, test_user.id, "timeline-cache.txt", "Roadmap", {"timeline_events": [{"title": "Kickoff", "date": "2025-01-01", "description": "Project kickoff"}]})
+    monkeypatch.setattr("app.services.chat_retrieval._CACHE", {})
+
+    out1 = retrieve_chat_context(db, "kickoff", test_user.id, None, True, False, 5, session_id="s1")
+    out2 = retrieve_chat_context(db, "kickoff", test_user.id, None, True, False, 5, session_id="s1")
+
+    assert out1["source_refs"] == out2["source_refs"]
+
+
+def test_retrieval_cache_miss_still_works(db, test_user, monkeypatch):
+    _mk_doc(db, test_user.id, "miss.txt", "alpha details")
+    monkeypatch.setattr("app.services.chat_retrieval._CACHE", {})
+
+    out = retrieve_chat_context(db, "alpha", test_user.id, None, True, False, 5, session_id="session-a")
+
+    assert out["documents"]
