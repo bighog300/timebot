@@ -29,7 +29,7 @@ class FakeQuery:
 
 
 def _doc():
-    return SimpleNamespace(id=uuid4(), filename='a.pdf', entities={}, upload_date=datetime.now(timezone.utc), source='upload', file_type='pdf', is_archived=False, ai_category_id=None, user_category_id=None)
+    return SimpleNamespace(id=uuid4(), filename='a.pdf', entities={}, upload_date=datetime.now(timezone.utc), source='upload', file_type='pdf', is_archived=False, ai_category_id=None, user_category_id=None, extracted_metadata={}, user_id=uuid4())
 
 
 def test_timeline_extraction_persists_events():
@@ -67,3 +67,30 @@ def test_timeline_fallback_extracts_dates_from_text():
     res = timeline_service.build_timeline(FakeDB([doc]))
     assert res["total_events"] >= 2
     assert all(ev["source"] == "date_extraction_fallback" for ev in res["events"])
+
+
+def test_thread_duplicate_timeline_events_are_not_inserted_twice():
+    doc = _doc()
+    doc.source = "gmail"
+    doc.extracted_metadata = {"gmail_thread_id": "thread-123"}
+    doc.entities = {"timeline_events": [{"title": "Project kickoff", "date": "2026-05-01"}]}
+    analysis = {"summary": "s", "key_points": [], "tags": [], "entities": {}, "action_items": [], "timeline_events": [{"title": "Project kickoff", "date": "2026-05-01"}]}
+    document_intelligence_service._upsert_from_analysis(FakeDB([doc]), doc, analysis)
+    assert doc.entities["timeline_events"] == []
+
+
+def test_distinct_timeline_events_are_preserved():
+    doc = _doc()
+    doc.entities = {"timeline_events": [{"title": "Kickoff", "date": "2026-05-01"}]}
+    analysis = {"summary": "s", "key_points": [], "tags": [], "entities": {}, "action_items": [], "timeline_events": [{"title": "Launch", "date": "2026-06-10"}]}
+    document_intelligence_service._upsert_from_analysis(FakeDB([doc]), doc, analysis)
+    assert len(doc.entities["timeline_events"]) == 1
+    assert doc.entities["timeline_events"][0]["title"] == "Launch"
+
+
+def test_normalization_collapses_case_and_punctuation_duplicates():
+    doc = _doc()
+    doc.entities = {"timeline_events": [{"title": "Contract Signed", "date": "2026-05-01"}]}
+    analysis = {"summary": "s", "key_points": [], "tags": [], "entities": {}, "action_items": [], "timeline_events": [{"title": "contract signed!!!", "date": "2026-05-01"}]}
+    document_intelligence_service._upsert_from_analysis(FakeDB([doc]), doc, analysis)
+    assert doc.entities["timeline_events"] == []
