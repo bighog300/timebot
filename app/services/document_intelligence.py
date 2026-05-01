@@ -244,6 +244,7 @@ class DocumentIntelligenceService:
         return any(phrase in text for phrase in phrases)
 
     def _deduplicate_timeline_events(self, db: Session, document: Document, incoming_events: list[dict]) -> list[dict]:
+        logger = logging.getLogger(__name__)
         existing_norm = self._existing_timeline_event_signatures(db, document)
         kept: list[dict] = []
         for event in incoming_events:
@@ -251,6 +252,11 @@ class DocumentIntelligenceService:
                 continue
             sig = self._timeline_event_signature(event)
             if sig and sig in existing_norm:
+                logger.info(
+                    "timeline_event_skip_duplicate document_id=%s signature=%s",
+                    document.id,
+                    sig[:80],
+                )
                 continue
             if sig:
                 existing_norm.add(sig)
