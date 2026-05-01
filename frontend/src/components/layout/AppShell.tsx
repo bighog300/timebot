@@ -70,9 +70,12 @@ export function AppShell() {
     const q = String(formData.get('q') ?? '').trim();
     navigate(q ? `/search?q=${encodeURIComponent(q)}` : '/search');
   };
+
+  const navLinks = [...baseLinks, ...(user?.role === 'admin' ? adminLinks : [])];
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
-      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 px-4 py-3">
+      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 px-3 py-3 sm:px-4">
         <div className="font-semibold">Document Intelligence Platform</div>
         <form onSubmit={onHeaderSearch} className="flex min-w-[220px] flex-1 items-center gap-2 md:max-w-md">
           <input
@@ -87,10 +90,36 @@ export function AppShell() {
           <button className="rounded bg-slate-700 px-2 py-1 hover:bg-slate-600" onClick={logout}>Logout</button>
         </div>
       </header>
+
+      <nav
+        aria-label="Mobile"
+        className="border-b border-slate-800 px-2 py-2 md:hidden"
+      >
+        <div className="flex gap-1 overflow-x-auto whitespace-nowrap pb-1">
+          {navLinks.map(([to, label]) => (
+            <NavLink
+              key={`mobile-${to}`}
+              to={to}
+              end={to === '/review'}
+              className={({ isActive }) =>
+                `shrink-0 rounded px-2.5 py-1.5 text-xs ${isActive ? 'bg-slate-700 text-white' : 'text-slate-300 hover:bg-slate-800'}`
+              }
+            >
+              <span className="inline-flex items-center gap-1.5">
+                {label}
+                {to === '/review' && pendingReviewCount > 0 && (
+                  <span className="rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] text-white">{pendingReviewCount}</span>
+                )}
+              </span>
+            </NavLink>
+          ))}
+        </div>
+      </nav>
+
       <div className="grid min-h-[calc(100vh-57px)] grid-cols-1 md:grid-cols-[220px_minmax(0,1fr)]">
-        <aside className="border-r border-slate-800 p-3">
+        <aside className="hidden border-r border-slate-800 p-3 md:block" aria-label="Desktop">
           <nav className="flex flex-col gap-1">
-            {[...baseLinks, ...(user?.role === "admin" ? adminLinks : [])].map(([to, label]) => (
+            {navLinks.map(([to, label]) => (
               <NavLink
                 key={to}
                 to={to}
@@ -109,7 +138,7 @@ export function AppShell() {
             ))}
           </nav>
         </aside>
-        <main className="min-w-0 overflow-x-hidden p-4">
+        <main className="min-w-0 overflow-x-auto overflow-y-auto p-3 sm:p-4 md:p-5">
           <Outlet />
         </main>
       </div>

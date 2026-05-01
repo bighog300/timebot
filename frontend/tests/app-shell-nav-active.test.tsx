@@ -12,28 +12,28 @@ afterEach(() => cleanup());
 describe('AppShell nav active states', () => {
   it('highlights Review for /review and not Relationships', () => {
     render(<MemoryRouter initialEntries={['/review']}><AppShell /></MemoryRouter>);
-    expect(screen.getByRole('link', { name: 'Review' }).className).toContain('bg-slate-700');
-    expect(screen.getByRole('link', { name: 'Relationships' }).className).not.toContain('bg-slate-700');
+    expect(screen.getAllByRole('link', { name: 'Review' })[0].className).toContain('bg-slate-700');
+    expect(screen.getAllByRole('link', { name: 'Relationships' })[0].className).not.toContain('bg-slate-700');
   });
 
   it('highlights Relationships for /review/relationships and not Review', () => {
     render(<MemoryRouter initialEntries={['/review/relationships']}><AppShell /></MemoryRouter>);
-    expect(screen.getByRole('link', { name: 'Relationships' }).className).toContain('bg-slate-700');
-    expect(screen.getByRole('link', { name: 'Review' }).className).not.toContain('bg-slate-700');
+    expect(screen.getAllByRole('link', { name: 'Relationships' })[0].className).toContain('bg-slate-700');
+    expect(screen.getAllByRole('link', { name: 'Review' })[0].className).not.toContain('bg-slate-700');
   });
 
   it('highlights Chat for /chat', () => {
     render(<MemoryRouter initialEntries={['/chat']}><AppShell /></MemoryRouter>);
-    expect(screen.getByRole('link', { name: 'Chat' }).className).toContain('bg-slate-700');
+    expect(screen.getAllByRole('link', { name: 'Chat' })[0].className).toContain('bg-slate-700');
   });
 
   it('highlights Reports for /reports', () => {
     render(<MemoryRouter initialEntries={['/reports']}><AppShell /></MemoryRouter>);
-    expect(screen.getByRole('link', { name: 'Reports' }).className).toContain('bg-slate-700');
+    expect(screen.getAllByRole('link', { name: 'Reports' })[0].className).toContain('bg-slate-700');
   });
 
   it('relationships nav points to relationship page', () => {
     render(<MemoryRouter><AppShell /></MemoryRouter>);
-    expect(screen.getByRole('link', { name: 'Relationships' }).getAttribute('href')).toBe('/review/relationships');
+    expect(screen.getAllByRole('link', { name: 'Relationships' })[0].getAttribute('href')).toBe('/review/relationships');
   });
 });
