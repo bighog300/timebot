@@ -37,13 +37,14 @@ class AIAnalyzer:
         try:
             categories_str = ", ".join(existing_categories) if existing_categories else "none yet"
             try:
-                base_prompt = build_default_summary_prompt(
+                prompt = self.get_prompt_template(
+                    "timeline_extraction",
+                    db=db,
                     filename=filename,
                     file_type=file_type,
-                    char_limit=MAX_TEXT_CHARS,
                     text=text[:MAX_TEXT_CHARS],
+                    char_limit=MAX_TEXT_CHARS,
                 )
-                prompt = self.get_prompt_template("timeline_extraction", base_prompt, db=db)
             except Exception as render_exc:
                 logger.error(
                     "AI prompt rendering failed: exception_type=%s message=%s",
@@ -90,10 +91,30 @@ class AIAnalyzer:
             logger.error("JSON parse error in AI response: %s", e)
             raise AIAnalysisError("AI enrichment failed: invalid JSON response.") from e
 
-    def get_prompt_template(self, prompt_type: str, default_prompt: str, db: Optional[Session] = None) -> str:
+    def get_prompt_template(
+        self,
+        prompt_type: str,
+        *,
+        db: Optional[Session] = None,
+        filename: str,
+        file_type: str,
+        text: str,
+        char_limit: int,
+    ) -> str:
+        default_prompt = self._get_default_prompt(prompt_type, filename, file_type, text, char_limit)
         if db is None:
             return default_prompt
         return get_active_prompt_content(db, prompt_type, default_prompt)
+
+    def _get_default_prompt(self, prompt_type: str, filename: str, file_type: str, text: str, char_limit: int) -> str:
+        if prompt_type == "timeline_extraction":
+            return build_default_summary_prompt(
+                filename=filename,
+                file_type=file_type,
+                char_limit=char_limit,
+                text=text,
+            )
+        raise AIAnalysisError(f"AI enrichment failed: unsupported prompt type '{prompt_type}'.")
 
     def _parse_and_normalize(self, content: str, *, filename: str) -> Dict[str, Any]:
         try:
