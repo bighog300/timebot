@@ -81,6 +81,36 @@ class AIClientRouter(AIClient):
     def stream_completion(self, payload: dict[str, Any]) -> Iterable[Any]:
         return self._execute_with_fallbacks("stream_completion", payload)
 
+    def extract_response_text(self, response: Any) -> str:
+        if response is None:
+            return ""
+
+        choices = getattr(response, "choices", None)
+        if isinstance(choices, list) and choices:
+            message = getattr(choices[0], "message", None)
+            content = getattr(message, "content", None)
+            if isinstance(content, str):
+                return content.strip()
+
+        text = getattr(response, "text", None)
+        if isinstance(text, str):
+            return text.strip()
+
+        content = getattr(response, "content", None)
+        if isinstance(content, str):
+            return content.strip()
+        if isinstance(content, list):
+            chunks: list[str] = []
+            for item in content:
+                if isinstance(item, dict) and isinstance(item.get("text"), str):
+                    chunks.append(item["text"])
+                elif hasattr(item, "text") and isinstance(item.text, str):
+                    chunks.append(item.text)
+            if chunks:
+                return "\n".join(chunks).strip()
+
+        return str(response).strip()
+
     @property
     def _client(self) -> Any:
         current = self._registry.get(self.selected_provider_name)
