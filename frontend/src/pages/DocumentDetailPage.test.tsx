@@ -45,7 +45,7 @@ import {
 const baseRelationships = [
   { id: '1', relationship_type: 'thread', status: 'confirmed', confidence: 0.95, related_document_id: 'r1', related_document_title: 'Thread Doc', related_document_name: 'Thread Doc', related_document_snippet: 'thread', direction: 'source', created_at: '', updated_at: null, explanation_metadata: { signals: ['subject_match'] } },
   { id: '2', relationship_type: 'attachment', status: 'pending', confidence: 0.91, related_document_id: 'r2', related_document_title: 'Attachment Doc', related_document_name: 'Attachment Doc', related_document_snippet: 'attachment', direction: 'source', created_at: '', updated_at: null, explanation_metadata: null },
-  { id: '3', relationship_type: 'related', status: 'pending', confidence: 0.82, related_document_id: 'r3', related_document_title: 'Related Doc', related_document_name: 'Related Doc', related_document_snippet: 'related', direction: 'source', created_at: '', updated_at: null, explanation_metadata: { signals: ['semantic_similarity'], confidence: 0.82 } },
+  { id: '3', relationship_type: 'related', status: 'pending', confidence: 0.82, related_document_id: 'r3', related_document_title: 'Related Doc', related_document_name: 'Related Doc', related_document_snippet: 'related', direction: 'source', created_at: '', updated_at: null, explanation_metadata: { reason: 'Common project context', signals: ['shared_terms', 'timeline_proximity'], confidence: 0.82 } },
 ] as const;
 
 function renderPage() {
@@ -165,5 +165,45 @@ describe('DocumentDetailPage relationship filtering', () => {
     await screen.findByText('Related Doc');
     fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
     expect(pushToast).toHaveBeenCalledWith('Failed to confirm relationship');
+  });
+
+  it('shows expandable Why related details when metadata exists', async () => {
+    renderPage();
+    await screen.findByText('Related Doc');
+    expect(screen.getAllByText('Why related:').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Common project context').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Why related details').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Reason:').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Confidence:').length).toBeGreaterThan(0);
+  });
+
+  it('renders friendly signal labels in explainability details', async () => {
+    renderPage();
+    await screen.findByText('Related Doc');
+    expect(screen.getByText('Shared terms')).toBeTruthy();
+    expect(screen.getByText('Timeline proximity')).toBeTruthy();
+  });
+
+  it('hides Why related details when metadata is missing', async () => {
+    vi.mocked(useDocumentRelationships).mockReturnValue({
+      isLoading: false,
+      isError: false,
+      isSuccess: true,
+      data: [{ ...baseRelationships[2], id: 'x', related_document_title: 'No Metadata Doc', explanation_metadata: null }],
+    } as never);
+    renderPage();
+    await screen.findByText('No Metadata Doc');
+    expect(screen.queryByText('Why related details')).toBeNull();
+    expect(screen.queryByText('Why related:')).toBeNull();
+  });
+
+  it('keeps filters and inline review actions with explainability details', async () => {
+    renderPage();
+    await screen.findByText('Related Doc');
+    expect(screen.getByRole('button', { name: 'AI-detected' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Pending' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Confirm' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Reject' })).toBeTruthy();
+    expect(screen.getAllByText('Why related details').length).toBeGreaterThan(0);
   });
 });

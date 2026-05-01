@@ -25,6 +25,18 @@ function docStatusReady(status?: string) {
   return status !== 'uploading' && status !== 'processing';
 }
 
+const SIGNAL_LABELS: Record<string, string> = {
+  structural_email_thread: 'Same email thread',
+  structural_attachment: 'Attachment relationship',
+  shared_terms: 'Shared terms',
+  timeline_proximity: 'Timeline proximity',
+  ai_detected: 'AI detected',
+};
+
+function toFriendlySignalLabel(signal: string) {
+  return SIGNAL_LABELS[signal] ?? signal;
+}
+
 export function DocumentDetailPage() {
   const { id = '' } = useParams();
   const qc = useQueryClient();
@@ -136,8 +148,39 @@ export function DocumentDetailPage() {
         <p className="mt-2 text-xs text-slate-400">
           <span className="font-medium text-slate-300">Why related:</span>{' '}
           {item.explanation_metadata.reason || 'Similarity signals detected.'}
-          {(item.explanation_metadata.signals?.length ?? 0) > 0 ? ` (${item.explanation_metadata.signals?.join(', ')})` : ''}
         </p>
+      )}
+      {item.explanation_metadata && (
+        <details className="mt-2 rounded border border-slate-800 p-2 text-xs text-slate-300">
+          <summary className="cursor-pointer list-none font-medium text-slate-200">
+            <span className="inline-flex items-center gap-1">
+              <span aria-hidden>▸</span>
+              Why related details
+            </span>
+          </summary>
+          <div className="mt-2 space-y-2">
+            {item.explanation_metadata.reason && (
+              <p>
+                <span className="font-medium text-slate-200">Reason:</span> {item.explanation_metadata.reason}
+              </p>
+            )}
+            {(item.explanation_metadata.confidence ?? item.confidence) != null && (
+              <p>
+                <span className="font-medium text-slate-200">Confidence:</span>{' '}
+                {Math.round(((item.explanation_metadata.confidence ?? item.confidence) ?? 0) * 100)}%
+              </p>
+            )}
+            {(item.explanation_metadata.signals?.length ?? 0) > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {item.explanation_metadata.signals?.map((signal) => (
+                  <span className="rounded bg-slate-800 px-2 py-1 text-[11px]" key={signal}>
+                    {toFriendlySignalLabel(signal)}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        </details>
       )}
       {item.status === 'pending' && item.relationship_type !== 'thread' && item.relationship_type !== 'attachment' && (
         <div className="mt-3 flex flex-wrap gap-2">
