@@ -155,3 +155,32 @@ def test_gap_detection_safe_for_single_or_no_events():
     empty.entities = {}
     empty_res = timeline_service.build_timeline(FakeDB([empty]))
     assert empty_res["gaps"] == []
+
+
+def test_timeline_confidence_normalizes_to_unit_interval():
+    doc = _doc()
+    doc.entities = {"timeline_events": [{"title": "Percent Confidence", "date": "2026-08-01", "confidence": 85}]}
+    res = timeline_service.build_timeline(FakeDB([doc]))
+    assert res["events"][0]["confidence"] == 0.85
+
+
+def test_timeline_signal_strength_label_mapping():
+    doc = _doc()
+    doc.entities = {
+        "timeline_events": [
+            {"title": "Strong", "date": "2026-01-01", "confidence": 0.9},
+            {"title": "Medium", "date": "2026-01-02", "confidence": 0.6},
+            {"title": "Weak", "date": "2026-01-03", "confidence": 0.2},
+        ]
+    }
+    res = timeline_service.build_timeline(FakeDB([doc]))
+    labels = [event["signal_strength"] for event in res["events"]]
+    assert labels == ["strong", "medium", "weak"]
+
+
+def test_timeline_missing_confidence_remains_safe():
+    doc = _doc()
+    doc.entities = {"timeline_events": [{"title": "Unknown", "date": "2026-08-02"}]}
+    res = timeline_service.build_timeline(FakeDB([doc]))
+    assert res["events"][0]["confidence"] is None
+    assert res["events"][0]["signal_strength"] is None

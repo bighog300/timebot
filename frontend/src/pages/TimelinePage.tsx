@@ -16,6 +16,16 @@ const formatConfidence = (confidence?: number | null) => {
   return `${Math.round(confidence * 100)}%`;
 };
 
+
+
+const getSignalStrengthLabel = (event: TimelineEvent): 'strong' | 'medium' | 'weak' | null => {
+  if (event.signal_strength === 'strong' || event.signal_strength === 'medium' || event.signal_strength === 'weak') return event.signal_strength;
+  if (typeof event.confidence !== 'number' || Number.isNaN(event.confidence)) return null;
+  if (event.confidence >= 0.8) return 'strong';
+  if (event.confidence >= 0.5) return 'medium';
+  return 'weak';
+};
+
 const getTimelineUncertaintyLabel = (event: TimelineEvent): string | null => {
   const precisionRaw = typeof event.date_precision === 'string' ? event.date_precision.trim().toLowerCase() : '';
   const meta = event.metadata && typeof event.metadata === 'object' ? event.metadata : null;
@@ -280,6 +290,7 @@ export function TimelinePage() {
               const primaryConfidenceLabel = formatConfidence(group.events.length > 1 ? groupMaxConfidence : item.event.confidence);
               const categoryLabel = item.event.category?.trim() || null;
               const uncertaintyLabel = getTimelineUncertaintyLabel(item.event);
+              const signalStrengthLabel = getSignalStrengthLabel(item.event);
 
               return (
                 <div
@@ -301,6 +312,7 @@ export function TimelinePage() {
                     <div className="truncate text-xs text-slate-400">{item.event.document_title}</div>
                     {categoryLabel ? <div className="truncate text-[11px] text-slate-500">Type: {categoryLabel}</div> : null}
                     {primaryConfidenceLabel ? <div className="text-xs text-slate-500">Confidence: {primaryConfidenceLabel}</div> : null}
+                    {signalStrengthLabel ? <div className="text-xs text-slate-500">Signal: {signalStrengthLabel}</div> : null}
                     {item.event.is_milestone ? (
                       <span className="mt-1 inline-flex rounded-full border border-emerald-500/60 bg-emerald-500/10 px-2 py-0.5 text-[11px] text-emerald-200">
                         Milestone
