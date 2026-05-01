@@ -37,6 +37,7 @@ class DocumentIntelligenceService:
                 filename=document.filename,
                 file_type=document.file_type,
                 existing_categories=[c.name for c in categories],
+                db=db,
             )
         except AIAnalysisError as exc:
             raise RuntimeError(str(exc)) from exc

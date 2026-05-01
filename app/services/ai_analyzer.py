@@ -4,9 +4,12 @@ import re
 from datetime import date, datetime
 from typing import Any, Dict, List, Optional
 
+from sqlalchemy.orm import Session
+
 from app.config import settings
 from app.prompts.document_analysis import DOCUMENT_ANALYSIS_SYSTEM, build_document_analysis_prompt
 from app.services.openai_client import APIError, openai_client_service
+from app.services.prompt_templates import get_active_prompt_content
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +27,7 @@ class AIAnalyzer:
         filename: str,
         file_type: str = "unknown",
         existing_categories: Optional[List[str]] = None,
+        db: Optional[Session] = None,
     ) -> Dict[str, Any]:
         if not text or not text.strip():
             raise AIAnalysisError("AI enrichment failed: document text is empty.")
@@ -33,13 +37,14 @@ class AIAnalyzer:
         try:
             categories_str = ", ".join(existing_categories) if existing_categories else "none yet"
             try:
-                prompt = build_document_analysis_prompt(
+                base_prompt = build_document_analysis_prompt(
                     filename=filename,
                     file_type=file_type,
                     char_limit=MAX_TEXT_CHARS,
                     text=text[:MAX_TEXT_CHARS],
                     categories=categories_str,
                 )
+                prompt = get_active_prompt_content(db, "timeline_extraction", base_prompt) if db is not None else base_prompt
             except Exception as render_exc:
                 logger.error(
                     "AI prompt rendering failed: exception_type=%s message=%s",
