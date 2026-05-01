@@ -355,6 +355,19 @@ export interface ChatMessageResponse {
   source_refs: SourceRef[];
 }
 
+export interface ChatStreamChunkEvent {
+  type: 'chunk';
+  content: string;
+}
+
+export interface ChatStreamFinalEvent {
+  type: 'final';
+  content: string;
+  source_refs: SourceRef[];
+}
+
+export type ChatStreamEvent = ChatStreamChunkEvent | ChatStreamFinalEvent;
+
 export interface ReportCreateRequest {
   title: string;
   prompt: string;
