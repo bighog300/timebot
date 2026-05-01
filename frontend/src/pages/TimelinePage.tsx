@@ -10,6 +10,11 @@ type NormalizedTimelineEvent = {
   end: Date;
   isMilestone: boolean;
 };
+type TimelineEventGroup = {
+  normalizedKey: string;
+  primary: NormalizedTimelineEvent;
+  events: NormalizedTimelineEvent[];
+};
 
 const MS_PER_DAY = 86_400_000;
 const LABEL_WIDTH = 320;
@@ -32,6 +37,7 @@ export function TimelinePage() {
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const [containerWidth, setContainerWidth] = useState<number>(0);
   const [zoomMode, setZoomMode] = useState<TimelineZoom>('fit');
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     const container = scrollContainerRef.current;
@@ -66,6 +72,28 @@ export function TimelinePage() {
       })
       .filter((item): item is NormalizedTimelineEvent => Boolean(item));
   }, [data?.events]);
+
+  const groupedEvents = useMemo(() => {
+    const normalizeEventText = (value: string) =>
+      value
+        .toLowerCase()
+        .replace(/[^\w\s]|_/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+    const groups = new Map<string, TimelineEventGroup>();
+    normalizedEvents.forEach((eventItem, idx) => {
+      const normalizedKey = normalizeEventText(eventItem.event.title || `event-${idx}`);
+      const existing = groups.get(normalizedKey);
+      if (existing) {
+        existing.events.push(eventItem);
+        return;
+      }
+      groups.set(normalizedKey, { normalizedKey, primary: eventItem, events: [eventItem] });
+    });
+
+    return Array.from(groups.values());
+  }, [normalizedEvents]);
 
   const chart = useMemo(() => {
     if (!normalizedEvents.length) return null;
@@ -133,7 +161,7 @@ export function TimelinePage() {
 
   if (isLoading) return <div>Loading timeline…</div>;
   if (isError) return <div>Failed to load timeline.</div>;
-  if (!normalizedEvents.length) return <div>No extracted timeline events yet. Upload documents with dated events or regenerate intelligence.</div>;
+  if (!groupedEvents.length) return <div>No extracted timeline events yet. Upload documents with dated events or regenerate intelligence.</div>;
   if (!chart) return null;
 
   return (
@@ -198,22 +226,59 @@ export function TimelinePage() {
               </div>
             </div>
 
-            {normalizedEvents.map((item, idx) => {
+            {groupedEvents.map((group, idx) => {
+              const item = group.primary;
               const startX = chart.dateToX(item.start);
               const endX = chart.dateToX(item.end);
               const width = Math.max(MIN_BAR_WIDTH, endX - startX);
+              const similarCount = group.events.length - 1;
+              const isExpanded = Boolean(expandedGroups[group.normalizedKey]);
 
               return (
-                <button
-                  key={`${item.event.document_id}-${idx}`}
-                  className="flex w-full min-w-0 border-b border-slate-700 text-left hover:bg-slate-800/60"
+                <div
+                  key={`${group.normalizedKey}-${item.event.document_id}-${idx}`}
+                  className="flex w-full min-w-0 cursor-pointer border-b border-slate-700 text-left hover:bg-slate-800/60"
                   onClick={() => navigate(`/documents/${item.event.document_id}`)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      navigate(`/documents/${item.event.document_id}`);
+                    }
+                  }}
+                  role="button"
+                  tabIndex={0}
                   title={`${item.event.title} • ${item.event.document_title} • ${item.event.start_date || item.event.date}${item.event.end_date ? ` → ${item.event.end_date}` : ''}${item.event.source_quote ? ` • ${item.event.source_quote}` : ''}`}
                 >
                   <div className="sticky left-0 z-30 shrink-0 border-r border-slate-700 bg-slate-900 p-3" style={{ width: LABEL_WIDTH }}>
                     <div className="truncate text-sm font-medium">{item.event.title}</div>
                     <div className="truncate text-xs text-slate-400">{item.event.document_title}</div>
                     <div className="text-xs text-slate-500">confidence: {Math.round(item.event.confidence * 100)}%</div>
+                    {group.events.length > 1 ? (
+                      <div className="mt-2 flex items-center gap-2">
+                        <span className="text-xs text-slate-400">{group.events.length} sources</span>
+                        <span className="text-xs text-slate-500">+{similarCount} similar events</span>
+                        <button
+                          type="button"
+                          className="rounded border border-slate-600 px-2 py-0.5 text-[11px] text-slate-300 hover:bg-slate-800"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setExpandedGroups((prev) => ({ ...prev, [group.normalizedKey]: !prev[group.normalizedKey] }));
+                          }}
+                          aria-expanded={isExpanded}
+                        >
+                          {isExpanded ? 'Hide' : 'Show'}
+                        </button>
+                      </div>
+                    ) : null}
+                    {isExpanded ? (
+                      <ul className="mt-2 space-y-1 text-xs text-slate-400">
+                        {group.events.map((sourceEvent, sourceIdx) => (
+                          <li key={`${sourceEvent.event.document_id}-${sourceIdx}`} className="truncate">
+                            {sourceEvent.event.document_title}: {sourceEvent.event.start_date || sourceEvent.event.date}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
                   </div>
                   <div className="relative shrink-0" style={{ width: chart.width, height: ROW_HEIGHT }}>
                     {chart.ticks.map((tick) => (
@@ -233,7 +298,7 @@ export function TimelinePage() {
                       />
                     )}
                   </div>
-                </button>
+                </div>
               );
             })}
           </div>
