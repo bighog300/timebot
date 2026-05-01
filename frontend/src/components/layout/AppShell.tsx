@@ -1,5 +1,12 @@
-import type { FormEvent } from 'react';
+import { type FormEvent, useEffect, useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import {
+  readOnboardingCompleted,
+  readOnboardingStep,
+  writeOnboardingCompleted,
+  writeOnboardingStep,
+  type OnboardingStep,
+} from '@/components/layout/onboarding';
 import { useUIStore } from '@/store/uiStore';
 import { useQueueStats } from '@/hooks/useApi';
 import { useAuth } from '@/auth/AuthContext';
@@ -28,6 +35,33 @@ export function AppShell() {
   const { user, logout } = useAuth();
   const queueStats = useQueueStats();
   const pendingReviewCount = queueStats.data?.pending_review_count ?? 0;
+
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [onboardingStep, setOnboardingStep] = useState<OnboardingStep>('welcome');
+  const [selectedUseCase, setSelectedUseCase] = useState<string | null>(null);
+
+  useEffect(() => {
+    const completed = readOnboardingCompleted();
+    setShowOnboarding(!completed);
+    setOnboardingStep(completed ? 'complete' : readOnboardingStep());
+  }, []);
+
+  const selectUseCase = (useCase: string) => {
+    setSelectedUseCase(useCase);
+    setOnboardingStep('first_action');
+    writeOnboardingStep('first_action');
+  };
+
+  const completeOnboarding = (action: 'upload' | 'gmail') => {
+    writeOnboardingCompleted();
+    setOnboardingStep('complete');
+    setShowOnboarding(false);
+    navigate(`/documents?onboardingAction=${action}`);
+  };
+
+  const skipOnboarding = () => {
+    setShowOnboarding(false);
+  };
 
   const onHeaderSearch = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -79,6 +113,42 @@ export function AppShell() {
           <Outlet />
         </main>
       </div>
+      {showOnboarding && (
+        <div className="fixed inset-0 z-40 bg-slate-950/90 p-4 sm:p-6" role="dialog" aria-modal="true" aria-label="Onboarding">
+          <div className="mx-auto w-full max-w-xl rounded-lg border border-slate-700 bg-slate-900 p-4 sm:p-6">
+            {onboardingStep === 'welcome' && (
+              <div className="space-y-3">
+                <h2 className="text-xl font-semibold">Welcome to Timebot</h2>
+                <p className="text-sm text-slate-300">Choose your primary use case to get started.</p>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <button className="rounded border border-slate-600 p-3 text-left hover:bg-slate-800" onClick={() => selectUseCase('casework')}>Casework & investigations</button>
+                  <button className="rounded border border-slate-600 p-3 text-left hover:bg-slate-800" onClick={() => selectUseCase('ops')}>Operations & reporting</button>
+                </div>
+                <button className="text-sm text-slate-400 underline" onClick={skipOnboarding}>Skip for now</button>
+              </div>
+            )}
+
+            {onboardingStep === 'first_action' && (
+              <div className="space-y-3">
+                <h2 className="text-xl font-semibold">Great. Add your first document source.</h2>
+                <p className="text-sm text-slate-300">Use case: {selectedUseCase ?? 'General'}</p>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <button className="rounded bg-blue-600 px-3 py-2 text-sm font-medium hover:bg-blue-500" onClick={() => completeOnboarding('upload')}>Upload files</button>
+                  <button className="rounded bg-emerald-700 px-3 py-2 text-sm font-medium hover:bg-emerald-600" onClick={() => completeOnboarding('gmail')}>Import from Gmail</button>
+                </div>
+                <button className="text-sm text-slate-400 underline" onClick={skipOnboarding}>Skip for now</button>
+              </div>
+            )}
+
+            {onboardingStep === 'complete' && (
+              <div className="space-y-3">
+                <h2 className="text-xl font-semibold">You are all set</h2>
+                <button className="rounded bg-slate-700 px-3 py-2 text-sm" onClick={() => setShowOnboarding(false)}>Continue</button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
       <div className="fixed bottom-4 right-4 flex flex-col gap-2">
         {toasts.map((toast) => (
           <button
