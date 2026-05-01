@@ -52,7 +52,7 @@ afterEach(() => {
 
 test('renders documents list', () => {
   renderPage();
-  expect(screen.getByText('a.pdf')).toBeInTheDocument();
+  expect(screen.getAllByText('a.pdf').length).toBeGreaterThan(0);
 });
 
 test('first-document success panel appears when documents exist after onboarding', () => {
