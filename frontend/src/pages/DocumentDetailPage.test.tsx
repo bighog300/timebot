@@ -237,16 +237,21 @@ describe('DocumentDetailPage relationship filtering', () => {
       isError: false,
       isSuccess: true,
       data: [
+        { type: 'risk', title: 'Low risk', severity: 'low', description: 'Low severity.', related_documents: [{ document_id: 'doc-1', title: 'Contract.pdf' }] },
         { type: 'risk', title: 'Late delivery risk', severity: 'high', description: 'Potential delay noted.', related_documents: [{ document_id: 'doc-1', title: 'Contract.pdf' }] },
+        { type: 'risk', title: 'Unknown severity risk', description: 'Missing severity.', related_documents: [{ document_id: 'doc-1', title: 'Contract.pdf' }] },
         { type: 'change', title: 'Scope changed', severity: 'medium', description: 'Scope modified.', related_documents: [{ document_id: 'doc-2', title: 'Other.pdf' }] },
       ],
     } as never);
     renderPage();
     expect(await screen.findByText('Insights for this document')).toBeTruthy();
-    expect(screen.getByText('Late delivery risk')).toBeTruthy();
+    const insightsSection = (await screen.findByText('Insights for this document')).closest('div');
+    const insightText = insightsSection?.textContent ?? '';
+    expect(insightText.indexOf('Late delivery risk')).toBeLessThan(insightText.indexOf('Low risk'));
+    expect(insightText.indexOf('Low risk')).toBeLessThan(insightText.indexOf('Unknown severity risk'));
     expect(screen.queryByText('Scope changed')).toBeNull();
-    expect(screen.getByText('risk')).toBeTruthy();
-    expect(screen.getByText('Severity: high')).toBeTruthy();
+    expect(screen.getByText('Severity: High')).toBeTruthy();
+    expect(screen.getByText('Severity: Unknown')).toBeTruthy();
     expect(screen.getByText('Potential delay noted.')).toBeTruthy();
   });
 

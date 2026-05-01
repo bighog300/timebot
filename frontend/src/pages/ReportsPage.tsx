@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useCreateReport, useReport, useReports, useUpdateReport } from '@/hooks/useApi';
 import { api, getErrorDetail } from '@/services/api';
 import { useUIStore } from '@/store/uiStore';
 import { PageHeader, ResponsiveGrid, ResponsivePage, StickyActionBar } from '@/components/layout/ResponsiveLayout';
+import { getSeverityBadgeClass, getSeverityLabel, sortInsightsBySeverity } from '@/lib/insights';
 
 function ReportSection({
   title, content, canEdit, isSaving, onSave,
@@ -42,7 +43,7 @@ export function ReportsPage() {
   const timelineContent = sections?.timeline_analysis || sections?.timeline;
   const relationshipContent = sections?.relationship_analysis || sections?.relationships;
   const hasStructuredSections = Boolean(summaryContent || timelineContent || relationshipContent);
-  const insights = detail.data?.insights ?? [];
+  const insights = useMemo(() => sortInsightsBySeverity(detail.data?.insights ?? []), [detail.data?.insights]);
   const saveSection = async (keys: string[], value: string) => {
     if (!detail.data || !detail.data.sections) return;
     const nextSections: Record<string, string> = {};
@@ -75,7 +76,7 @@ export function ReportsPage() {
           <p><span className='font-semibold'>type:</span> {insight.type}</p>
           <p><span className='font-semibold'>title:</span> {insight.title}</p>
           <p><span className='font-semibold'>description:</span> {insight.description}</p>
-          <p><span className='font-semibold'>severity:</span> {insight.severity}</p>
+          <p><span className='font-semibold'>severity:</span> <span className={`ml-1 rounded-full px-2 py-0.5 text-xs font-medium ${getSeverityBadgeClass(insight.severity)}`}>{getSeverityLabel(insight.severity)}</span></p>
         </li>)}
       </ul>}
     </section>

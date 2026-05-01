@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useInsightsOverview, useStructuredInsights } from '@/hooks/useApi';
 import { Card } from '@/components/ui/Card';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui/States';
+import { getSeverityBadgeClass, getSeverityLabel, normalizeSeverity, sortInsightsBySeverity } from '@/lib/insights';
 
 const TYPE_FILTERS = [
   { label: 'All', value: 'all' },
@@ -31,13 +32,13 @@ export function InsightsPage() {
 
   const filteredInsights = useMemo(() => {
     const insights = structuredInsights ?? [];
-    return insights.filter((insight) => {
+    return sortInsightsBySeverity(insights.filter((insight) => {
       const normalizedType = normalizeFilterValue(insight.type);
-      const normalizedSeverity = normalizeFilterValue(insight.severity);
+      const normalizedSeverity = normalizeSeverity(insight.severity);
       const typeMatch = typeFilter === 'all' || normalizedType === typeFilter;
       const severityMatch = severityFilter === 'all' || normalizedSeverity === severityFilter;
       return typeMatch && severityMatch;
-    });
+    }));
   }, [severityFilter, structuredInsights, typeFilter]);
 
   const isInitialLoading = isLoading || structuredLoading;
@@ -91,7 +92,7 @@ export function InsightsPage() {
               <div className="space-y-2 text-sm">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs uppercase tracking-wide">{insight.type}</span>
-                  <span className="rounded-full bg-slate-200 px-2 py-0.5 text-xs font-medium">Severity: {insight.severity}</span>
+                  <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${getSeverityBadgeClass(insight.severity)}`}>Severity: {getSeverityLabel(insight.severity)}</span>
                 </div>
                 <h3 className="text-base font-semibold">{insight.title}</h3>
                 <p className="text-slate-700">{insight.description}</p>

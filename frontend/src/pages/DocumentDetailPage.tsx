@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { ErrorState, LoadingState, EmptyState } from '@/components/ui/States';
 import { ProcessingStatusIndicator } from '@/components/documents/ProcessingStatusIndicator';
+import { getSeverityBadgeClass, getSeverityLabel, sortInsightsBySeverity } from '@/lib/insights';
 import { useUIStore } from '@/store/uiStore';
 import {
   useApproveDocumentCategory,
@@ -222,7 +223,7 @@ export function DocumentDetailPage() {
   );
   const documentInsights = useMemo(() => {
     const insights = structuredInsightsQuery.data ?? [];
-    return insights.filter((insight) => insight.related_documents?.some((docRef) => docRef.document_id === id));
+    return sortInsightsBySeverity(insights.filter((insight) => insight.related_documents?.some((docRef) => docRef.document_id === id)));
   }, [id, structuredInsightsQuery.data]);
 
   if (documentQuery.isLoading) return <LoadingState />;
@@ -344,7 +345,7 @@ export function DocumentDetailPage() {
               <li key={`${insight.type}-${insight.title}-${index}`} className="rounded border border-slate-800 p-3">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="rounded bg-slate-800 px-2 py-1 text-xs">{insight.type}</span>
-                  <span className="rounded bg-slate-800 px-2 py-1 text-xs">Severity: {insight.severity}</span>
+                  <span className={`rounded px-2 py-1 text-xs ${getSeverityBadgeClass(insight.severity)}`}>Severity: {getSeverityLabel(insight.severity)}</span>
                 </div>
                 <h4 className="mt-2 font-medium">{insight.title}</h4>
                 <p className="mt-1 text-slate-300">{insight.description}</p>

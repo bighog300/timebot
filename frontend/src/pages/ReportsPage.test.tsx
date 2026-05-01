@@ -23,6 +23,7 @@ const baseReport = {
   sections: { summary: 'Summary A', timeline: 'Timeline A', relationships: 'Relationships A' },
   source_refs: [],
   created_at: new Date().toISOString(),
+  insights: [],
 };
 
 describe('ReportsPage section editing', () => {
@@ -83,6 +84,23 @@ describe('ReportsPage section editing', () => {
     expect(actions?.className).toContain('flex-wrap');
     expect(screen.getByText('Long markdown content line').closest('pre')?.className).toContain('overflow-x-auto');
     expect(screen.getByRole('link', { name: 'Download PDF' })).toBeTruthy();
+  });
+
+
+
+  it('sorts report insights by severity and renders severity badge text', async () => {
+    vi.mocked(useReport).mockReturnValue({ data: { ...baseReport, insights: [
+      { type: 'risk', title: 'Low', severity: 'low', description: 'd' },
+      { type: 'risk', title: 'High', severity: 'high', description: 'd' },
+      { type: 'risk', title: 'No Severity', description: 'd' },
+    ] } } as never);
+    render(<ReportsPage />);
+    await userEvent.click(screen.getAllByRole('button', { name: 'Report' })[0]);
+    const insightItems = screen.getAllByText(/title:/i).map((node) => node.parentElement?.textContent || '');
+    expect(insightItems[0]).toContain('High');
+    expect(insightItems[1]).toContain('Low');
+    expect(insightItems[2]).toContain('No Severity');
+    expect(screen.getByText('Unknown')).toBeTruthy();
   });
 
   it('keeps section editor textarea usable and wrapped on mobile', async () => {
