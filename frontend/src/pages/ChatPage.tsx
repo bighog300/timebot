@@ -101,7 +101,9 @@ function CitationSection({ sourceRefs }: { sourceRefs: SourceRef[] }) {
             </div>
           );
           if (ref.document_id) {
-            return <Link key={`${ref.document_id}-${index}`} className='block rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/80' to={`/documents/${ref.document_id}`}>{card}</Link>;
+            const destination = `/documents/${ref.document_id}`;
+            const linkLabel = `Open document: ${title}`;
+            return <Link key={`${ref.document_id}-${index}`} aria-label={linkLabel} title={linkLabel} className='block rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/80' to={destination}>{card}<span className='sr-only'>{linkLabel}</span><div className='mt-1 text-[11px] font-medium text-cyan-200'>↗ Open document</div></Link>;
           }
           return <div key={`citation-${index}`}>{card}</div>;
         })}

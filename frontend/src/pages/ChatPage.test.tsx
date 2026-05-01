@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { ChatPage } from './ChatPage';
 
@@ -15,6 +15,7 @@ vi.mock('@/store/uiStore', () => ({ useUIStore: () => ({ pushToast: vi.fn() }) }
 vi.mock('@/services/api', () => ({ api: { sendChatMessageStream: vi.fn() }, getErrorDetail: () => 'error' }));
 
 import { useChatSessions, useCreateChatSession, useChatSession, useInvalidateChatSession, useCreateReport } from '@/hooks/useApi';
+import { api } from '@/services/api';
 
 describe('ChatPage mobile layout', () => {
   beforeEach(() => {
@@ -117,5 +118,36 @@ describe('ChatPage mobile layout', () => {
     render(<MemoryRouter><ChatPage /></MemoryRouter>);
     expect(screen.getByText('Suggested follow-ups')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'What are the key risks?' })).toBeTruthy();
+  });
+
+
+  it('adds descriptive citation link affordance and accessibility label', () => {
+    render(<MemoryRouter><ChatPage /></MemoryRouter>);
+    const link = screen.getByRole('link', { name: /Open document: Very Long Citation Title/ });
+    expect(link).toHaveAttribute('href', '/documents/doc-1');
+    expect(screen.getByText('↗ Open document')).toBeTruthy();
+  });
+
+  it('renders citation without link when document_id is missing', () => {
+    render(<MemoryRouter><ChatPage /></MemoryRouter>);
+    expect(screen.queryByRole('link', { name: /Fallback title only citation/ })).toBeNull();
+    expect(screen.getByText('Fallback title only citation')).toBeTruthy();
+  });
+
+  it('keeps streaming citation links after final event', async () => {
+    vi.mocked(api.sendChatMessageStream).mockImplementation(async (_sid, _payload, handlers) => {
+      handlers.onEvent({ type: 'chunk', content: 'Draft' });
+      handlers.onEvent({
+        type: 'final',
+        content: 'Final answer',
+        source_refs: [{ document_id: 'doc-stream', document_title: 'Stream Citation' }],
+      });
+    });
+
+    render(<MemoryRouter><ChatPage /></MemoryRouter>);
+    fireEvent.change(screen.getByPlaceholderText('Ask a question'), { target: { value: 'Question' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+    await waitFor(() => expect(screen.getByRole('link', { name: /Open document: Stream Citation/ })).toHaveAttribute('href', '/documents/doc-stream'));
   });
 });
