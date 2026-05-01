@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   invalidateChat: vi.fn(),
   streamMock: vi.fn(),
   messagesMock: vi.fn<() => ChatMessage[]>(() => []),
+  pushToast: vi.fn(),
 }));
 
 vi.mock('@/hooks/useApi', () => ({
@@ -17,7 +18,7 @@ vi.mock('@/hooks/useApi', () => ({
   useCreateReport: () => ({ mutateAsync: vi.fn(async () => ({ id: 'r1' })) }),
   useInvalidateChatSession: () => mocks.invalidateChat,
 }));
-vi.mock('@/store/uiStore', () => ({ useUIStore: () => ({ pushToast: vi.fn() }) }));
+vi.mock('@/store/uiStore', () => ({ useUIStore: () => ({ pushToast: mocks.pushToast }) }));
 vi.mock('@/services/api', async () => {
   const actual = await vi.importActual<typeof import('@/services/api')>('@/services/api');
   return { ...actual, api: { ...actual.api, sendChatMessageStream: mocks.streamMock } };
@@ -178,5 +179,15 @@ describe('chat page streaming', () => {
 
     resolveStream();
     await waitFor(() => expect(mocks.invalidateChat).toHaveBeenCalledWith('s1'));
+  });
+
+
+  it('shows friendly usage-limit message', async () => {
+    mocks.streamMock.mockRejectedValueOnce(new Error('Usage limit reached'));
+    render(<MemoryRouter><ChatPage /></MemoryRouter>);
+    fireEvent.change(screen.getByPlaceholderText('Ask a question'), { target: { value: 'hi' } });
+    fireEvent.click(screen.getByText('Send'));
+
+    await waitFor(() => expect(mocks.pushToast).toHaveBeenCalledWith("You’ve reached your limit. Upgrade to Pro to continue.", 'error'));
   });
 });
