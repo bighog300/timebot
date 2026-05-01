@@ -38,7 +38,7 @@ describe('insights structured panel', () => {
     render(<InsightsPage />);
 
     expect(screen.getByText('Contract renewal risk')).toBeInTheDocument();
-    expect(screen.getByText('Severity: high')).toBeInTheDocument();
+    expect(screen.getByText('Severity: High')).toBeInTheDocument();
     const link = screen.getByRole('link', { name: 'Master Service Agreement' });
     expect(link).toHaveAttribute('href', '/documents/doc-1');
     expect(screen.getByText(/timeline/)).toBeInTheDocument();
