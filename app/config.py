@@ -36,6 +36,7 @@ class Settings(BaseSettings):
     QDRANT_HOST: str = "localhost"
     QDRANT_PORT: int = 6333
     AI_MAX_TOKENS: int = 4096
+    CHAT_MAX_HISTORY_MESSAGES: int = 6
 
     DATA_DIR: str = "data"
     UPLOAD_DIR: str = "data/uploads"

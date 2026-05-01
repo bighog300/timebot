@@ -12,6 +12,7 @@ from app.models.chat import ChatMessage, ChatSession
 from app.models.user import User
 from app.services.chat_retrieval import retrieve_chat_context
 from app.services.openai_client import APIError, openai_client_service
+from app.config import settings
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
@@ -32,6 +33,27 @@ def _get_session_for_user(db: Session, session_id: UUID, user_id: UUID) -> ChatS
     if not s:
         raise HTTPException(status_code=404, detail="Session not found")
     return s
+
+
+def _load_recent_session_messages(db: Session, session_id: UUID, max_messages: int) -> list[dict]:
+    if max_messages <= 0:
+        return []
+    rows = (
+        db.query(ChatMessage)
+        .filter(ChatMessage.session_id == session_id)
+        .order_by(ChatMessage.created_at.desc())
+        .limit(max_messages)
+        .all()
+    )
+    rows.reverse()
+    return [{"role": r.role, "content": r.content} for r in rows]
+
+
+def _build_model_messages(bot_settings, prompt: str, prior_messages: list[dict]) -> list[dict]:
+    model_messages = [{"role": "system", "content": bot_settings.system_prompt}]
+    model_messages.extend(prior_messages)
+    model_messages.append({"role": "user", "content": prompt})
+    return model_messages
 
 
 def _build_chat_payload(db: Session, user: User, payload: MessageRequest):
@@ -93,6 +115,7 @@ def get_session(session_id: UUID, db: Session = Depends(get_db), user: User = De
 def post_message(session_id: UUID, payload: MessageRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     s = _get_session_for_user(db, session_id, user.id)
     bot_settings, context, prompt = _build_chat_payload(db, user, payload)
+    prior_messages = _load_recent_session_messages(db, s.id, settings.CHAT_MAX_HISTORY_MESSAGES)
     user_message = ChatMessage(session_id=s.id, role="user", content=payload.message)
     if not prompt:
         assistant_content = "Not enough information was found in accessible Timebot documents to answer this confidently."
@@ -102,10 +125,7 @@ def post_message(session_id: UUID, payload: MessageRequest, db: Session = Depend
                 model=bot_settings.model,
                 temperature=bot_settings.temperature,
                 max_tokens=bot_settings.max_tokens,
-                messages=[
-                    {"role": "system", "content": bot_settings.system_prompt},
-                    {"role": "user", "content": prompt},
-                ],
+                messages=_build_model_messages(bot_settings, prompt, prior_messages),
             )
         except APIError as exc:
             raise HTTPException(status_code=503, detail=f"Chat AI request failed: {exc}") from exc
@@ -122,6 +142,7 @@ def post_message(session_id: UUID, payload: MessageRequest, db: Session = Depend
 def stream_message(session_id: UUID, payload: MessageRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     s = _get_session_for_user(db, session_id, user.id)
     bot_settings, context, prompt = _build_chat_payload(db, user, payload)
+    prior_messages = _load_recent_session_messages(db, s.id, settings.CHAT_MAX_HISTORY_MESSAGES)
 
     def _event(event_type: str, data: dict) -> str:
         return f"event: {event_type}\ndata: {json.dumps(data)}\n\n"
@@ -140,10 +161,7 @@ def stream_message(session_id: UUID, payload: MessageRequest, db: Session = Depe
                     model=bot_settings.model,
                     temperature=bot_settings.temperature,
                     max_tokens=bot_settings.max_tokens,
-                    messages=[
-                        {"role": "system", "content": bot_settings.system_prompt},
-                        {"role": "user", "content": prompt},
-                    ],
+                    messages=_build_model_messages(bot_settings, prompt, prior_messages),
                     stream=True,
                 )
             except APIError as exc:

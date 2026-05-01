@@ -82,6 +82,117 @@ def test_chat_persists_and_returns_grounded(client, monkeypatch, db):
     assert isinstance(body["source_refs"], list)
 
 
+
+def test_chat_includes_recent_history_and_grounding_context(client, monkeypatch, db):
+    from app.models.user import User
+
+    user = db.query(User).first()
+    _mk_doc(db, user.id, "alpha.txt", "Alpha summary with milestone")
+
+    captured = {}
+
+    class DummyChoice:
+        message = type("M", (), {"content": "Grounded response"})
+
+    class DummyResp:
+        choices = [DummyChoice()]
+
+    class DummyComp:
+        def create(self, **kwargs):
+            captured["messages"] = kwargs["messages"]
+            return DummyResp()
+
+    class DummyChat:
+        completions = DummyComp()
+
+    monkeypatch.setattr("app.config.settings.OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr("app.api.v1.chat.openai_client_service._client", type("C", (), {"chat": DummyChat()})())
+
+    s = client.post("/api/v1/chat/sessions", json={"title": "history"}).json()
+    client.post(f"/api/v1/chat/sessions/{s['id']}/messages", json={"message": "alpha first question"})
+    client.post(f"/api/v1/chat/sessions/{s['id']}/messages", json={"message": "alpha follow-up question"})
+
+    msgs = captured["messages"]
+    assert msgs[0]["role"] == "system"
+    assert any(m["role"] == "assistant" and "Grounded response" in m["content"] for m in msgs)
+    prompt_msg = msgs[-1]
+    assert prompt_msg["role"] == "user"
+    assert "Context:" in prompt_msg["content"]
+    assert "Question:\nalpha follow-up question" in prompt_msg["content"]
+
+
+def test_chat_history_is_capped_to_configured_max(client, monkeypatch, db):
+    from app.models.user import User
+
+    user = db.query(User).first()
+    _mk_doc(db, user.id, "alpha.txt", "Alpha summary with milestone")
+
+    captured = {}
+
+    class DummyChoice:
+        message = type("M", (), {"content": "Grounded response"})
+
+    class DummyResp:
+        choices = [DummyChoice()]
+
+    class DummyComp:
+        def create(self, **kwargs):
+            captured["messages"] = kwargs["messages"]
+            return DummyResp()
+
+    class DummyChat:
+        completions = DummyComp()
+
+    monkeypatch.setattr("app.config.settings.OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr("app.config.settings.CHAT_MAX_HISTORY_MESSAGES", 2)
+    monkeypatch.setattr("app.api.v1.chat.openai_client_service._client", type("C", (), {"chat": DummyChat()})())
+
+    s = client.post("/api/v1/chat/sessions", json={"title": "cap"}).json()
+    client.post(f"/api/v1/chat/sessions/{s['id']}/messages", json={"message": "alpha q1"})
+    client.post(f"/api/v1/chat/sessions/{s['id']}/messages", json={"message": "alpha q2"})
+    client.post(f"/api/v1/chat/sessions/{s['id']}/messages", json={"message": "alpha q3"})
+
+    history = captured["messages"][1:-1]
+    assert len(history) == 2
+    assert [m["role"] for m in history] == ["assistant", "user"]
+
+
+def test_chat_stream_uses_same_history_behavior(client, monkeypatch, db):
+    from app.models.user import User
+
+    user = db.query(User).first()
+    _mk_doc(db, user.id, "alpha.txt", "Alpha summary with milestone")
+
+    captured = {}
+
+    class DummyChunk:
+        def __init__(self, text):
+            self.choices = [type("Choice", (), {"delta": type("Delta", (), {"content": text})()})()]
+
+    class DummyComp:
+        def create(self, **kwargs):
+            captured["messages"] = kwargs["messages"]
+            if kwargs.get("stream"):
+                return [DummyChunk("streamed "), DummyChunk("answer")]
+            return type("DummyResp", (), {"choices": [type("DummyChoice", (), {"message": type("M", (), {"content": "Grounded response"})()})()]})()
+
+    class DummyChat:
+        completions = DummyComp()
+
+    monkeypatch.setattr("app.config.settings.OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr("app.api.v1.chat.openai_client_service._client", type("C", (), {"chat": DummyChat()})())
+
+    s = client.post("/api/v1/chat/sessions", json={"title": "stream-history"}).json()
+    client.post(f"/api/v1/chat/sessions/{s['id']}/messages", json={"message": "alpha first"})
+
+    with client.stream("POST", f"/api/v1/chat/sessions/{s['id']}/messages/stream", json={"message": "alpha second"}) as response:
+        assert response.status_code == 200
+        _ = "".join(list(response.iter_text()))
+
+    msgs = captured["messages"]
+    assert any(m["role"] == "assistant" for m in msgs)
+    assert "Question:\nalpha second" in msgs[-1]["content"]
+
 def test_report_create_and_download_rebuild(client, monkeypatch, db):
     from app.models.user import User
     user = db.query(User).first()
