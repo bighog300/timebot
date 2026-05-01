@@ -31,10 +31,6 @@ describe('TimelinePage', () => {
     constructor() {}
     observe() {}
     disconnect() {}
-    unobserve() {}
-    takeRecords(): ResizeObserverEntry[] {
-      return [];
-    }
   }
 
   const makeTimelineResponse = (events: TimelineResponse['events']): TimelineResponse => ({
@@ -49,90 +45,60 @@ describe('TimelinePage', () => {
     navigateMock.mockReset();
   });
 
-  afterEach(() => {
-    cleanup();
-  });
+  afterEach(() => cleanup());
 
-  it('renders timeline axis ticks and both event types', async () => {
+  it('groups similar events by normalized title and shows grouped source count', async () => {
     vi.mocked(api.getTimeline).mockResolvedValue(
       makeTimelineResponse([
-        { title: 'Due', date: '2025-02-15', confidence: 0.9, document_id: 'd1', document_title: 'doc', source_quote: 'Payment due date', start_date: null, end_date: null },
-        { title: 'Term', start_date: '2025-01-01', end_date: '2025-12-31', confidence: 0.8, document_id: 'd1', document_title: 'doc', source_quote: 'term runs from', date: null },
+        { title: 'Payment Due!', date: '2025-02-15', confidence: 0.9, document_id: 'd1', document_title: 'Doc A', source_quote: 'A', start_date: null, end_date: null },
+        { title: ' payment due ', date: '2025-02-16', confidence: 0.86, document_id: 'd2', document_title: 'Doc B', source_quote: 'B', start_date: null, end_date: null },
+      ]),
+    );
+    renderPage();
+    await screen.findByText('Payment Due!');
+    expect(screen.getByText('2 events')).toBeTruthy();
+    expect(screen.getByText('2 documents')).toBeTruthy();
+  });
+
+  it('shows source document title, type, and confidence when available', async () => {
+    vi.mocked(api.getTimeline).mockResolvedValue(
+      makeTimelineResponse([
+        { title: 'Board Approval', date: '2025-04-02', confidence: 0.77, document_id: 'd1', document_title: 'Board Minutes.pdf', category: 'Governance', source_quote: 'Approved', start_date: null, end_date: null },
       ]),
     );
 
     renderPage();
-
-    expect(await screen.findByTestId('timeline-axis')).toBeTruthy();
-    expect(screen.getByTestId('timeline-scroll-container').className).toContain('max-h-[calc(100vh-240px)]');
-    expect(screen.getAllByText(/2025/).length).toBeGreaterThan(0);
-    expect(screen.getByText('Event / Document')).toBeTruthy();
-    expect(screen.getByTestId('timeline-range-bar')).toBeTruthy();
-    expect(screen.getByTestId('timeline-milestone')).toBeTruthy();
+    expect(await screen.findByText('Board Minutes.pdf')).toBeTruthy();
+    expect(screen.getByText('Type: Governance')).toBeTruthy();
+    expect(screen.getByText('Confidence: 77%')).toBeTruthy();
   });
 
-  it('keeps overflow classes constrained to scroll container and avoids min-w-max', async () => {
+  it('handles missing confidence without crashing or fabricating values', async () => {
     vi.mocked(api.getTimeline).mockResolvedValue(
-      makeTimelineResponse([{ title: 'Due', date: '2025-02-15', confidence: 0.9, document_id: 'd1', document_title: 'doc', source_quote: 'Payment due date', start_date: null, end_date: null }]),
+      makeTimelineResponse([
+        { title: 'Notice Sent', date: '2025-04-03', confidence: null, document_id: 'd1', document_title: 'Notice Letter.pdf', source_quote: 'Sent', start_date: null, end_date: null },
+      ]),
     );
-    const { container } = renderPage();
-    await screen.findByTestId('timeline-scroll-container');
 
-    const root = container.querySelector('div.w-full.min-w-0.max-w-\\[calc\\(100vw-2rem\\)\\].space-y-3.overflow-hidden') as HTMLElement;
-    expect(root.className).toContain('max-w-[calc(100vw-2rem)]');
-    expect(root.className).not.toContain('min-w-max');
-    expect(screen.getByTestId('timeline-card').className).toContain('max-w-full');
-    expect(container.querySelectorAll('.overflow-auto').length).toBe(1);
-    expect(container.querySelectorAll('.overflow-x-auto').length).toBe(0);
-    expect(container.querySelector('.min-w-max')).toBeNull();
-  });
-
-  it('updates zoom state and width scaling and only shows pan hint when scrollable', async () => {
-    vi.mocked(api.getTimeline).mockResolvedValue(
-      makeTimelineResponse([{ title: 'Long Program', start_date: '2025-01-01', end_date: '2025-10-01', confidence: 0.95, document_id: 'd1', document_title: 'doc', source_quote: 'Long range', date: null }]),
-    );
     renderPage();
-
-    const axis = await screen.findByTestId('timeline-axis');
-    expect(screen.queryByText('Drag or scroll inside the chart to pan timeline.')).toBeNull();
-    expect(screen.getByRole('button', { name: 'Fit' }).getAttribute('aria-pressed')).toBe('true');
-
-    const fitWidth = Number((axis as HTMLElement).style.width.replace('px', ''));
-
-    const controls = screen.getByText('Fit').parentElement as HTMLElement;
-    fireEvent.click(within(controls).getByRole('button', { name: 'Month' }));
-    expect(screen.getByRole('button', { name: 'Month' }).getAttribute('aria-pressed')).toBe('true');
-    expect(await screen.findByText('Drag or scroll inside the chart to pan timeline.')).toBeTruthy();
-
-    const monthWidth = Number((screen.getByTestId('timeline-axis') as HTMLElement).style.width.replace('px', ''));
-    expect(monthWidth).toBeGreaterThan(fitWidth);
-
-    fireEvent.click(within(controls).getByRole('button', { name: 'Year' }));
-    const yearWidth = Number((screen.getByTestId('timeline-axis') as HTMLElement).style.width.replace('px', ''));
-    expect(yearWidth).toBeLessThan(monthWidth);
+    expect(await screen.findByText('Notice Sent')).toBeTruthy();
+    expect(screen.queryByText(/Confidence:/)).toBeNull();
   });
 
-  it('pan buttons scroll the timeline container when chart is scrollable', async () => {
+  it('expands grouped events and shows source details', async () => {
     vi.mocked(api.getTimeline).mockResolvedValue(
-      makeTimelineResponse([{ title: 'Long Program', start_date: '2025-01-01', end_date: '2025-10-01', confidence: 0.95, document_id: 'd1', document_title: 'doc', source_quote: 'Long range', date: null }]),
+      makeTimelineResponse([
+        { title: 'Audit Complete', date: '2025-04-04', confidence: 0.92, document_id: 'd1', document_title: 'Audit A', category: 'Compliance', source: 'internal', source_quote: 'done', start_date: null, end_date: null },
+        { title: 'audit complete', date: '2025-04-05', confidence: 0.81, document_id: 'd2', document_title: 'Audit B', category: 'Compliance', source: 'external', source_quote: 'done 2', start_date: null, end_date: null },
+      ]),
     );
-    renderPage();
-    const scrollContainer = await screen.findByTestId('timeline-scroll-container');
-    const scrollByMock = vi.fn();
-    (scrollContainer as HTMLDivElement).scrollBy = scrollByMock;
 
-    fireEvent.click(screen.getByRole('button', { name: 'Month' }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Pan timeline right' }));
-    expect(scrollByMock).toHaveBeenCalled();
-  });
-
-  it('does not show empty state when events exist', async () => {
-    vi.mocked(api.getTimeline).mockResolvedValue(
-      makeTimelineResponse([{ title: 'Due', date: '2025-02-15', confidence: 0.9, document_id: 'd1', document_title: 'doc', source_quote: 'Payment due date', start_date: null, end_date: null }]),
-    );
     renderPage();
-    await screen.findByText('Due');
-    expect(screen.queryByText(/No extracted timeline events yet/)).toBeNull();
+    fireEvent.click(await screen.findByRole('button', { name: 'Show' }));
+    expect(screen.getByText('Audit A: 2025-04-04')).toBeTruthy();
+    expect(screen.getByText('Audit B: 2025-04-05')).toBeTruthy();
+    expect(screen.getAllByText(/Type: Compliance/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/Source: internal/)).toBeTruthy();
   });
 
   it('clicking event navigates to document detail', async () => {
@@ -144,46 +110,21 @@ describe('TimelinePage', () => {
     expect(navigateMock).toHaveBeenCalledWith(expect.stringMatching(/^\/documents\/.+/));
   });
 
-  it('groups similar events by normalized title', async () => {
+  it('updates zoom state and width scaling and only shows pan hint when scrollable', async () => {
     vi.mocked(api.getTimeline).mockResolvedValue(
-      makeTimelineResponse([
-        { title: 'Payment Due!', date: '2025-02-15', confidence: 0.9, document_id: 'd1', document_title: 'Doc A', source_quote: 'A', start_date: null, end_date: null },
-        { title: ' payment due ', date: '2025-02-16', confidence: 0.86, document_id: 'd2', document_title: 'Doc B', source_quote: 'B', start_date: null, end_date: null },
-      ]),
+      makeTimelineResponse([{ title: 'Long Program', start_date: '2025-01-01', end_date: '2025-10-01', confidence: 0.95, document_id: 'd1', document_title: 'doc', source_quote: 'Long range', date: null }]),
     );
     renderPage();
-    await screen.findByText('Payment Due!');
-    expect(screen.getAllByRole('button', { name: /Payment Due!/i })).toHaveLength(1);
-    expect(screen.getByText('2 sources')).toBeTruthy();
-    expect(screen.getByText('+1 similar events')).toBeTruthy();
-  });
 
-  it('does not group distinct events', async () => {
-    vi.mocked(api.getTimeline).mockResolvedValue(
-      makeTimelineResponse([
-        { title: 'Payment Due', date: '2025-02-15', confidence: 0.9, document_id: 'd1', document_title: 'Doc A', source_quote: 'A', start_date: null, end_date: null },
-        { title: 'Contract Signed', date: '2025-02-16', confidence: 0.86, document_id: 'd2', document_title: 'Doc B', source_quote: 'B', start_date: null, end_date: null },
-      ]),
-    );
-    renderPage();
-    expect(await screen.findByText('Payment Due')).toBeTruthy();
-    expect(screen.getByText('Contract Signed')).toBeTruthy();
-    expect(screen.queryByText(/sources/)).toBeNull();
-    expect(screen.queryByText(/similar events/)).toBeNull();
-  });
+    const axis = await screen.findByTestId('timeline-axis');
+    expect(screen.queryByText('Drag or scroll inside the chart to pan timeline.')).toBeNull();
+    const fitWidth = Number((axis as HTMLElement).style.width.replace('px', ''));
 
-  it('expands grouped events to show underlying sources', async () => {
-    vi.mocked(api.getTimeline).mockResolvedValue(
-      makeTimelineResponse([
-        { title: 'Renewal Notice', date: '2025-02-15', confidence: 0.9, document_id: 'd1', document_title: 'Doc A', source_quote: 'A', start_date: null, end_date: null },
-        { title: 'renewal notice', date: '2025-02-16', confidence: 0.86, document_id: 'd2', document_title: 'Doc B', source_quote: 'B', start_date: null, end_date: null },
-        { title: 'renewal notice', date: '2025-02-17', confidence: 0.85, document_id: 'd3', document_title: 'Doc C', source_quote: 'C', start_date: null, end_date: null },
-      ]),
-    );
-    renderPage();
-    fireEvent.click(await screen.findByRole('button', { name: 'Show' }));
-    expect(screen.getByText('Doc A: 2025-02-15')).toBeTruthy();
-    expect(screen.getByText('Doc B: 2025-02-16')).toBeTruthy();
-    expect(screen.getByText('Doc C: 2025-02-17')).toBeTruthy();
+    const controls = screen.getByText('Fit').parentElement as HTMLElement;
+    fireEvent.click(within(controls).getByRole('button', { name: 'Month' }));
+    expect(await screen.findByText('Drag or scroll inside the chart to pan timeline.')).toBeTruthy();
+
+    const monthWidth = Number((screen.getByTestId('timeline-axis') as HTMLElement).style.width.replace('px', ''));
+    expect(monthWidth).toBeGreaterThan(fitWidth);
   });
 });

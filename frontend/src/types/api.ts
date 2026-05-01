@@ -93,7 +93,7 @@ export interface TimelineEvent {
   date?: string | null;
   start_date?: string | null;
   end_date?: string | null;
-  confidence: number;
+  confidence?: number | null;
   source_quote?: string | null;
   page_number?: number | null;
   document_id: string;
