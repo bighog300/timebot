@@ -12,14 +12,14 @@ function ReportSection({
   const [error, setError] = useState('');
   return (
     <section className='rounded border border-slate-700 bg-slate-900/50 p-3'>
-      <div className='mb-2 flex items-center justify-between gap-2'>
+      <div className='mb-2 flex flex-wrap items-center justify-between gap-2'>
         <h3 className='text-sm font-semibold text-slate-100'>{title}</h3>
         {canEdit && !isEditing && <button className='rounded border border-slate-600 px-2 py-1 text-xs' onClick={() => { setDraft(content); setError(''); setIsEditing(true); }}>Edit</button>}
       </div>
       {isEditing ? <div>
-        <textarea value={draft} onChange={(e) => setDraft(e.target.value)} className='min-h-28 w-full rounded border border-slate-700 bg-slate-900 p-2 text-sm' />
+        <textarea value={draft} onChange={(e) => setDraft(e.target.value)} className='min-h-40 w-full rounded border border-slate-700 bg-slate-900 p-2 text-sm leading-6 sm:min-h-28' />
         {error && <p className='mt-2 text-xs text-rose-300'>{error}</p>}
-        <div className='mt-2 flex gap-2'>
+        <div className='mt-2 flex flex-wrap gap-2'>
           <button disabled={isSaving} onClick={async () => { try { setError(''); await onSave(draft); setIsEditing(false); } catch (e) { setError(getErrorDetail(e)); } }} className='rounded bg-indigo-700 px-2 py-1 text-xs disabled:opacity-50'>{isSaving ? 'Saving...' : 'Save'}</button>
           <button disabled={isSaving} onClick={() => { setDraft(content); setError(''); setIsEditing(false); }} className='rounded border border-slate-600 px-2 py-1 text-xs'>Cancel</button>
         </div>
@@ -62,9 +62,9 @@ export function ReportsPage() {
     <label className='ml-2'><input type='checkbox' checked={includeFullText} onChange={(e)=>setIncludeFullText(e.target.checked)} /> full text</label>
     <StickyActionBar><button onClick={async()=>{try{const r=await create.mutateAsync({title,prompt,document_ids:docIds.split(',').map(s=>s.trim()).filter(Boolean),include_timeline:includeTimeline,include_relationships:includeRelationships,include_full_text:includeFullText}); setSelectedId(r.id); pushToast('Report created');}catch(e){pushToast(getErrorDetail(e),'error')}}} className='w-full rounded bg-indigo-700 px-3 py-2 text-sm'>Create report</button></StickyActionBar>
     {(reports.data||[]).map(r=><button key={r.id} onClick={()=>setSelectedId(r.id)} className='block w-full rounded border border-slate-700 p-2 text-left text-sm'>{r.title}</button>)}
-  </div><div>{detail.data && <div><h2 className='text-lg'>{detail.data.title}</h2><div className='mt-2 flex gap-3 text-sm'><a href={api.getReportDownloadUrl(detail.data.id, 'md')} target='_blank'>Download Markdown</a><a href={api.getReportDownloadUrl(detail.data.id, 'pdf')} target='_blank'>Download PDF</a></div>{hasStructuredSections ? <div className='mt-3 space-y-3'>
+  </div><div className='min-w-0'>{detail.data && <div className='min-w-0'><h2 className='text-lg break-words'>{detail.data.title}</h2><div className='mt-2 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm'><a className='break-words underline-offset-2 hover:underline' href={api.getReportDownloadUrl(detail.data.id, 'md')} target='_blank'>Download Markdown</a><a className='break-words underline-offset-2 hover:underline' href={api.getReportDownloadUrl(detail.data.id, 'pdf')} target='_blank'>Download PDF</a></div>{hasStructuredSections ? <div className='mt-3 space-y-3'>
     {summaryContent && <ReportSection title='Executive Summary / Summary' content={summaryContent} canEdit={hasStructuredSections} isSaving={update.isPending} onSave={(value)=>saveSection(['executive_summary', 'summary'], value)} />}
     {timelineContent && <ReportSection title='Timeline Analysis' content={timelineContent} canEdit={hasStructuredSections} isSaving={update.isPending} onSave={(value)=>saveSection(['timeline_analysis', 'timeline'], value)} />}
     {relationshipContent && <ReportSection title='Relationship Analysis' content={relationshipContent} canEdit={hasStructuredSections} isSaving={update.isPending} onSave={(value)=>saveSection(['relationship_analysis', 'relationships'], value)} />}
-  </div> : <pre className='mt-3 whitespace-pre-wrap break-words'>{detail.data.markdown_content}</pre>}</div>}</div></ResponsiveGrid></ResponsivePage>;
+  </div> : <pre className='mt-3 max-w-full overflow-x-auto whitespace-pre-wrap break-words'>{detail.data.markdown_content}</pre>}</div>}</div></ResponsiveGrid></ResponsivePage>;
 }
