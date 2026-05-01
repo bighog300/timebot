@@ -56,15 +56,15 @@ class CategoryDiscoveryService:
                 current_categories=", ".join(existing) or "none",
             )
 
-            response = openai_client_service.client.chat.completions.create(
-                model=settings.OPENAI_MODEL,
-                max_tokens=2048,
-                response_format={"type": "json_object"},
-                messages=[
+            response = openai_client_service.generate_completion({
+                "model": settings.OPENAI_MODEL,
+                "max_tokens": 2048,
+                "response_format": {"type": "json_object"},
+                "messages": [
                     {"role": "system", "content": CATEGORY_DISCOVERY_SYSTEM},
                     {"role": "user", "content": prompt},
                 ],
-            )
+            })
 
             content = (response.choices[0].message.content or "").strip()
             if content.startswith("```"):

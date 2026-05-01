@@ -53,15 +53,15 @@ class AIAnalyzer:
                 )
                 raise
 
-            response = openai_client_service.client.chat.completions.create(
-                model=settings.OPENAI_MODEL,
-                max_tokens=settings.AI_MAX_TOKENS,
-                response_format={"type": "json_object"},
-                messages=[
+            response = openai_client_service.generate_completion({
+                "model": settings.OPENAI_MODEL,
+                "max_tokens": settings.AI_MAX_TOKENS,
+                "response_format": {"type": "json_object"},
+                "messages": [
                     {"role": "system", "content": DOCUMENT_ANALYSIS_SYSTEM},
                     {"role": "user", "content": prompt},
                 ],
-            )
+            })
             content = (response.choices[0].message.content or "").strip()
             analysis = self._normalize_analysis(self._parse_json(content))
             logger.info("ai_analysis_complete filename=%s timeline_event_count=%s", filename, len(analysis.get("timeline_events", [])))

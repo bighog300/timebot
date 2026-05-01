@@ -215,14 +215,14 @@ def test_prompt_template(payload: PromptTemplateTestRequest, _: str = Depends(re
     )
 
     try:
-        response = openai_client_service.client.chat.completions.create(
-            model="gpt-4.1-mini",
-            temperature=0.2,
-            messages=[
+        response = openai_client_service.generate_completion({
+            "model": "gpt-4.1-mini",
+            "temperature": 0.2,
+            "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
             ],
-        )
+        })
     except APIError as exc:
         raise HTTPException(status_code=502, detail=f"AI request failed: {exc}") from exc
 
