@@ -15,6 +15,27 @@ const formatConfidence = (confidence?: number | null) => {
   if (typeof confidence !== 'number' || Number.isNaN(confidence)) return null;
   return `${Math.round(confidence * 100)}%`;
 };
+
+const getTimelineUncertaintyLabel = (event: TimelineEvent): string | null => {
+  const precisionRaw = typeof event.date_precision === 'string' ? event.date_precision.trim().toLowerCase() : '';
+  const meta = event.metadata && typeof event.metadata === 'object' ? event.metadata : null;
+  const metadataFlag = (key: string) => {
+    if (!meta) return false;
+    const value = meta[key];
+    return value === true || value === 'true';
+  };
+
+  if (precisionRaw === 'day' || precisionRaw === 'exact') return 'Exact date';
+  if (precisionRaw === 'month' || precisionRaw === 'month_only') return 'Month only';
+  if (precisionRaw === 'approximate' || precisionRaw === 'approx' || precisionRaw === 'estimated') return 'Approximate date';
+  if (precisionRaw === 'uncertain' || precisionRaw === 'unknown') return 'Date uncertain';
+
+  if (metadataFlag('is_approximate') || metadataFlag('approximate_date') || metadataFlag('estimated_date')) return 'Approximate date';
+  if (metadataFlag('is_uncertain') || metadataFlag('date_uncertain') || metadataFlag('uncertain_date')) return 'Date uncertain';
+  if (metadataFlag('month_only') || metadataFlag('date_month_only')) return 'Month only';
+
+  return null;
+};
 type TimelineEventGroup = {
   normalizedKey: string;
   primary: NormalizedTimelineEvent;
@@ -246,6 +267,7 @@ export function TimelinePage() {
               }, null);
               const primaryConfidenceLabel = formatConfidence(group.events.length > 1 ? groupMaxConfidence : item.event.confidence);
               const categoryLabel = item.event.category?.trim() || null;
+              const uncertaintyLabel = getTimelineUncertaintyLabel(item.event);
 
               return (
                 <div
@@ -267,6 +289,11 @@ export function TimelinePage() {
                     <div className="truncate text-xs text-slate-400">{item.event.document_title}</div>
                     {categoryLabel ? <div className="truncate text-[11px] text-slate-500">Type: {categoryLabel}</div> : null}
                     {primaryConfidenceLabel ? <div className="text-xs text-slate-500">Confidence: {primaryConfidenceLabel}</div> : null}
+                    {uncertaintyLabel ? (
+                      <span className="mt-1 inline-flex max-w-full rounded-full border border-amber-600/60 bg-amber-500/10 px-2 py-0.5 text-[11px] text-amber-200">
+                        {uncertaintyLabel}
+                      </span>
+                    ) : null}
                     {group.events.length > 1 ? (
                       <div className="mt-2 flex flex-wrap items-center gap-2">
                         <span className="text-xs text-slate-400">{group.events.length} events</span>
@@ -287,7 +314,9 @@ export function TimelinePage() {
                     ) : null}
                     {isExpanded ? (
                       <ul className="mt-2 space-y-1 text-xs text-slate-400">
-                        {group.events.map((sourceEvent, sourceIdx) => (
+                        {group.events.map((sourceEvent, sourceIdx) => {
+                          const sourceUncertaintyLabel = getTimelineUncertaintyLabel(sourceEvent.event);
+                          return (
                           <li key={`${sourceEvent.event.document_id}-${sourceIdx}`} className="space-y-0.5">
                             <div className="truncate">{sourceEvent.event.document_title}: {sourceEvent.event.start_date || sourceEvent.event.date}</div>
                             <div className="truncate text-[11px] text-slate-500">
@@ -295,8 +324,10 @@ export function TimelinePage() {
                               {sourceEvent.event.source ? `Source: ${sourceEvent.event.source} • ` : ''}
                               {formatConfidence(sourceEvent.event.confidence) ? `Confidence: ${formatConfidence(sourceEvent.event.confidence)}` : ''}
                             </div>
+                            {sourceUncertaintyLabel ? <div className="text-[11px] text-amber-200">{sourceUncertaintyLabel}</div> : null}
                           </li>
-                        ))}
+                          );
+                        })}
                       </ul>
                     ) : null}
                   </div>

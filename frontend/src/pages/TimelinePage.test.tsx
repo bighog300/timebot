@@ -76,7 +76,7 @@ describe('TimelinePage', () => {
   it('handles missing confidence without crashing or fabricating values', async () => {
     vi.mocked(api.getTimeline).mockResolvedValue(
       makeTimelineResponse([
-        { title: 'Notice Sent', date: '2025-04-03', confidence: null, document_id: 'd1', document_title: 'Notice Letter.pdf', source_quote: 'Sent', start_date: null, end_date: null },
+        { title: 'Notice Sent', date: '2025-04-03', confidence: null, metadata: null, document_id: 'd1', document_title: 'Notice Letter.pdf', source_quote: 'Sent', start_date: null, end_date: null },
       ]),
     );
 
@@ -88,8 +88,8 @@ describe('TimelinePage', () => {
   it('expands grouped events and shows source details', async () => {
     vi.mocked(api.getTimeline).mockResolvedValue(
       makeTimelineResponse([
-        { title: 'Audit Complete', date: '2025-04-04', confidence: 0.92, document_id: 'd1', document_title: 'Audit A', category: 'Compliance', source: 'internal', source_quote: 'done', start_date: null, end_date: null },
-        { title: 'audit complete', date: '2025-04-05', confidence: 0.81, document_id: 'd2', document_title: 'Audit B', category: 'Compliance', source: 'external', source_quote: 'done 2', start_date: null, end_date: null },
+        { title: 'Audit Complete', date: '2025-04-04', confidence: 0.92, date_precision: 'month', document_id: 'd1', document_title: 'Audit A', category: 'Compliance', source: 'internal', source_quote: 'done', start_date: null, end_date: null },
+        { title: 'audit complete', date: '2025-04-05', confidence: 0.81, metadata: { is_approximate: true }, document_id: 'd2', document_title: 'Audit B', category: 'Compliance', source: 'external', source_quote: 'done 2', start_date: null, end_date: null },
       ]),
     );
 
@@ -99,8 +99,36 @@ describe('TimelinePage', () => {
     expect(screen.getByText('Audit B: 2025-04-05')).toBeTruthy();
     expect(screen.getAllByText(/Type: Compliance/).length).toBeGreaterThan(0);
     expect(screen.getByText(/Source: internal/)).toBeTruthy();
+    expect(screen.getAllByText('Month only').length).toBeGreaterThan(0);
+    expect(screen.getByText('Approximate date')).toBeTruthy();
   });
 
+
+  it('renders exact date events normally when precision metadata marks day-level precision', async () => {
+    vi.mocked(api.getTimeline).mockResolvedValue(
+      makeTimelineResponse([
+        { title: 'Signed Contract', date: '2025-04-10', date_precision: 'day', confidence: 0.91, document_id: 'd1', document_title: 'Contract.pdf', source_quote: 'signed', start_date: null, end_date: null },
+      ]),
+    );
+
+    renderPage();
+    expect(await screen.findByText('Signed Contract')).toBeTruthy();
+    expect(screen.getByText('Exact date')).toBeTruthy();
+  });
+
+  it('renders uncertainty labels when event metadata indicates approximate or uncertain dates', async () => {
+    vi.mocked(api.getTimeline).mockResolvedValue(
+      makeTimelineResponse([
+        { title: 'Market Launch', date: '2025-04', date_precision: 'month', confidence: 0.7, document_id: 'd1', document_title: 'Roadmap.pdf', source_quote: 'April launch', start_date: null, end_date: null },
+        { title: 'Regulatory Decision', date: '2025-05-01', metadata: { date_uncertain: true }, confidence: 0.6, document_id: 'd2', document_title: 'Memo.pdf', source_quote: 'pending', start_date: null, end_date: null },
+      ]),
+    );
+
+    renderPage();
+    expect(await screen.findByText('Market Launch')).toBeTruthy();
+    expect(screen.getAllByText('Month only').length).toBeGreaterThan(0);
+    expect(screen.getByText('Date uncertain')).toBeTruthy();
+  });
   it('clicking event navigates to document detail', async () => {
     vi.mocked(api.getTimeline).mockResolvedValue(
       makeTimelineResponse([{ title: 'Due', date: '2025-02-15', confidence: 0.9, document_id: 'doc-123', document_title: 'doc', source_quote: 'Payment due date', start_date: null, end_date: null }]),
