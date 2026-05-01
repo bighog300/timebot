@@ -163,6 +163,42 @@ describe('TimelinePage', () => {
     expect(navigateMock).toHaveBeenCalledWith(expect.stringMatching(/^\/documents\/.+/));
   });
 
+  it('grouped event primary remains navigable', async () => {
+    vi.mocked(api.getTimeline).mockResolvedValue(
+      makeTimelineResponse([
+        { title: 'Filing Sent', date: '2025-04-01', confidence: 0.8, document_id: 'doc-a', document_title: 'A', source_quote: 'sent', start_date: null, end_date: null },
+        { title: 'filing sent', date: '2025-04-02', confidence: 0.7, document_id: 'doc-b', document_title: 'B', source_quote: 'sent again', start_date: null, end_date: null },
+      ]),
+    );
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: /Open document for timeline event Filing Sent/i }));
+    expect(navigateMock).toHaveBeenCalledWith('/documents/doc-a');
+  });
+
+  it('expanded grouped source events show document links', async () => {
+    vi.mocked(api.getTimeline).mockResolvedValue(
+      makeTimelineResponse([
+        { title: 'Audit Complete', date: '2025-04-04', confidence: 0.92, document_id: 'd1', document_title: 'Audit A', source_quote: 'done', start_date: null, end_date: null },
+        { title: 'audit complete', date: '2025-04-05', confidence: 0.81, document_id: 'd2', document_title: 'Audit B', source_quote: 'done 2', start_date: null, end_date: null },
+      ]),
+    );
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Show' }));
+    fireEvent.click(screen.getAllByRole('button', { name: /Open document for grouped timeline source event audit complete/i })[0]);
+    expect(navigateMock).toHaveBeenCalledWith('/documents/d1');
+  });
+
+  it('missing document_id is safe', async () => {
+    vi.mocked(api.getTimeline).mockResolvedValue(
+      makeTimelineResponse([{ title: 'No Doc', date: '2025-04-06', confidence: 0.5, document_id: '', document_title: 'Unknown', source_quote: 'n/a', start_date: null, end_date: null } as TimelineResponse['events'][number]]),
+    );
+    renderPage();
+    await screen.findByText('No Doc');
+    expect(screen.queryByRole('button', { name: /Open document for timeline event/i })).toBeNull();
+    expect(() => fireEvent.click(screen.getByText('No Doc'))).not.toThrow();
+    expect(navigateMock).not.toHaveBeenCalled();
+  });
+
   it('renders milestone badge when event is flagged as milestone', async () => {
     vi.mocked(api.getTimeline).mockResolvedValue(
       makeTimelineResponse([
