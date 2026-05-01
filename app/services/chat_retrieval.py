@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from time import perf_counter
 from typing import Any
-import logging
+
 
 from sqlalchemy.orm import Session, joinedload, selectinload
 
@@ -12,6 +12,47 @@ from app.models.document import Document
 from app.models.relationships import DocumentRelationship
 
 logger = logging.getLogger(__name__)
+
+
+logger = logging.getLogger(__name__)
+_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
+
+
+def _cache_ttl_seconds() -> int:
+    ttl = int(getattr(settings, "CHAT_RETRIEVAL_CACHE_TTL_SECONDS", 120) or 120)
+    return max(60, min(300, ttl))
+
+
+def _build_cache_key(*, user_id: Any, session_id: Any | None, query: str, document_ids: list[str] | None, include_timeline: bool, include_full_text: bool, max_documents: int) -> str:
+    key_payload = {
+        "user_id": str(user_id),
+        "session_id": str(session_id) if session_id is not None else None,
+        "query": query,
+        "document_ids": sorted(str(i) for i in (document_ids or [])),
+        "include_timeline": include_timeline,
+        "include_full_text": include_full_text,
+        "max_documents": max_documents,
+    }
+    return json.dumps(key_payload, sort_keys=True, separators=(",", ":"))
+
+
+def _cache_get(cache_key: str) -> dict[str, Any] | None:
+    now = time.time()
+    item = _CACHE.get(cache_key)
+    if not item:
+        logger.info("chat_retrieval_cache", extra={"event": "chat_retrieval_cache", "cache_status": "miss"})
+        return None
+    expires_at, payload = item
+    if now >= expires_at:
+        _CACHE.pop(cache_key, None)
+        logger.info("chat_retrieval_cache", extra={"event": "chat_retrieval_cache", "cache_status": "miss_expired"})
+        return None
+    logger.info("chat_retrieval_cache", extra={"event": "chat_retrieval_cache", "cache_status": "hit"})
+    return copy.deepcopy(payload)
+
+
+def _cache_set(cache_key: str, payload: dict[str, Any]) -> None:
+    _CACHE[cache_key] = (time.time() + _cache_ttl_seconds(), copy.deepcopy(payload))
 
 
 def _score_text(query_terms: list[str], values: list[str]) -> int:
@@ -46,8 +87,9 @@ def retrieve_chat_context(
     include_timeline: bool,
     include_full_text: bool,
     max_documents: int,
+    session_id: Any | None = None,
 ) -> dict[str, Any]:
-    start = perf_counter()
+
     query_terms = [t.strip().lower() for t in query.split() if t.strip()]
     base_q = (
         db.query(Document)
@@ -150,19 +192,7 @@ def retrieve_chat_context(
     selected = ranked[: max(1, max_documents)]
     documents = [item[2] for item in selected]
     source_refs = [ref for _, _, d in selected for ref in d.pop("_source_refs", [])]
-    duration_ms = (perf_counter() - start) * 1000
-    logger.info(
-        "chat_retrieval_completed user_id=%s query_terms=%s include_timeline=%s include_full_text=%s candidate_count=%s selected_count=%s source_ref_count=%s duration_ms=%.2f",
-        user_id,
-        len(query_terms),
-        include_timeline,
-        include_full_text,
-        len(candidates),
-        len(documents),
-        len(source_refs),
-        duration_ms,
-    )
-    return {"documents": documents, "source_refs": source_refs}
+
 
 
 def format_chat_context(context: dict[str, Any], max_items_per_section: int = 25) -> str:

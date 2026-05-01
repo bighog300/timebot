@@ -37,6 +37,7 @@ class Settings(BaseSettings):
     QDRANT_PORT: int = 6333
     AI_MAX_TOKENS: int = 4096
     CHAT_MAX_HISTORY_MESSAGES: int = 6
+    CHAT_RETRIEVAL_CACHE_TTL_SECONDS: int = 120
 
     DATA_DIR: str = "data"
     UPLOAD_DIR: str = "data/uploads"

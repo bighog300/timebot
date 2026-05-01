@@ -105,7 +105,7 @@ def _build_model_messages(db: Session, bot_settings, prompt: str, prior_messages
     return model_messages
 
 
-def _build_chat_payload(db: Session, user: User, payload: MessageRequest):
+def _build_chat_payload(db: Session, user: User, payload: MessageRequest, session_id: UUID | None = None):
     bot_settings = _get_or_create_chatbot_settings(db)
     if not openai_client_service.enabled:
         raise HTTPException(status_code=503, detail="Chat AI is unavailable: OPENAI_API_KEY is not configured.")
@@ -117,6 +117,7 @@ def _build_chat_payload(db: Session, user: User, payload: MessageRequest):
         include_timeline=payload.include_timeline,
         include_full_text=payload.include_full_text and bot_settings.allow_full_text_retrieval,
         max_documents=bot_settings.max_documents,
+        session_id=session_id,
     )
     if not context["documents"]:
         return bot_settings, context, None
@@ -184,7 +185,7 @@ def get_session(session_id: UUID, db: Session = Depends(get_db), user: User = De
 @router.post("/sessions/{session_id}/messages")
 def post_message(session_id: UUID, payload: MessageRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     s = _get_session_for_user(db, session_id, user.id)
-    bot_settings, context, prompt = _build_chat_payload(db, user, payload)
+    bot_settings, context, prompt = _build_chat_payload(db, user, payload, s.id)
     prior_messages = _load_recent_session_messages(db, s.id, settings.CHAT_MAX_HISTORY_MESSAGES)
     user_message = ChatMessage(session_id=s.id, role="user", content=payload.message)
     start = time.perf_counter()
@@ -216,7 +217,7 @@ def post_message(session_id: UUID, payload: MessageRequest, db: Session = Depend
 @router.post("/sessions/{session_id}/messages/stream")
 def stream_message(session_id: UUID, payload: MessageRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     s = _get_session_for_user(db, session_id, user.id)
-    bot_settings, context, prompt = _build_chat_payload(db, user, payload)
+    bot_settings, context, prompt = _build_chat_payload(db, user, payload, s.id)
     prior_messages = _load_recent_session_messages(db, s.id, settings.CHAT_MAX_HISTORY_MESSAGES)
 
     def _event(event_type: str, data: dict) -> str:
