@@ -120,6 +120,25 @@ describe('ChatPage mobile layout', () => {
     expect(screen.getByRole('button', { name: 'What are the key risks?' })).toBeTruthy();
   });
 
+  it('renders shortcuts for assistant messages', () => {
+    render(<MemoryRouter><ChatPage /></MemoryRouter>);
+    expect(screen.getByRole('link', { name: 'Open in Timeline' })).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Open in Relationships' })).toBeTruthy();
+  });
+
+  it('does not render assistant shortcuts inside user messages', () => {
+    render(<MemoryRouter><ChatPage /></MemoryRouter>);
+    const userMessage = screen.getByTestId('chat-message-user');
+    expect(userMessage).not.toHaveTextContent('Open in Timeline');
+    expect(userMessage).not.toHaveTextContent('Open in Relationships');
+  });
+
+  it('uses expected Timeline and Relationships shortcut routes', () => {
+    render(<MemoryRouter><ChatPage /></MemoryRouter>);
+    expect(screen.getByRole('link', { name: 'Open in Timeline' })).toHaveAttribute('href', '/timeline');
+    expect(screen.getByRole('link', { name: 'Open in Relationships' })).toHaveAttribute('href', '/review/relationships');
+  });
+
 
   it('adds descriptive citation link affordance and accessibility label', () => {
     render(<MemoryRouter><ChatPage /></MemoryRouter>);

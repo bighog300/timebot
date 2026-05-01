@@ -53,6 +53,16 @@ function FollowUpSuggestions({
   );
 }
 
+function ResponseShortcuts() {
+  const relationshipRoute = '/review/relationships';
+  return (
+    <div className='mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-300'>
+      <Link className='rounded px-1 py-0.5 underline decoration-slate-500 underline-offset-2 hover:text-cyan-200' to='/timeline'>Open in Timeline</Link>
+      <Link className='rounded px-1 py-0.5 underline decoration-slate-500 underline-offset-2 hover:text-cyan-200' to={relationshipRoute}>Open in Relationships</Link>
+    </div>
+  );
+}
+
 
 function getMessageContainerClasses(role: ChatMessage['role']): string {
   if (role === 'user') {
@@ -223,6 +233,7 @@ export function ChatPage() {
             <div className={getMessageTextClasses()}>{m.content}</div>
             {m.role === 'assistant' && (
               <>
+                <ResponseShortcuts />
                 <CitationSection sourceRefs={m.source_refs || []} />
                 <FollowUpSuggestions
                   suggestions={getFollowUpSuggestions({ includeTimeline, includeFullText, sourceRefCount: (m.source_refs || []).length })}
@@ -238,6 +249,7 @@ export function ChatPage() {
             <div className='mb-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-300'>assistant</div>
             <div className={`min-h-[4rem] ${getMessageTextClasses()}`}>{streamingMessage || ' '}</div>
             {!hasStreamFinal && <div data-testid='streaming-indicator' aria-live='polite' className='mt-2 inline-flex items-center gap-1 text-xs text-slate-400'><span className='h-1.5 w-1.5 animate-pulse rounded-full bg-slate-400 [animation-delay:0ms]' /><span className='h-1.5 w-1.5 animate-pulse rounded-full bg-slate-400 [animation-delay:120ms]' /><span className='h-1.5 w-1.5 animate-pulse rounded-full bg-slate-400 [animation-delay:240ms]' /><span>Assistant is typing</span></div>}
+            {hasStreamFinal && <ResponseShortcuts />}
             <CitationSection sourceRefs={streamingSourceRefs} />
             {hasStreamFinal && <FollowUpSuggestions suggestions={getFollowUpSuggestions({ includeTimeline, includeFullText, sourceRefCount: streamingSourceRefs.length })} onSelect={setMessage} />}
           </div>
