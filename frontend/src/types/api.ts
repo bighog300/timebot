@@ -130,6 +130,26 @@ export interface InsightsResponse {
   recent_activity: Array<Record<string, unknown>>;
 }
 
+export interface StructuredInsightDocumentRef {
+  document_id: string;
+  title?: string | null;
+}
+
+export interface StructuredInsightEvidenceRef {
+  source?: string | null;
+  reference?: string | null;
+  quote?: string | null;
+}
+
+export interface StructuredInsight {
+  type: string;
+  title: string;
+  description: string;
+  severity: string;
+  related_documents?: StructuredInsightDocumentRef[] | null;
+  evidence_refs?: StructuredInsightEvidenceRef[] | null;
+}
+
 export interface Connection {
   id: string;
   type: 'gmail' | 'gdrive' | 'dropbox' | 'onedrive';
