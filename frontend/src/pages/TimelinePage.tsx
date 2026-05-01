@@ -291,20 +291,30 @@ export function TimelinePage() {
               const categoryLabel = item.event.category?.trim() || null;
               const uncertaintyLabel = getTimelineUncertaintyLabel(item.event);
               const signalStrengthLabel = getSignalStrengthLabel(item.event);
+              const primaryDocumentId = item.event.document_id?.trim();
+              const primaryDocumentPath = primaryDocumentId ? `/documents/${primaryDocumentId}` : null;
+              const rowAriaLabel = primaryDocumentPath
+                ? `Open document for timeline event ${item.event.title}`
+                : `Timeline event ${item.event.title}`;
 
               return (
                 <div
                   key={`${group.normalizedKey}-${item.event.document_id}-${idx}`}
-                  className="flex w-full min-w-0 cursor-pointer border-b border-slate-700 text-left hover:bg-slate-800/60"
-                  onClick={() => navigate(`/documents/${item.event.document_id}`)}
+                  className={`flex w-full min-w-0 border-b border-slate-700 text-left hover:bg-slate-800/60 ${primaryDocumentPath ? 'cursor-pointer' : ''}`}
+                  onClick={() => {
+                    if (!primaryDocumentPath) return;
+                    navigate(primaryDocumentPath);
+                  }}
                   onKeyDown={(e) => {
+                    if (!primaryDocumentPath) return;
                     if (e.key === 'Enter' || e.key === ' ') {
                       e.preventDefault();
-                      navigate(`/documents/${item.event.document_id}`);
+                      navigate(primaryDocumentPath);
                     }
                   }}
-                  role="button"
-                  tabIndex={0}
+                  role={primaryDocumentPath ? 'button' : 'group'}
+                  tabIndex={primaryDocumentPath ? 0 : -1}
+                  aria-label={rowAriaLabel}
                   title={`${item.event.title} • ${item.event.document_title} • ${item.event.start_date || item.event.date}${item.event.end_date ? ` → ${item.event.end_date}` : ''}${item.event.source_quote ? ` • ${item.event.source_quote}` : ''}`}
                 >
                   <div className="sticky left-0 z-30 shrink-0 border-r border-slate-700 bg-slate-900 p-3" style={{ width: LABEL_WIDTH }}>
@@ -345,9 +355,25 @@ export function TimelinePage() {
                       <ul className="mt-2 space-y-1 text-xs text-slate-400">
                         {group.events.map((sourceEvent, sourceIdx) => {
                           const sourceUncertaintyLabel = getTimelineUncertaintyLabel(sourceEvent.event);
+                          const sourceDocumentId = sourceEvent.event.document_id?.trim();
+                          const sourceDocumentPath = sourceDocumentId ? `/documents/${sourceDocumentId}` : null;
                           return (
                           <li key={`${sourceEvent.event.document_id}-${sourceIdx}`} className="space-y-0.5">
                             <div className="truncate">{sourceEvent.event.document_title}: {sourceEvent.event.start_date || sourceEvent.event.date}</div>
+                            {sourceDocumentPath ? (
+                              <button
+                                type="button"
+                                className="text-left text-[11px] text-blue-300 underline-offset-2 hover:underline"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  navigate(sourceDocumentPath);
+                                }}
+                                aria-label={`Open document for grouped timeline source event ${sourceEvent.event.title}`}
+                                title={`Open ${sourceEvent.event.document_title}`}
+                              >
+                                Open document
+                              </button>
+                            ) : null}
                             <div className="truncate text-[11px] text-slate-500">
                               {sourceEvent.event.category ? `Type: ${sourceEvent.event.category} • ` : ''}
                               {sourceEvent.event.source ? `Source: ${sourceEvent.event.source} • ` : ''}
