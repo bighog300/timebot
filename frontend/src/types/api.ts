@@ -102,6 +102,8 @@ export interface TimelineEvent {
   source?: string | null;
   date_precision?: string | null;
   metadata?: Record<string, unknown> | null;
+  is_milestone?: boolean;
+  milestone_reason?: string | null;
 }
 
 export interface TimelineResponse {

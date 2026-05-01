@@ -93,7 +93,7 @@ export function TimelinePage() {
           event,
           start,
           end: end < start ? start : end,
-          isMilestone: Boolean(event.date && !event.end_date),
+          isMilestone: Boolean(event.is_milestone),
         };
       })
       .filter((item): item is NormalizedTimelineEvent => Boolean(item));
@@ -289,6 +289,11 @@ export function TimelinePage() {
                     <div className="truncate text-xs text-slate-400">{item.event.document_title}</div>
                     {categoryLabel ? <div className="truncate text-[11px] text-slate-500">Type: {categoryLabel}</div> : null}
                     {primaryConfidenceLabel ? <div className="text-xs text-slate-500">Confidence: {primaryConfidenceLabel}</div> : null}
+                    {item.event.is_milestone ? (
+                      <span className="mt-1 inline-flex rounded-full border border-emerald-500/60 bg-emerald-500/10 px-2 py-0.5 text-[11px] text-emerald-200">
+                        Milestone
+                      </span>
+                    ) : null}
                     {uncertaintyLabel ? (
                       <span className="mt-1 inline-flex max-w-full rounded-full border border-amber-600/60 bg-amber-500/10 px-2 py-0.5 text-[11px] text-amber-200">
                         {uncertaintyLabel}
