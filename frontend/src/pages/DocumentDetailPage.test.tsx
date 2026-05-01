@@ -16,6 +16,7 @@ vi.mock('@/services/api', () => ({
 }));
 vi.mock('@/hooks/useApi', () => ({
   useDocumentIntelligence: vi.fn(),
+  useDocumentClusters: vi.fn(),
   useCategories: vi.fn(),
   useDocumentActionItems: vi.fn(),
   useDocumentAuditHistory: vi.fn(),
@@ -36,6 +37,7 @@ import {
   useDocumentAuditHistory,
   useDocumentIntelligence,
   useDocumentRelationships,
+  useDocumentClusters,
   useConfirmDocumentRelationship,
   useDismissDocumentRelationship,
   useOverrideDocumentCategory,
@@ -82,6 +84,7 @@ describe('DocumentDetailPage relationship filtering', () => {
     vi.mocked(useApproveDocumentCategory).mockReturnValue({ mutate: vi.fn() } as never);
     vi.mocked(useOverrideDocumentCategory).mockReturnValue({ mutate: vi.fn() } as never);
     vi.mocked(useDocumentRelationships).mockReturnValue({ isLoading: false, isError: false, isSuccess: true, data: baseRelationships } as never);
+    vi.mocked(useDocumentClusters).mockReturnValue({ isLoading: false, isError: false, isSuccess: true, data: [{ cluster_id: 'cluster-1', document_ids: ['doc-1', 'r3'], document_titles: ['Contract.pdf', 'Related Doc'], relationship_count: 1, dominant_signals: ['ai_detected'] }] } as never);
     vi.mocked(useConfirmDocumentRelationship).mockReturnValue({ isPending: false, mutate: confirmMutate } as never);
     vi.mocked(useDismissDocumentRelationship).mockReturnValue({ isPending: false, mutate: dismissMutate } as never);
   });
@@ -205,5 +208,18 @@ describe('DocumentDetailPage relationship filtering', () => {
     expect(screen.getByRole('button', { name: 'Confirm' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Reject' })).toBeTruthy();
     expect(screen.getAllByText('Why related details').length).toBeGreaterThan(0);
+  });
+
+  it('shows View related cluster action when current document has a cluster', async () => {
+    renderPage();
+    const links = await screen.findAllByRole('link', { name: 'View related cluster' });
+    expect(links[0]).toHaveAttribute('href', '/documents?cluster=cluster-1');
+  });
+
+  it('does not show View related cluster action when cluster is missing', async () => {
+    vi.mocked(useDocumentClusters).mockReturnValue({ isLoading: false, isError: false, isSuccess: true, data: [] } as never);
+    renderPage();
+    await screen.findByText('Related Doc');
+    expect(screen.queryByRole('link', { name: 'View related cluster' })).toBeNull();
   });
 });
