@@ -15,6 +15,7 @@ from app.models.user import User
 from app.services.chat_retrieval import retrieve_chat_context
 from app.services.openai_client import APIError, openai_client_service
 from app.config import settings
+from app.services.prompt_templates import get_active_prompt_content
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 logger = logging.getLogger(__name__)
@@ -52,8 +53,8 @@ def _load_recent_session_messages(db: Session, session_id: UUID, max_messages: i
     return [{"role": r.role, "content": r.content} for r in rows]
 
 
-def _build_model_messages(bot_settings, prompt: str, prior_messages: list[dict]) -> list[dict]:
-    model_messages = [{"role": "system", "content": bot_settings.system_prompt}]
+def _build_model_messages(db: Session, bot_settings, prompt: str, prior_messages: list[dict]) -> list[dict]:
+    model_messages = [{"role": "system", "content": get_active_prompt_content(db, "chat", bot_settings.system_prompt)}]
     model_messages.extend(prior_messages)
     model_messages.append({"role": "user", "content": prompt})
     return model_messages
@@ -75,7 +76,7 @@ def _build_chat_payload(db: Session, user: User, payload: MessageRequest):
     if not context["documents"]:
         return bot_settings, context, None
     prompt = (
-        f"{bot_settings.retrieval_prompt}\n\n"
+        f"{get_active_prompt_content(db, "retrieval", bot_settings.retrieval_prompt)}\n\n"
         f"Context:\n{context}\n\n"
         f"Question:\n{payload.message}\n\n"
         f"{bot_settings.citation_prompt}\n"
@@ -147,7 +148,7 @@ def post_message(session_id: UUID, payload: MessageRequest, db: Session = Depend
                 model=bot_settings.model,
                 temperature=bot_settings.temperature,
                 max_tokens=bot_settings.max_tokens,
-                messages=_build_model_messages(bot_settings, prompt, prior_messages),
+                messages=_build_model_messages(db, bot_settings, prompt, prior_messages),
             )
         except APIError as exc:
             _log_chat_request(session_id=s.id, user_id=user.id, endpoint_type="non_streaming", retrieval_count=len(context.get("source_refs", [])), history_count=len(prior_messages), success=False, latency_ms=(time.perf_counter()-start)*1000)
@@ -188,7 +189,7 @@ def stream_message(session_id: UUID, payload: MessageRequest, db: Session = Depe
                     model=bot_settings.model,
                     temperature=bot_settings.temperature,
                     max_tokens=bot_settings.max_tokens,
-                    messages=_build_model_messages(bot_settings, prompt, prior_messages),
+                    messages=_build_model_messages(db, bot_settings, prompt, prior_messages),
                     stream=True,
                 )
             except APIError as exc:

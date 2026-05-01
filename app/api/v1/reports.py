@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user, get_db
 from app.api.v1.admin import _get_or_create_chatbot_settings
 from app.config import settings
+from app.services.prompt_templates import get_active_prompt_content
 from app.models.chat import GeneratedReport
 from app.models.user import User
 from app.services.chat_retrieval import retrieve_chat_context
@@ -39,7 +40,7 @@ def create_report(payload: ReportRequest, db: Session = Depends(get_db), user: U
         max_documents=bot_settings.max_documents,
     )
     prompt = (
-        f"{bot_settings.report_prompt}\n\nTemplate:\n{bot_settings.default_report_template}\n\n"
+        f"{get_active_prompt_content(db, "report", bot_settings.report_prompt)}\n\nTemplate:\n{bot_settings.default_report_template}\n\n"
         f"User request:\n{payload.prompt}\n\n"
         f"Context:\n{context}\n\n"
         "Ground strictly in context and cite sources."
@@ -50,7 +51,7 @@ def create_report(payload: ReportRequest, db: Session = Depends(get_db), user: U
             temperature=bot_settings.temperature,
             max_tokens=bot_settings.max_tokens,
             messages=[
-                {"role": "system", "content": bot_settings.system_prompt},
+                {"role": "system", "content": get_active_prompt_content(db, "chat", bot_settings.system_prompt)},
                 {"role": "user", "content": prompt},
             ],
         )
