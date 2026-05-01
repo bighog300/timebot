@@ -7,6 +7,7 @@ import { DocumentsPage } from './DocumentsPage';
 vi.mock('@/auth/AuthContext', () => ({ useAuth: vi.fn() }));
 vi.mock('@/hooks/useApi', () => ({
   useDocuments: vi.fn(),
+  useDocumentClusters: vi.fn(),
   useConnections: vi.fn(),
   useGmailPreview: vi.fn(),
   useGmailImport: vi.fn(),
@@ -15,7 +16,7 @@ vi.mock('@/hooks/useApi', () => ({
 vi.mock('@/store/uiStore', () => ({ useUIStore: vi.fn() }));
 
 import { useAuth } from '@/auth/AuthContext';
-import { useConnections, useDocuments, useGmailImport, useGmailPreview, useUploadDocument } from '@/hooks/useApi';
+import { useConnections, useDocumentClusters, useDocuments, useGmailImport, useGmailPreview, useUploadDocument } from '@/hooks/useApi';
 import { useUIStore } from '@/store/uiStore';
 
 function renderPage(initialEntry = '/documents') {
@@ -40,6 +41,7 @@ describe('DocumentsPage onboarding and first-value guidance', () => {
     vi.mocked(useGmailImport).mockReturnValue({ isPending: false, mutateAsync: vi.fn() } as never);
     vi.mocked(useConnections).mockReturnValue({ data: [{ type: 'gmail', is_authenticated: true, provider_is_configured: true }] } as never);
     vi.mocked(useDocuments).mockReturnValue({ data: [], isLoading: false, isError: false } as never);
+    vi.mocked(useDocumentClusters).mockReturnValue({ data: [], isSuccess: true } as never);
   });
 
   afterEach(() => {
@@ -86,5 +88,31 @@ describe('DocumentsPage onboarding and first-value guidance', () => {
     expect(screen.queryByTestId('onboarding-gmail-hint')).toBeNull();
     expect(screen.getByText('Drag and drop documents here')).toBeTruthy();
     expect(screen.getByText('Import from Gmail')).toBeTruthy();
+  });
+
+  it('renders clusters and document names', () => {
+    vi.mocked(useDocuments).mockReturnValue({
+      data: [{ id: 'doc-1', filename: 'A.pdf', summary: 'A summary', upload_date: '2026-01-01T00:00:00Z', processing_status: 'processed' }],
+      isLoading: false,
+      isError: false,
+    } as never);
+    vi.mocked(useDocumentClusters).mockReturnValue({
+      isSuccess: true,
+      data: [{ cluster_id: 'c1', document_ids: ['doc-1', 'doc-2'], document_titles: ['A.pdf', 'B.pdf'], relationship_count: 1, dominant_signals: ['ai_detected'] }],
+    } as never);
+    renderPage('/documents');
+    expect(screen.getByText('Cluster (2 documents)')).toBeTruthy();
+    expect(screen.getByText('A.pdf, B.pdf')).toBeTruthy();
+  });
+
+  it('renders cluster empty state', () => {
+    vi.mocked(useDocuments).mockReturnValue({
+      data: [{ id: 'doc-1', filename: 'A.pdf', summary: 'A summary', upload_date: '2026-01-01T00:00:00Z', processing_status: 'processed' }],
+      isLoading: false,
+      isError: false,
+    } as never);
+    vi.mocked(useDocumentClusters).mockReturnValue({ isSuccess: true, data: [] } as never);
+    renderPage('/documents');
+    expect(screen.getByText('No clusters yet.')).toBeTruthy();
   });
 });

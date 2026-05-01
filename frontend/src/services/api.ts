@@ -6,6 +6,7 @@ import type {
   Connection,
   ConnectStartResponse,
   Document,
+  DocumentCluster,
   DocumentIntelligence,
   DocumentRelationshipListItem,
   InsightsResponse,
@@ -224,6 +225,8 @@ export const api = {
   getDocumentAuditHistory: async (id: string): Promise<ReviewAuditEvent[]> => (await http.get(`/documents/${id}/review-audit`)).data,
   listDocumentRelationships: async (id: string, params?: { include_dismissed?: boolean; status?: 'pending' | 'confirmed' | 'dismissed'; limit?: number }): Promise<DocumentRelationshipListItem[]> =>
     (await http.get(`/documents/${id}/relationships`, { params })).data,
+  listDocumentClusters: async (): Promise<DocumentCluster[]> =>
+    (await http.get('/documents/clusters')).data,
   listActionItems: async (status?: 'open' | 'completed' | 'dismissed', limit = 20, offset = 0): Promise<{items: ActionItem[]; total_count:number; limit:number; offset:number}> =>
     (await http.get('/action-items', { params: { status, limit, offset } })).data,
   completeActionItem: async (id: string): Promise<ActionItem> => (await http.post(`/action-items/${id}/complete`)).data,

@@ -304,6 +304,14 @@ export interface DocumentRelationshipListItem {
   } | null;
 }
 
+export interface DocumentCluster {
+  cluster_id: string;
+  document_ids: string[];
+  document_titles: string[];
+  relationship_count: number;
+  dominant_signals: string[];
+}
+
 
 export interface AdminUser { id: string; email: string; display_name: string; role: string; created_at: string; }
 export interface AdminUsersPage { items: AdminUser[]; total_count: number; limit: number; offset: number; }

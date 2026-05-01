@@ -10,11 +10,13 @@ from app.api.deps import get_current_user, get_db
 from app.crud import document as crud_document
 from app.models.user import User
 from app.schemas.document import (
+    DocumentClusterResponse,
     DocumentResponse,
     DocumentReviewRequest,
     DocumentSearchResponse,
     DocumentUpdate,
 )
+from app.services.document_clusters import document_cluster_service
 from app.schemas.review_workflow import (
     CategoryOverrideRequest,
     DocumentRelationshipListItemResponse,
@@ -53,6 +55,14 @@ def search_documents(
 ):
     results = crud_document.search_documents(db, user=current_user, query=query, skip=skip, limit=limit)
     return DocumentSearchResponse(documents=results, total=len(results), query=query)
+
+
+@router.get("/clusters", response_model=List[DocumentClusterResponse])
+def list_document_clusters(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return document_cluster_service.list_clusters_for_user(db, user_id=current_user.id)
 
 
 @router.get("/review-queue", response_model=List[DocumentResponse])
