@@ -142,6 +142,12 @@ export interface StructuredInsightEvidenceRef {
   quote?: string | null;
 }
 
+export interface StructuredInsightsResponse {
+  generated_at?: string;
+  count?: number;
+  insights?: StructuredInsight[] | null;
+}
+
 export interface StructuredInsight {
   type: string;
   title: string;
