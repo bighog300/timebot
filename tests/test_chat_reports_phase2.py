@@ -113,3 +113,57 @@ def test_report_create_and_download_rebuild(client, monkeypatch, db):
     Path(rep.file_path).unlink(missing_ok=True)
     get_res2 = client.get(data["download_url"])
     assert get_res2.status_code == 200
+
+
+def test_chat_stream_requires_auth():
+    from fastapi.testclient import TestClient
+    from app.main import app
+
+    with TestClient(app) as unauth_client:
+        res = unauth_client.post(f"/api/v1/chat/sessions/{uuid.uuid4()}/messages/stream", json={"message": "hello"})
+    assert res.status_code == 401
+
+
+def test_chat_stream_emits_chunks_and_persists_with_sources(client, monkeypatch, db):
+    from app.models.chat import ChatMessage
+    from app.models.user import User
+
+    user = db.query(User).first()
+    _mk_doc(db, user.id, "alpha.txt", "Alpha summary with milestone")
+
+    class DummyChunk:
+        def __init__(self, text):
+            self.choices = [type("Choice", (), {"delta": type("Delta", (), {"content": text})()})()]
+
+    class DummyComp:
+        def create(self, **kwargs):
+            if kwargs.get("stream"):
+                for part in ["According ", "to alpha"]:
+                    yield DummyChunk(part)
+                return
+            return type("DummyResp", (), {"choices": [type("DummyChoice", (), {"message": type("M", (), {"content": "According to alpha"})()})()]})()
+
+    class DummyChat:
+        completions = DummyComp()
+
+    monkeypatch.setattr("app.config.settings.OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr("app.api.v1.chat.openai_client_service._client", type("C", (), {"chat": DummyChat()})())
+
+    s = client.post("/api/v1/chat/sessions", json={"title": "stream"}).json()
+    with client.stream("POST", f"/api/v1/chat/sessions/{s['id']}/messages/stream", json={"message": "alpha"}) as response:
+        assert response.status_code == 200
+        assert response.headers["content-type"].startswith("text/event-stream")
+        body = "".join(list(response.iter_text()))
+
+    assert 'event: chunk' in body
+    assert '"delta": "According "' in body
+    assert '"delta": "to alpha"' in body
+    assert 'event: final' in body
+    assert '"source_refs"' in body
+
+    msgs = db.query(ChatMessage).filter(ChatMessage.session_id == s["id"]).order_by(ChatMessage.created_at.asc()).all()
+    assert len(msgs) == 2
+    assert msgs[0].role == "user"
+    assert msgs[1].role == "assistant"
+    assert "Sources:" in msgs[1].content
+    assert isinstance(msgs[1].source_refs, list)
