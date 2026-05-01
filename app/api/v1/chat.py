@@ -18,6 +18,51 @@ from app.config import settings
 from app.services.prompt_templates import get_active_prompt_content
 
 router = APIRouter(prefix="/chat", tags=["chat"])
+
+
+ANSWER_MODE_INSTRUCTIONS = {
+    "timeline_reasoning": "Answer mode: timeline_reasoning. Focus on sequence, dates, and what happened next using only timeline evidence in context.",
+    "relationship_reasoning": "Answer mode: relationship_reasoning. Focus on links between people, orgs, docs, or events supported by context evidence.",
+    "change_analysis": "Answer mode: change_analysis. Compare before/after states and clearly describe what changed with evidence.",
+    "inconsistency_check": "Answer mode: inconsistency_check. Identify contradictions or mismatches in context and call out missing corroboration.",
+    "risk_analysis": "Answer mode: risk_analysis. Identify explicit risks, impacts, and uncertainty only where context supports it.",
+    "general": "Answer mode: general. Provide a direct grounded answer based on the strongest available context evidence.",
+}
+
+
+def _detect_answer_mode(question: str) -> str:
+    q = (question or "").strip().lower()
+    if not q:
+        return "general"
+
+    timeline_terms = (
+        "what happened next", "happened next", "after that", "then what", "sequence", "timeline", "chronology", "in order",
+    )
+    relationship_terms = (
+        "relationship", "related to", "connected to", "connection between", "how does", "who worked with", "linked to",
+    )
+    change_terms = (
+        "what changed", "changes", "changed", "difference", "different", "before and after", "delta", "evolution",
+    )
+    inconsistency_terms = (
+        "inconsistent", "inconsistency", "contradiction", "conflict", "mismatch", "doesn't match", "do not match", "discrepancy",
+    )
+    risk_terms = (
+        "risk", "risks", "risky", "exposure", "liability", "issue", "issues", "concern", "concerns", "red flag", "threat",
+    )
+
+    if any(t in q for t in inconsistency_terms):
+        return "inconsistency_check"
+    if any(t in q for t in risk_terms):
+        return "risk_analysis"
+    if any(t in q for t in change_terms):
+        return "change_analysis"
+    if any(t in q for t in timeline_terms):
+        return "timeline_reasoning"
+    if any(t in q for t in relationship_terms):
+        return "relationship_reasoning"
+    return "general"
+
 logger = logging.getLogger(__name__)
 
 
@@ -76,10 +121,13 @@ def _build_chat_payload(db: Session, user: User, payload: MessageRequest):
     if not context["documents"]:
         return bot_settings, context, None
     retrieval_prompt_content = get_active_prompt_content(db, "retrieval", bot_settings.retrieval_prompt)
+    answer_mode = _detect_answer_mode(payload.message)
+    answer_mode_instruction = ANSWER_MODE_INSTRUCTIONS[answer_mode]
     prompt = (
         f"{retrieval_prompt_content}\n\n"
         f"Context:\n{format_chat_context(context)}\n\n"
         f"Question:\n{payload.message}\n\n"
+        f"{answer_mode_instruction}\n"
         f"{bot_settings.citation_prompt}\n"
         "Only answer using provided context. If uncertain, explicitly say evidence is insufficient."
     )

@@ -660,3 +660,79 @@ def test_streaming_and_non_streaming_use_same_formatted_context(client, monkeypa
     non_stream_context = captured["non_stream"].split("Question:\n", 1)[0]
     stream_context = captured["stream"].split("Question:\n", 1)[0]
     assert non_stream_context == stream_context
+
+
+def test_answer_mode_detection_keywords():
+    from app.api.v1.chat import _detect_answer_mode
+
+    assert _detect_answer_mode("What changed between versions?") == "change_analysis"
+    assert _detect_answer_mode("What is inconsistent in these records?") == "inconsistency_check"
+    assert _detect_answer_mode("What are the risks here?") == "risk_analysis"
+    assert _detect_answer_mode("Summarize the project") == "general"
+
+
+def test_answer_mode_guidance_in_non_streaming_prompt_and_source_refs_preserved(client, monkeypatch, db):
+    from app.models.user import User
+
+    user = db.query(User).first()
+    _mk_doc(db, user.id, "alpha.txt", "Alpha summary with milestone")
+
+    captured = {}
+
+    class DummyChoice:
+        message = type("M", (), {"content": "Grounded response"})
+
+    class DummyResp:
+        choices = [DummyChoice()]
+
+    class DummyComp:
+        def create(self, **kwargs):
+            captured["messages"] = kwargs["messages"]
+            return DummyResp()
+
+    class DummyChat:
+        completions = DummyComp()
+
+    monkeypatch.setattr("app.config.settings.OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr("app.api.v1.chat.openai_client_service._client", type("C", (), {"chat": DummyChat()})())
+
+    s = client.post("/api/v1/chat/sessions", json={"title": "answer-mode"}).json()
+    r = client.post(f"/api/v1/chat/sessions/{s['id']}/messages", json={"message": "what changed in alpha milestone?"})
+
+    assert r.status_code == 200
+    assert isinstance(r.json()["source_refs"], list)
+    assert "Answer mode: change_analysis" in captured["messages"][-1]["content"]
+
+
+def test_answer_mode_guidance_in_streaming_prompt(client, monkeypatch, db):
+    from app.models.user import User
+
+    user = db.query(User).first()
+    _mk_doc(db, user.id, "alpha.txt", "Alpha summary with milestone")
+
+    captured = {}
+
+    class DummyChunk:
+        def __init__(self, text):
+            self.choices = [type("Choice", (), {"delta": type("Delta", (), {"content": text})()})()]
+
+    class DummyComp:
+        def create(self, **kwargs):
+            captured["messages"] = kwargs["messages"]
+            if kwargs.get("stream"):
+                return [DummyChunk("streamed "), DummyChunk("answer")]
+            return type("DummyResp", (), {"choices": [type("DummyChoice", (), {"message": type("M", (), {"content": "Grounded response"})()})()]})()
+
+    class DummyChat:
+        completions = DummyComp()
+
+    monkeypatch.setattr("app.config.settings.OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr("app.api.v1.chat.openai_client_service._client", type("C", (), {"chat": DummyChat()})())
+
+    s = client.post("/api/v1/chat/sessions", json={"title": "stream-answer-mode"}).json()
+
+    with client.stream("POST", f"/api/v1/chat/sessions/{s['id']}/messages/stream", json={"message": "what is inconsistent about alpha milestone?"}) as response:
+        assert response.status_code == 200
+        _ = "".join(list(response.iter_text()))
+
+    assert "Answer mode: inconsistency_check" in captured["messages"][-1]["content"]
