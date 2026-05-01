@@ -1,16 +1,17 @@
 from __future__ import annotations
 
 from pathlib import Path
+from time import perf_counter
 from typing import Any
-import copy
-import json
-import logging
-import time
 
-from sqlalchemy.orm import Session
+
+from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.config import settings
 from app.models.document import Document
+from app.models.relationships import DocumentRelationship
+
+logger = logging.getLogger(__name__)
 
 
 logger = logging.getLogger(__name__)
@@ -88,24 +89,26 @@ def retrieve_chat_context(
     max_documents: int,
     session_id: Any | None = None,
 ) -> dict[str, Any]:
-    cache_key = _build_cache_key(
-        user_id=user_id,
-        session_id=session_id,
-        query=query,
-        document_ids=document_ids,
-        include_timeline=include_timeline,
-        include_full_text=include_full_text,
-        max_documents=max_documents,
-    )
-    cached = _cache_get(cache_key)
-    if cached is not None:
-        return cached
 
     query_terms = [t.strip().lower() for t in query.split() if t.strip()]
-    base_q = db.query(Document).filter(Document.user_id == user_id, Document.is_archived.is_(False))
+    base_q = (
+        db.query(Document)
+        .options(
+            joinedload(Document.ai_category),
+            joinedload(Document.intelligence),
+            selectinload(Document.outgoing_relationships).joinedload(DocumentRelationship.target_document),
+        )
+        .filter(Document.user_id == user_id, Document.is_archived.is_(False))
+    )
     if document_ids:
         base_q = base_q.filter(Document.id.in_(document_ids))
     candidates = base_q.all()
+
+    full_text_by_doc: dict[str, Path] = {}
+    if include_full_text:
+        text_path = Path(settings.effective_artifact_dir) / "extracted_text"
+        for candidate in text_path.glob("**/*.txt"):
+            full_text_by_doc[candidate.stem] = candidate
 
     ranked: list[tuple[int, Document, dict[str, Any]]] = []
     for doc in candidates:
@@ -173,10 +176,9 @@ def retrieve_chat_context(
             thread_outcome = doc.extracted_metadata.get("thread_outcome")
 
         if include_full_text:
-            text_path = Path(settings.effective_artifact_dir) / "extracted_text"
-            possible = list(text_path.glob(f"**/{doc.id}.txt"))
+            possible = full_text_by_doc.get(str(doc.id))
             if possible:
-                full_text = possible[0].read_text(encoding="utf-8", errors="ignore")
+                full_text = possible.read_text(encoding="utf-8", errors="ignore")
                 excerpts = _excerpt_matches(query_terms, full_text, max_chars=180)
                 for ex in excerpts[:2]:
                     matched_snippets.append(ex)
@@ -190,9 +192,7 @@ def retrieve_chat_context(
     selected = ranked[: max(1, max_documents)]
     documents = [item[2] for item in selected]
     source_refs = [ref for _, _, d in selected for ref in d.pop("_source_refs", [])]
-    result = {"documents": documents, "source_refs": source_refs}
-    _cache_set(cache_key, result)
-    return result
+
 
 
 def format_chat_context(context: dict[str, Any], max_items_per_section: int = 25) -> str:
