@@ -1,5 +1,7 @@
 from pathlib import Path
 import json
+import logging
+import time
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse
@@ -17,6 +19,7 @@ from app.services.openai_client import APIError, openai_client_service
 from app.services.report_export import generate_report_pdf
 
 router = APIRouter(prefix="/reports", tags=["reports"])
+logger = logging.getLogger(__name__)
 
 
 class ReportRequest(BaseModel):
@@ -81,6 +84,7 @@ def create_report(payload: ReportRequest, db: Session = Depends(get_db), user: U
     bot_settings = _get_or_create_chatbot_settings(db)
     if not openai_client_service.enabled:
         raise HTTPException(status_code=503, detail="Report AI is unavailable: OPENAI_API_KEY is not configured.")
+    start = time.perf_counter()
     context = retrieve_chat_context(
         db=db,
         query=payload.prompt,
@@ -97,6 +101,7 @@ def create_report(payload: ReportRequest, db: Session = Depends(get_db), user: U
         f"Context:\n{context}\n\n"
         "Ground strictly in context and cite sources."
     )
+    model_start = time.perf_counter()
     try:
         response = openai_client_service.client.chat.completions.create(
             model=bot_settings.model,
@@ -108,6 +113,7 @@ def create_report(payload: ReportRequest, db: Session = Depends(get_db), user: U
             ],
         )
     except APIError as exc:
+        logger.info("report_generation_timing", extra={"event": "report_generation_timing", "user_id": str(user.id), "report_id": None, "duration_ms": round((time.perf_counter() - start) * 1000, 2), "model_call_duration_ms": round((time.perf_counter() - model_start) * 1000, 2), "source_ref_count": len(context.get("source_refs", [])), "success": False})
         raise HTTPException(status_code=503, detail=f"Report AI request failed: {exc}") from exc
     content = (response.choices[0].message.content or "").strip() or f"# {payload.title}\n\nInsufficient evidence in accessible documents."
     sections_prompt = (
@@ -142,6 +148,7 @@ def create_report(payload: ReportRequest, db: Session = Depends(get_db), user: U
     db.add(report)
     db.commit()
     db.refresh(report)
+    logger.info("report_generation_timing", extra={"event": "report_generation_timing", "user_id": str(user.id), "report_id": str(report.id), "duration_ms": round((time.perf_counter() - start) * 1000, 2), "model_call_duration_ms": round((time.perf_counter() - model_start) * 1000, 2), "source_ref_count": len(context.get("source_refs", [])), "section_count": len(sections or {}), "success": True})
 
     report_dir = Path(settings.effective_artifact_dir) / "reports"
     report_dir.mkdir(parents=True, exist_ok=True)

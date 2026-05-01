@@ -1,5 +1,6 @@
 import uuid
 from pathlib import Path
+import logging
 
 from app.api.v1.admin import _get_or_create_chatbot_settings
 from app.services.chat_retrieval import retrieve_chat_context
@@ -277,6 +278,43 @@ def test_report_owner_can_update_sections(client, monkeypatch):
     updated = client.patch(f"/api/v1/reports/{created['id']}", json={"sections": {"summary": "Updated S", "timeline": "Updated T", "relationships": "Updated R"}})
     assert updated.status_code == 200
     assert updated.json()["sections"]["summary"] == "Updated S"
+
+
+def test_chat_timing_logs_success_include_duration(client, monkeypatch, db, caplog):
+    from app.models.user import User
+    user = db.query(User).first()
+    _mk_doc(db, user.id, "alpha.txt", "Alpha summary")
+
+    class DummyComp:
+        def create(self, **kwargs):
+            return type("R", (), {"choices": [type("C", (), {"message": type("M", (), {"content": "OK"})()})()]})()
+
+    monkeypatch.setattr("app.config.settings.OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr("app.api.v1.chat.openai_client_service._client", type("X", (), {"chat": type("Y", (), {"completions": DummyComp()})()})())
+    s = client.post("/api/v1/chat/sessions", json={"title": "s"}).json()
+    with caplog.at_level(logging.INFO):
+        res = client.post(f"/api/v1/chat/sessions/{s['id']}/messages", json={"message": "alpha question"})
+    assert res.status_code == 200
+    timing = [r for r in caplog.records if r.msg == "chat_model_call_timing"]
+    assert timing and getattr(timing[-1], "duration_ms", None) is not None
+    assert "alpha question" not in caplog.text
+
+
+def test_report_timing_logs_failure_success_false(client, monkeypatch, caplog):
+    class DummyComp:
+        def create(self, **kwargs):
+            raise Exception("boom")
+
+    monkeypatch.setattr("app.config.settings.OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr("app.api.v1.reports.APIError", Exception)
+    monkeypatch.setattr("app.api.v1.reports.openai_client_service._client", type("X", (), {"chat": type("Y", (), {"completions": DummyComp()})()})())
+
+    with caplog.at_level(logging.INFO):
+        res = client.post("/api/v1/reports", json={"title": "R", "prompt": "safe prompt"})
+    assert res.status_code == 503
+    timing = [r for r in caplog.records if r.msg == "report_generation_timing"]
+    assert timing and timing[-1].success is False
+    assert "safe prompt" not in caplog.text
 
 
 def test_report_update_forbidden_for_other_user(client, db, monkeypatch):
