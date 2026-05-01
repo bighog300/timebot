@@ -1,10 +1,44 @@
+import { useMemo, useState } from 'react';
 import { useInsightsOverview, useStructuredInsights } from '@/hooks/useApi';
 import { Card } from '@/components/ui/Card';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui/States';
 
+const TYPE_FILTERS = [
+  { label: 'All', value: 'all' },
+  { label: 'Risks', value: 'risk' },
+  { label: 'Inconsistencies', value: 'inconsistency' },
+  { label: 'Changes', value: 'change' },
+  { label: 'Missing information', value: 'missing_information' },
+  { label: 'Milestones', value: 'milestone' },
+] as const;
+
+const SEVERITY_FILTERS = [
+  { label: 'All severity', value: 'all' },
+  { label: 'High', value: 'high' },
+  { label: 'Medium', value: 'medium' },
+  { label: 'Low', value: 'low' },
+] as const;
+
+function normalizeFilterValue(value: string) {
+  return value.toLowerCase().replace(/\s+/g, '_');
+}
+
 export function InsightsPage() {
   const { data, isLoading, isError } = useInsightsOverview();
   const { data: structuredInsights, isLoading: structuredLoading, isError: structuredError } = useStructuredInsights();
+  const [typeFilter, setTypeFilter] = useState<(typeof TYPE_FILTERS)[number]['value']>('all');
+  const [severityFilter, setSeverityFilter] = useState<(typeof SEVERITY_FILTERS)[number]['value']>('all');
+
+  const filteredInsights = useMemo(() => {
+    const insights = structuredInsights ?? [];
+    return insights.filter((insight) => {
+      const normalizedType = normalizeFilterValue(insight.type);
+      const normalizedSeverity = normalizeFilterValue(insight.severity);
+      const typeMatch = typeFilter === 'all' || normalizedType === typeFilter;
+      const severityMatch = severityFilter === 'all' || normalizedSeverity === severityFilter;
+      return typeMatch && severityMatch;
+    });
+  }, [severityFilter, structuredInsights, typeFilter]);
 
   const isInitialLoading = isLoading || structuredLoading;
   const hasError = isError || structuredError;
@@ -17,8 +51,42 @@ export function InsightsPage() {
       {!isInitialLoading && !hasError && (
         <section className="space-y-3" aria-label="Structured insights">
           <h2 className="text-base font-medium">Structured insights</h2>
+          {!!structuredInsights?.length && (
+            <div className="space-y-2" aria-label="Insight filters">
+              <div className="flex flex-wrap gap-2">
+                {TYPE_FILTERS.map((filter) => (
+                  <button
+                    key={filter.value}
+                    type="button"
+                    onClick={() => setTypeFilter(filter.value)}
+                    className={`rounded-full px-3 py-1 text-xs font-medium ${
+                      typeFilter === filter.value ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-700'
+                    }`}
+                  >
+                    {filter.label}
+                  </button>
+                ))}
+              </div>
+              <label className="flex w-full max-w-xs flex-col gap-1 text-xs font-medium text-slate-600">
+                Severity
+                <select
+                  className="rounded-md border border-slate-300 bg-white px-2 py-1 text-sm"
+                  value={severityFilter}
+                  onChange={(event) => setSeverityFilter(event.target.value as (typeof SEVERITY_FILTERS)[number]['value'])}
+                  aria-label="Severity filter"
+                >
+                  {SEVERITY_FILTERS.map((filter) => (
+                    <option key={filter.value} value={filter.value}>
+                      {filter.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          )}
           {!structuredInsights?.length && <EmptyState label="No structured insights available." />}
-          {structuredInsights?.map((insight, index) => (
+          {!!structuredInsights?.length && !filteredInsights.length && <EmptyState label="No insights match the selected filters." />}
+          {filteredInsights.map((insight, index) => (
             <Card key={`${insight.type}-${index}`}>
               <div className="space-y-2 text-sm">
                 <div className="flex flex-wrap items-center gap-2">

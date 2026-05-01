@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { InsightsPage } from '@/pages/InsightsPage';
 
@@ -42,6 +42,48 @@ describe('insights structured panel', () => {
     const link = screen.getByRole('link', { name: 'Master Service Agreement' });
     expect(link).toHaveAttribute('href', '/documents/doc-1');
     expect(screen.getByText(/timeline/)).toBeInTheDocument();
+  });
+
+  it('applies type and severity filters and keeps related links/evidence visible', () => {
+    mockUseInsightsOverview.mockReturnValue({ data: { action_item_summary: {}, category_distribution: [], recent_activity: [] }, isLoading: false, isError: false });
+    mockUseStructuredInsights.mockReturnValue({
+      data: [
+        {
+          type: 'risk',
+          title: 'Risk insight',
+          description: 'A high risk issue.',
+          severity: 'high',
+          related_documents: [{ document_id: 'doc-2', title: 'Risk Document' }],
+          evidence_refs: [{ source: 'document', reference: 'sec-1' }],
+        },
+        {
+          type: 'change',
+          title: 'Change insight',
+          description: 'A medium change issue.',
+          severity: 'medium',
+          related_documents: [{ document_id: 'doc-3', title: 'Change Document' }],
+          evidence_refs: [{ source: 'timeline', reference: 'chg-1' }],
+        },
+      ],
+      isLoading: false,
+      isError: false,
+    });
+
+    render(<InsightsPage />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Risks' }));
+    expect(screen.getByText('Risk insight')).toBeInTheDocument();
+    expect(screen.queryByText('Change insight')).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Risk Document' })).toHaveAttribute('href', '/documents/doc-2');
+    expect(screen.getByText(/document • sec-1/)).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Severity filter'), { target: { value: 'medium' } });
+    expect(screen.getByText('No insights match the selected filters.')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'All' }));
+    expect(screen.getByText('Change insight')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Change Document' })).toHaveAttribute('href', '/documents/doc-3');
+    expect(screen.getByText(/timeline • chg-1/)).toBeInTheDocument();
   });
 
   it('renders empty state when no structured insights exist', () => {
