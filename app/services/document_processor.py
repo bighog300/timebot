@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.models.document import Document
 from app.models.user import User
+from app.services.error_sanitizer import sanitize_processing_error
 from app.services.storage import storage
 from app.services.text_extractor import text_extractor
 from app.services.thumbnail_generator import thumbnail_generator
@@ -75,7 +76,7 @@ class DocumentProcessor:
         except Exception as e:
             logger.error("Sync processing failed: %s", e)
             document.processing_status = "failed"
-            document.processing_error = str(e)
+            document.processing_error = sanitize_processing_error(str(e))
             db.add(document)
             db.commit()
 
@@ -119,7 +120,7 @@ class DocumentProcessor:
         except Exception as e:
             logger.error("Document processing error for %s: %s", document.id, e)
             document.processing_status = "failed"
-            document.processing_error = str(e)
+            document.processing_error = sanitize_processing_error(str(e))
 
         db.add(document)
         db.commit()
@@ -202,14 +203,15 @@ class DocumentProcessor:
         return ""
 
     def _append_processing_warning(self, document: Document, message: str) -> None:
-        if not message:
+        safe_message = sanitize_processing_error(message)
+        if not safe_message:
             return
         if not document.processing_error:
-            document.processing_error = message
+            document.processing_error = safe_message
             return
-        if message in document.processing_error:
+        if safe_message in document.processing_error:
             return
-        document.processing_error = f"{document.processing_error} | {message}"
+        document.processing_error = f"{document.processing_error} | {safe_message}"
 
 
 document_processor = DocumentProcessor()
