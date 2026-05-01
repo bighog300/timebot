@@ -19,6 +19,7 @@ import {
   useDocumentRelationships,
   useOverrideDocumentCategory,
   usePatchDocumentIntelligence,
+  useStructuredInsights,
 } from '@/hooks/useApi';
 
 function docStatusReady(status?: string) {
@@ -60,6 +61,7 @@ export function DocumentDetailPage() {
   const auditQuery = useDocumentAuditHistory(id);
   const relationshipsQuery = useDocumentRelationships(id);
   const clustersQuery = useDocumentClusters();
+  const structuredInsightsQuery = useStructuredInsights();
   const confirmRelationship = useConfirmDocumentRelationship(id);
   const dismissRelationship = useDismissDocumentRelationship(id);
   const patchIntelligence = usePatchDocumentIntelligence(id);
@@ -218,6 +220,10 @@ export function DocumentDetailPage() {
       )}
     </li>
   );
+  const documentInsights = useMemo(() => {
+    const insights = structuredInsightsQuery.data ?? [];
+    return insights.filter((insight) => insight.related_documents?.some((docRef) => docRef.document_id === id));
+  }, [id, structuredInsightsQuery.data]);
 
   if (documentQuery.isLoading) return <LoadingState />;
   if (documentQuery.isError || !documentQuery.data) return <ErrorState message="Document not found" />;
@@ -326,6 +332,27 @@ export function DocumentDetailPage() {
           </ul>
         </Card>
       </div>
+
+      <Card>
+        <h3 className="mb-2">Insights for this document</h3>
+        {structuredInsightsQuery.isLoading && <LoadingState label="Loading insights..." />}
+        {structuredInsightsQuery.isError && <ErrorState message="Failed to load insights for this document." />}
+        {structuredInsightsQuery.isSuccess && documentInsights.length === 0 && <EmptyState label="No insights found for this document." />}
+        {structuredInsightsQuery.isSuccess && documentInsights.length > 0 && (
+          <ul className="space-y-2 text-sm">
+            {documentInsights.map((insight, index) => (
+              <li key={`${insight.type}-${insight.title}-${index}`} className="rounded border border-slate-800 p-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="rounded bg-slate-800 px-2 py-1 text-xs">{insight.type}</span>
+                  <span className="rounded bg-slate-800 px-2 py-1 text-xs">Severity: {insight.severity}</span>
+                </div>
+                <h4 className="mt-2 font-medium">{insight.title}</h4>
+                <p className="mt-1 text-slate-300">{insight.description}</p>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
 
       <Card>
         <h3 className="mb-2">Related documents</h3>

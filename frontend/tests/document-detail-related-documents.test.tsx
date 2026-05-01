@@ -42,6 +42,7 @@ vi.mock('@/hooks/useApi', () => ({
   useOverrideDocumentCategory: () => ({ mutate: vi.fn() }),
   useDocumentRelationships: () => mockUseDocumentRelationships(),
   useDocumentClusters: () => mockUseDocumentClusters(),
+  useStructuredInsights: () => ({ isLoading: false, isError: false, isSuccess: true, data: [] }),
   useConfirmDocumentRelationship: () => ({ isPending: false, mutate: vi.fn() }),
   useDismissDocumentRelationship: () => ({ isPending: false, mutate: vi.fn() }),
 }));
