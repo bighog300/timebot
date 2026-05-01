@@ -56,7 +56,7 @@ class DocumentProcessor:
             from app.workers.tasks import process_document_task
 
             task_result = process_document_task.apply_async(args=[str(document.id)], priority=5)
-            logger.info("Upload queued document_id=%s user_id=%s task_id=%s queue=documents", document.id, user.id, task_result.id)
+            logger.info("Upload queued document_id=%s user_id=%s task_id=%s queue=ingestion", document.id, user.id, task_result.id)
         except Exception as e:
             logger.warning("Celery unavailable (%s); processing synchronously", e)
             self._process_sync(db, document)
