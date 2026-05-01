@@ -278,3 +278,110 @@ def test_chat_stream_emits_chunks_and_persists_with_sources(client, monkeypatch,
     assert msgs[1].role == "assistant"
     assert "Sources:" in msgs[1].content
     assert isinstance(msgs[1].source_refs, list)
+
+
+def test_chat_success_emits_structured_log_without_message_content(client, monkeypatch, db, caplog):
+    from app.models.user import User
+
+    user = db.query(User).first()
+    _mk_doc(db, user.id, "alpha.txt", "Alpha summary with milestone")
+
+    class DummyChoice:
+        message = type("M", (), {"content": "Grounded response"})
+
+    class DummyResp:
+        choices = [DummyChoice()]
+
+    class DummyComp:
+        def create(self, **kwargs):
+            return DummyResp()
+
+    class DummyChat:
+        completions = DummyComp()
+
+    monkeypatch.setattr("app.config.settings.OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr("app.api.v1.chat.openai_client_service._client", type("C", (), {"chat": DummyChat()})())
+
+    s = client.post("/api/v1/chat/sessions", json={"title": "log-s"}).json()
+    raw_message = "private user message should not be logged"
+
+    with caplog.at_level("INFO", logger="app.api.v1.chat"):
+        r = client.post(f"/api/v1/chat/sessions/{s['id']}/messages", json={"message": raw_message})
+
+    assert r.status_code == 200
+    records = [rec for rec in caplog.records if rec.msg == "chat_request"]
+    assert records
+    rec = records[-1]
+    assert rec.event == "chat_request"
+    assert rec.endpoint_type == "non_streaming"
+    assert rec.success is True
+    assert rec.session_id == s["id"]
+    assert rec.user_id
+    assert isinstance(rec.retrieval_count, int)
+    assert isinstance(rec.history_message_count, int)
+    assert isinstance(rec.latency_ms, float)
+    assert raw_message not in caplog.text
+
+
+def test_chat_failure_emits_structured_log(client, monkeypatch, db, caplog):
+    from app.models.user import User
+
+    user = db.query(User).first()
+    _mk_doc(db, user.id, "alpha.txt", "Alpha summary with milestone")
+
+    class DummyComp:
+        def create(self, **kwargs):
+            raise Exception("simulated upstream failure")
+
+    class DummyChat:
+        completions = DummyComp()
+
+    monkeypatch.setattr("app.config.settings.OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr("app.api.v1.chat.APIError", Exception)
+    monkeypatch.setattr("app.api.v1.chat.openai_client_service._client", type("C", (), {"chat": DummyChat()})())
+
+    s = client.post("/api/v1/chat/sessions", json={"title": "log-f"}).json()
+    with caplog.at_level("INFO", logger="app.api.v1.chat"):
+        r = client.post(f"/api/v1/chat/sessions/{s['id']}/messages", json={"message": "alpha"})
+
+    assert r.status_code == 503
+    records = [rec for rec in caplog.records if rec.msg == "chat_request"]
+    assert records
+    rec = records[-1]
+    assert rec.endpoint_type == "non_streaming"
+    assert rec.success is False
+
+
+def test_chat_stream_success_emits_structured_log(client, monkeypatch, db, caplog):
+    from app.models.user import User
+
+    user = db.query(User).first()
+    _mk_doc(db, user.id, "alpha.txt", "Alpha summary with milestone")
+
+    class DummyChunk:
+        def __init__(self, text):
+            self.choices = [type("Choice", (), {"delta": type("Delta", (), {"content": text})()})()]
+
+    class DummyComp:
+        def create(self, **kwargs):
+            if kwargs.get("stream"):
+                return [DummyChunk("hello "), DummyChunk("world")]
+            return type("DummyResp", (), {"choices": [type("DummyChoice", (), {"message": type("M", (), {"content": "fallback"})()})()]})()
+
+    class DummyChat:
+        completions = DummyComp()
+
+    monkeypatch.setattr("app.config.settings.OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr("app.api.v1.chat.openai_client_service._client", type("C", (), {"chat": DummyChat()})())
+
+    s = client.post("/api/v1/chat/sessions", json={"title": "stream-log"}).json()
+    with caplog.at_level("INFO", logger="app.api.v1.chat"):
+        with client.stream("POST", f"/api/v1/chat/sessions/{s['id']}/messages/stream", json={"message": "alpha"}) as response:
+            assert response.status_code == 200
+            _ = "".join(list(response.iter_text()))
+
+    records = [rec for rec in caplog.records if rec.msg == "chat_request"]
+    assert records
+    rec = records[-1]
+    assert rec.endpoint_type == "streaming"
+    assert rec.success is True
