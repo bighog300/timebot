@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useAdminAudit, useAdminMetrics, useAdminUsers, useUpdateUserRole } from '@/hooks/useApi';
+import { useAdminAudit, useAdminMetrics, useAdminProcessingSummary, useAdminUsers, useUpdateUserRole } from '@/hooks/useApi';
 import { useUIStore } from '@/store/uiStore';
 import { Card } from '@/components/ui/Card';
 import { PaginationControls } from '@/components/ui/PaginationControls';
@@ -12,11 +12,24 @@ export function AdminPage() {
   const users = useAdminUsers(page, limit);
   const audit = useAdminAudit(auditPage, limit);
   const metrics = useAdminMetrics();
+  const processingSummary = useAdminProcessingSummary();
   const updateRole = useUpdateUserRole();
 
   return <div className='space-y-6'>
     <h1 className='text-xl font-semibold'>Admin Panel</h1>
     <div className='grid grid-cols-2 gap-3 md:grid-cols-4'>{Object.entries(metrics.data || {}).map(([k,v])=><Card key={k}><div className='text-sm text-slate-400'>{k}</div><div className='text-lg'>{String(v)}</div></Card>)}</div>
+    <Card>
+      <h2 className='mb-2 text-lg'>Processing Summary</h2>
+      {processingSummary.isLoading ? 'Loading processing summary...' : processingSummary.isError ? 'Failed loading processing summary' : (
+        <div className='grid grid-cols-2 gap-2 text-sm md:grid-cols-5'>
+          <div><div className='text-slate-400'>pending</div><div>{processingSummary.data?.pending ?? 0}</div></div>
+          <div><div className='text-slate-400'>processing</div><div>{processingSummary.data?.processing ?? 0}</div></div>
+          <div><div className='text-slate-400'>completed</div><div>{processingSummary.data?.completed ?? 0}</div></div>
+          <div><div className='text-slate-400'>failed</div><div>{processingSummary.data?.failed ?? 0}</div></div>
+          <div><div className='text-slate-400'>recently failed</div><div>{processingSummary.data?.recently_failed ?? 0}</div></div>
+        </div>
+      )}
+    </Card>
     <Card><h2 className='mb-2 text-lg'>User Management</h2>
       {users.isLoading ? 'Loading users...' : users.isError ? 'Failed loading users' : <table className='w-full text-sm'><thead><tr className='text-left'><th>Email</th><th>Name</th><th>Role</th><th>Created</th></tr></thead><tbody>{users.data?.items.map(u=><tr key={u.id} className='border-t border-slate-800'><td>{u.email}</td><td>{u.display_name}</td><td><select value={u.role} onChange={async (e)=>{ try { await updateRole.mutateAsync({userId:u.id, role:e.target.value}); pushToast('Role updated'); } catch (err) { pushToast((err as Error).message, 'error'); } }}><option>viewer</option><option>editor</option><option>admin</option></select></td><td>{new Date(u.created_at).toLocaleString()}</td></tr>)}</tbody></table>}
       <PaginationControls page={page} total={users.data ? Math.max(1, Math.ceil(users.data.total_count / users.data.limit)) : undefined} hasNext={Boolean(users.data?.items?.length)} onPrev={()=>setPage((p)=>Math.max(0,p-1))} onNext={()=>setPage((p)=>p+1)} />

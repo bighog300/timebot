@@ -22,6 +22,7 @@ import type {
   TimelineResponse,
   AdminUsersPage,
   AdminMetrics,
+  AdminProcessingSummary,
   AdminAuditPage,
   ChatbotSettings,
   ChatSession,
@@ -138,6 +139,7 @@ export const api = {
   listAdminUsers: async (limit = 20, offset = 0): Promise<AdminUsersPage> => (await http.get('/admin/users', { params: { limit, offset } })).data,
   updateAdminUserRole: async (userId: string, role: string) => (await http.patch(`/admin/users/${userId}/role`, { role })).data,
   getAdminMetrics: async (): Promise<AdminMetrics> => (await http.get('/admin/metrics')).data,
+  getAdminProcessingSummary: async (): Promise<AdminProcessingSummary> => (await http.get('/admin/processing-summary')).data,
   listAdminAudit: async (limit = 20, offset = 0): Promise<AdminAuditPage> => (await http.get('/admin/audit', { params: { limit, offset } })).data,
 
   listPromptTemplates: async (): Promise<PromptTemplate[]> => (await http.get('/admin/prompts')).data,

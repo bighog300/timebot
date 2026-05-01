@@ -43,6 +43,7 @@ export const keys = {
   connections: ['connections'] as const,
   adminUsers: (page:number,limit:number)=>['admin-users',page,limit] as const,
   adminMetrics: ['admin-metrics'] as const,
+  adminProcessingSummary: ['admin-processing-summary'] as const,
   adminAudit: (page:number,limit:number)=>['admin-audit',page,limit] as const,
   adminPrompts: ['admin-prompts'] as const,
   chatbotSettings: ['chatbot-settings'] as const,
@@ -442,6 +443,7 @@ export function useConnections() {
 
 export function useAdminUsers(page=0, limit=20) { const authReady = useAuthReady(); return useQuery({queryKey: keys.adminUsers(page, limit), queryFn: () => api.listAdminUsers(limit, page*limit), enabled: authReady}); }
 export function useAdminMetrics() { const authReady = useAuthReady(); return useQuery({queryKey: keys.adminMetrics, queryFn: api.getAdminMetrics, enabled: authReady}); }
+export function useAdminProcessingSummary() { const authReady = useAuthReady(); return useQuery({queryKey: keys.adminProcessingSummary, queryFn: api.getAdminProcessingSummary, enabled: authReady}); }
 export function useAdminAudit(page=0, limit=20) { const authReady = useAuthReady(); return useQuery({queryKey: keys.adminAudit(page, limit), queryFn: () => api.listAdminAudit(limit, page*limit), enabled: authReady}); }
 export function useUpdateUserRole() {
   const qc = useQueryClient();

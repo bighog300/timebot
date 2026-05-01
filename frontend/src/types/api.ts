@@ -310,6 +310,7 @@ export interface AdminUsersPage { items: AdminUser[]; total_count: number; limit
 export interface AdminAuditEvent { id: string; actor_id: string | null; actor_email: string | null; entity_type: string; entity_id: string; action: string; details: Record<string, unknown>; created_at: string; }
 export interface AdminAuditPage { items: AdminAuditEvent[]; total_count: number; limit: number; offset: number; }
 export interface AdminMetrics { total_users: number; total_documents: number; documents_processed: number; documents_failed: number; pending_review_items: number; open_action_items: number; pending_relationship_reviews: number; }
+export interface AdminProcessingSummary { pending: number; processing: number; completed: number; failed: number; recently_failed: number; }
 export type PromptTemplateType = 'chat' | 'retrieval' | 'report' | 'timeline_extraction' | 'relationship_detection';
 export interface PromptTemplate { id: string; prompt_type: PromptTemplateType; name: string; content: string; version: number; is_active: boolean; created_at: string; updated_at: string; }
 export interface PromptTemplateCreateRequest { prompt_type: PromptTemplateType; name: string; content: string; }

@@ -1,3 +1,5 @@
+from datetime import datetime, timedelta, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -15,6 +17,7 @@ from app.schemas.admin import (
     AdminAuditEventResponse,
     AdminAuditPageResponse,
     AdminMetricsResponse,
+    AdminProcessingSummaryResponse,
     AdminRoleUpdateRequest,
     AdminUserResponse,
     AdminUsersPageResponse,
@@ -121,6 +124,30 @@ def admin_metrics(_: str = Depends(require_admin), db: Session = Depends(get_db)
         pending_review_items=db.query(func.count(DocumentReviewItem.id)).filter(DocumentReviewItem.status == "open").scalar() or 0,
         open_action_items=db.query(func.count(DocumentActionItem.id)).filter(DocumentActionItem.state == "open").scalar() or 0,
         pending_relationship_reviews=db.query(func.count(DocumentRelationshipReview.id)).filter(DocumentRelationshipReview.status == "pending").scalar() or 0,
+    )
+
+
+@router.get("/processing-summary", response_model=AdminProcessingSummaryResponse)
+def admin_processing_summary(_: str = Depends(require_admin), db: Session = Depends(get_db)):
+    status_counts = (
+        db.query(Document.processing_status, func.count(Document.id))
+        .group_by(Document.processing_status)
+        .all()
+    )
+    counts = {status: count for status, count in status_counts}
+    recent_cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+    recently_failed = (
+        db.query(func.count(Document.id))
+        .filter(Document.processing_status == "failed", Document.updated_at >= recent_cutoff)
+        .scalar()
+        or 0
+    )
+    return AdminProcessingSummaryResponse(
+        pending=(counts.get("pending", 0) + counts.get("queued", 0)),
+        processing=counts.get("processing", 0),
+        completed=counts.get("completed", 0),
+        failed=counts.get("failed", 0),
+        recently_failed=recently_failed,
     )
 
 
