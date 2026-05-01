@@ -51,3 +51,11 @@ class AdminMetricsResponse(BaseModel):
     pending_review_items: int
     open_action_items: int
     pending_relationship_reviews: int
+
+
+class AdminProcessingSummaryResponse(BaseModel):
+    pending: int
+    processing: int
+    completed: int
+    failed: int
+    recently_failed: int
