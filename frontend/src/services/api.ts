@@ -127,7 +127,8 @@ export const api = {
   listReports: async (): Promise<GeneratedReport[]> => (await http.get('/reports')).data,
   getReport: async (reportId: string): Promise<GeneratedReport> => (await http.get(`/reports/${reportId}`)).data,
   updateReport: async (reportId: string, payload: ReportUpdateRequest): Promise<GeneratedReport> => (await http.patch(`/reports/${reportId}`, payload)).data,
-  getReportDownloadUrl: (reportId: string): string => `${http.defaults.baseURL}/reports/${reportId}/download`,
+  getReportDownloadUrl: (reportId: string, format: 'md' | 'pdf' = 'md'): string =>
+    `${http.defaults.baseURL}/reports/${reportId}/download?format=${format}`,
 
   listAdminUsers: async (limit = 20, offset = 0): Promise<AdminUsersPage> => (await http.get('/admin/users', { params: { limit, offset } })).data,
   updateAdminUserRole: async (userId: string, role: string) => (await http.patch(`/admin/users/${userId}/role`, { role })).data,

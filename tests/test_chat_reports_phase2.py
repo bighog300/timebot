@@ -344,6 +344,82 @@ def test_markdown_download_remains_after_section_edit(client, monkeypatch):
     assert "# Report" in download.text
 
 
+def test_report_owner_can_download_pdf(client, monkeypatch):
+    class DummyComp:
+        calls = 0
+        def create(self, **kwargs):
+            self.calls += 1
+            if self.calls == 1:
+                return type("DR", (), {"choices": [type("DC", (), {"message": type("M", (), {"content": "# Report\n\nBody"})()})()]})()
+            return type("DR2", (), {"choices": [type("DC2", (), {"message": type("M", (), {"content": '{"summary":"S","timeline":"T","relationships":"R"}'})()})()]})()
+    monkeypatch.setattr("app.config.settings.OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr("app.api.v1.reports.openai_client_service._client", type("C", (), {"chat": type("Chat", (), {"completions": DummyComp()})()})())
+    created = client.post("/api/v1/reports", json={"title": "PDF Report", "prompt": "p"}).json()
+    res = client.get(f"/api/v1/reports/{created['id']}/download?format=pdf")
+    assert res.status_code == 200
+    assert res.headers["content-type"].startswith("application/pdf")
+    assert res.content.startswith(b"%PDF")
+
+
+def test_report_pdf_download_forbidden_for_other_user(client, db, monkeypatch):
+    from app.models.user import User
+    from app.services.auth import auth_service
+    from app.api.deps import get_current_user
+    from app.main import app
+    class DummyComp:
+        calls = 0
+        def create(self, **kwargs):
+            self.calls += 1
+            if self.calls == 1:
+                return type("DR", (), {"choices": [type("DC", (), {"message": type("M", (), {"content": "# Report\n\nBody"})()})()]})()
+            return type("DR2", (), {"choices": [type("DC2", (), {"message": type("M", (), {"content": '{"summary":"S","timeline":"T","relationships":"R"}'})()})()]})()
+    monkeypatch.setattr("app.config.settings.OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr("app.api.v1.reports.openai_client_service._client", type("C", (), {"chat": type("Chat", (), {"completions": DummyComp()})()})())
+    created = client.post("/api/v1/reports", json={"title": "Private", "prompt": "p"}).json()
+    other = User(email="other2@example.com", display_name="other2", password_hash=auth_service.hash_password("pw"), is_active=True, role="editor")
+    db.add(other); db.commit()
+    app.dependency_overrides[get_current_user] = lambda: other
+    res = client.get(f"/api/v1/reports/{created['id']}/download?format=pdf")
+    app.dependency_overrides.pop(get_current_user, None)
+    assert res.status_code == 404
+
+
+def test_report_pdf_prefers_structured_sections(client, monkeypatch):
+    class DummyComp:
+        calls = 0
+        def create(self, **kwargs):
+            self.calls += 1
+            if self.calls == 1:
+                return type("DR", (), {"choices": [type("DC", (), {"message": type("M", (), {"content": "# Report\n\nBody markdown only"})()})()]})()
+            return type("DR2", (), {"choices": [type("DC2", (), {"message": type("M", (), {"content": '{"summary":"S section","timeline":"T section","relationships":"R section"}'})()})()]})()
+    monkeypatch.setattr("app.config.settings.OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr("app.api.v1.reports.openai_client_service._client", type("C", (), {"chat": type("Chat", (), {"completions": DummyComp()})()})())
+    created = client.post("/api/v1/reports", json={"title": "Structured", "prompt": "p"}).json()
+    _ = client.get(f"/api/v1/reports/{created['id']}/download?format=pdf")
+    from app.config import settings
+    pdf_path = Path(settings.effective_artifact_dir) / "reports" / f"{created['id']}.pdf"
+    assert pdf_path.exists()
+    raw = pdf_path.read_bytes()
+    assert b"S section" in raw and b"T section" in raw and b"R section" in raw
+
+
+def test_report_pdf_falls_back_to_markdown_when_sections_missing(client, monkeypatch):
+    class DummyComp:
+        calls = 0
+        def create(self, **kwargs):
+            self.calls += 1
+            if self.calls == 1:
+                return type("DR", (), {"choices": [type("DC", (), {"message": type("M", (), {"content": "# Report\\n\\nMarkdown fallback body"})()})()]})()
+            return type("DR2", (), {"choices": [type("DC2", (), {"message": type("M", (), {"content": "not-json"})()})()]})()
+    monkeypatch.setattr("app.config.settings.OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr("app.api.v1.reports.openai_client_service._client", type("C", (), {"chat": type("Chat", (), {"completions": DummyComp()})()})())
+    created = client.post("/api/v1/reports", json={"title": "Fallback", "prompt": "p"}).json()
+    _ = client.get(f"/api/v1/reports/{created['id']}/download?format=pdf")
+    from app.config import settings
+    pdf_path = Path(settings.effective_artifact_dir) / "reports" / f"{created['id']}.pdf"
+    assert b"Markdown fallback body" in pdf_path.read_bytes()
+
+
 def test_chat_stream_requires_auth():
     from fastapi.testclient import TestClient
     from app.main import app
