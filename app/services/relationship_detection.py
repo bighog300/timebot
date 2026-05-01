@@ -199,8 +199,18 @@ class RelationshipDetectionService:
             metadata={
                 "signals": {k: round(v, 5) for k, v in weighted.items()},
                 "titles": [left.filename, right.filename],
+                "explanation": self._build_ai_explanation(weighted=weighted, relationship_type=relationship_type, confidence=round(min(score, 1.0), 5)),
             },
         )
+
+    def _build_ai_explanation(self, *, weighted: Dict[str, float], relationship_type: str, confidence: float) -> Dict[str, Any]:
+        signals: list[str] = ["ai_detected"]
+        if weighted.get("keyword_overlap", 0.0) > 0.03:
+            signals.append("shared_terms")
+        if weighted.get("timeline_overlap", 0.0) > 0.0 or weighted.get("date_adjacency", 0.0) > 0.0:
+            signals.append("timeline_proximity")
+        explanation = f"AI detected a {relationship_type.replace('_', ' ')} relationship from combined similarity signals."
+        return {"confidence": confidence, "signals": signals, "reason": explanation}
 
     def _timeline_overlap(self, left: Document, right: Document) -> float:
         left_dates = self._extract_dates(left)

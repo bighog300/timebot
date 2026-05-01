@@ -67,6 +67,9 @@ def test_pending_review_created_from_raw_relationship(db, test_user):
     review = db.query(DocumentRelationshipReview).filter(DocumentRelationshipReview.source_document_id == rel.source_doc_id).first()
     assert review is not None
     assert review.status == "pending"
+    explanation = review.metadata_json.get("explanation", {})
+    assert "ai_detected" in explanation.get("signals", [])
+    assert isinstance(explanation.get("reason"), str)
 
 
 def test_detection_skips_when_thread_relationship_exists(db, test_user):

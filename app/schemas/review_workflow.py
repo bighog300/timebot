@@ -236,3 +236,4 @@ class DocumentRelationshipListItemResponse(BaseModel):
     direction: str
     created_at: datetime
     updated_at: datetime | None = None
+    explanation_metadata: dict[str, Any] = Field(default_factory=dict)

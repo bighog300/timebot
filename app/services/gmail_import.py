@@ -214,7 +214,14 @@ class GmailImportService:
                             target_doc_id=target_id,
                             relationship_type="thread",
                             confidence=0.99,
-                            metadata={"gmail_thread_id": thread_id},
+                            metadata={
+                                "gmail_thread_id": thread_id,
+                                "explanation": {
+                                    "confidence": 0.99,
+                                    "signals": ["structural_email_thread"],
+                                    "reason": "same email thread",
+                                },
+                            },
                         )
                 db.commit()
                 imported_email_count += 1
@@ -254,7 +261,15 @@ class GmailImportService:
                             target_doc_id=att_doc.id,
                             relationship_type="attachment",
                             confidence=1.0,
-                            metadata={"filename": filename, "gmail_message_id": mid},
+                            metadata={
+                                "filename": filename,
+                                "gmail_message_id": mid,
+                                "explanation": {
+                                    "confidence": 1.0,
+                                    "signals": ["structural_attachment"],
+                                    "reason": "attachment relationship",
+                                },
+                            },
                         )
                         db.commit()
                         imported_attachment_count += 1

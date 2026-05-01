@@ -32,6 +32,7 @@ def test_document_relationships_include_source_and_target(client, db, sample_doc
             relationship_type="related",
             status="confirmed",
             confidence=0.9,
+            metadata_json={"explanation": {"signals": ["ai_detected", "shared_terms"], "reason": "AI detected shared terms."}},
         ),
         DocumentRelationshipReview(
             source_document_id=target_related.id,
@@ -54,6 +55,7 @@ def test_document_relationships_include_source_and_target(client, db, sample_doc
     assert source_row["direction"] == "source"
     assert source_row["related_document_title"] == "source-related.pdf"
     assert source_row["related_document_snippet"] == "source intelligence"
+    assert source_row["explanation_metadata"]["signals"] == ["ai_detected", "shared_terms"]
 
 
 def test_document_relationships_excludes_dismissed_by_default(client, db, sample_document, test_user):
