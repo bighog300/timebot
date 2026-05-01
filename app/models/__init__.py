@@ -10,6 +10,7 @@ from app.models.intelligence import (
 )
 from app.models.admin_audit import AdminAuditEvent
 from app.models.chat import ChatbotSettings, ChatMessage, ChatSession, GeneratedReport
+from app.models.prompt_template import PromptTemplate
 from app.models.relationships import (
     Connection,
     DocumentRelationship,
@@ -28,6 +29,7 @@ __all__ = [
     "ChatSession",
     "ChatMessage",
     "GeneratedReport",
+    "PromptTemplate",
     "Category",
     "Connection",
     "Document",

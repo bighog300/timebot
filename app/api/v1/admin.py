@@ -9,6 +9,7 @@ from app.models.intelligence import DocumentActionItem, DocumentRelationshipRevi
 from app.models.user import User
 
 from app.models.chat import ChatbotSettings
+from app.models.prompt_template import PromptTemplate
 from app.schemas.chatbot import ChatbotSettingsPayload, ChatbotSettingsResponse
 from app.schemas.admin import (
     AdminAuditEventResponse,
@@ -18,6 +19,8 @@ from app.schemas.admin import (
     AdminUserResponse,
     AdminUsersPageResponse,
 )
+from app.schemas.prompt_template import PromptTemplateCreate, PromptTemplateResponse, PromptTemplateUpdate
+from app.services.prompt_templates import activate_prompt_template
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -112,6 +115,49 @@ def admin_metrics(_: str = Depends(require_admin), db: Session = Depends(get_db)
         open_action_items=db.query(func.count(DocumentActionItem.id)).filter(DocumentActionItem.state == "open").scalar() or 0,
         pending_relationship_reviews=db.query(func.count(DocumentRelationshipReview.id)).filter(DocumentRelationshipReview.status == "pending").scalar() or 0,
     )
+
+
+@router.get("/prompts", response_model=list[PromptTemplateResponse])
+def list_prompt_templates(_: str = Depends(require_admin), db: Session = Depends(get_db)):
+    return db.query(PromptTemplate).order_by(PromptTemplate.type.asc(), PromptTemplate.version.desc(), PromptTemplate.created_at.desc()).all()
+
+
+@router.post("/prompts", response_model=PromptTemplateResponse, status_code=201)
+def create_prompt_template(payload: PromptTemplateCreate, _: str = Depends(require_admin), db: Session = Depends(get_db)):
+    prompt = PromptTemplate(**payload.model_dump())
+    db.add(prompt)
+    if prompt.is_active:
+        activate_prompt_template(db, prompt)
+    db.commit()
+    db.refresh(prompt)
+    return prompt
+
+
+@router.put("/prompts/{prompt_id}", response_model=PromptTemplateResponse)
+def update_prompt_template(prompt_id: str, payload: PromptTemplateUpdate, _: str = Depends(require_admin), db: Session = Depends(get_db)):
+    prompt = db.query(PromptTemplate).filter(PromptTemplate.id == prompt_id).first()
+    if not prompt:
+        raise HTTPException(status_code=404, detail="Prompt template not found")
+    changes = payload.model_dump(exclude_unset=True)
+    for k, v in changes.items():
+        setattr(prompt, k, v)
+    if changes.get("is_active") is True:
+        activate_prompt_template(db, prompt)
+    db.add(prompt)
+    db.commit()
+    db.refresh(prompt)
+    return prompt
+
+
+@router.post("/prompts/{prompt_id}/activate", response_model=PromptTemplateResponse)
+def activate_prompt(prompt_id: str, _: str = Depends(require_admin), db: Session = Depends(get_db)):
+    prompt = db.query(PromptTemplate).filter(PromptTemplate.id == prompt_id).first()
+    if not prompt:
+        raise HTTPException(status_code=404, detail="Prompt template not found")
+    activate_prompt_template(db, prompt)
+    db.commit()
+    db.refresh(prompt)
+    return prompt
 
 
 DEFAULT_CHATBOT_SETTINGS = {
