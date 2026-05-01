@@ -7,6 +7,7 @@ from app.api.deps import get_current_user, get_db
 from app.models.user import User
 from app.schemas.document import DocumentResponse
 from app.services.document_processor import document_processor
+from app.services.monetization import ActionType, ensure_user_limit, refresh_usage_counters
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +22,10 @@ async def upload_document(
     current_user: User = Depends(get_current_user),
 ):
     try:
+        ensure_user_limit(db, current_user, ActionType.UPLOAD_DOCUMENT)
         document = await document_processor.process_upload(db, file, current_user)
+        refresh_usage_counters(db, current_user)
+        db.commit()
         return document
     except ValueError as e:
         logger.exception("Upload failed")

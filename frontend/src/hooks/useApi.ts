@@ -51,6 +51,7 @@ export const keys = {
   chatSessions: ['chat-sessions'] as const,
   chatSession: (sessionId: string) => ['chat-session', sessionId] as const,
   reports: ['reports'] as const,
+  usage: ['usage'] as const,
   report: (reportId: string) => ['report', reportId] as const,
   gmailConnections: ['connections'] as const,
 };
@@ -552,3 +553,6 @@ export function useActivatePromptTemplate() {
 export function useTestPromptTemplate() {
   return useMutation({ mutationFn: (payload: PromptTemplateTestRequest) => api.testPromptTemplate(payload) });
 }
+
+export function useUsage() { const authReady = useAuthReady(); return useQuery({ queryKey: keys.usage, queryFn: api.getUsage, enabled: authReady }); }
+export function useCreateCheckoutSession() { return useMutation({ mutationFn: (plan: string) => api.createCheckoutSession(plan) }); }

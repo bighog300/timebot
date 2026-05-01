@@ -196,6 +196,10 @@ export function ChatPage() {
     } catch (e) {
       const detail = getErrorDetail(e);
       setStreamError(detail);
+      if (detail.toLowerCase().includes('usage limit reached')) {
+        pushToast("You’ve reached your limit. Upgrade to Pro to continue.", 'error');
+        return;
+      }
       pushToast(detail.includes('503') ? 'OpenAI unavailable. Please retry shortly.' : detail, 'error');
     } finally {
       if (!hasFinalEventRef.current && frameRef.current !== null) {

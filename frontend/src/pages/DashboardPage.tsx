@@ -1,10 +1,14 @@
 import { Card } from '@/components/ui/Card';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui/States';
-import { useActionItemMetrics, useReviewMetrics } from '@/hooks/useApi';
+import { useActionItemMetrics, useCreateCheckoutSession, useReviewMetrics, useUsage } from '@/hooks/useApi';
+import { useUIStore } from '@/store/uiStore';
 
 export function DashboardPage() {
+  const { pushToast } = useUIStore();
   const reviewMetrics = useReviewMetrics();
   const actionMetrics = useActionItemMetrics();
+  const usage = useUsage();
+  const checkout = useCreateCheckoutSession();
 
   return (
     <div className="space-y-4">
@@ -46,6 +50,23 @@ export function DashboardPage() {
                   ))}
                 </ul>
               )}
+            </Card>
+            <Card>
+              <h2 className="mb-2 text-sm font-semibold">Plan & Usage</h2>
+              <div className="space-y-1 text-sm">
+                <div>Current plan: <span className="font-semibold uppercase">{usage.data?.plan || 'free'}</span></div>
+                <div>Documents: {usage.data?.documents?.used ?? 0} / {usage.data?.documents?.limit ?? '∞'}</div>
+                <div>Reports: {usage.data?.reports?.used ?? 0} / {usage.data?.reports?.limit ?? '∞'}</div>
+                <div>Chat messages: {usage.data?.chat_messages?.used ?? 0} / {usage.data?.chat_messages?.limit ?? '∞'}</div>
+              </div>
+              <button className="mt-3 rounded bg-indigo-700 px-3 py-2 text-sm" onClick={async () => {
+                try {
+                  const result = await checkout.mutateAsync('pro');
+                  pushToast(`Upgrade started: ${result.plan}`);
+                } catch {
+                  pushToast('Upgrade currently unavailable', 'error');
+                }
+              }}>Upgrade to Pro</button>
             </Card>
           </div>
         </>

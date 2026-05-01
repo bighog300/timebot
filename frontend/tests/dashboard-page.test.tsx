@@ -20,6 +20,12 @@ vi.mock('@/hooks/useApi', () => ({
     isError: false,
     data: { open_count: 5, completed_count: 7, dismissed_count: 1, completion_rate: 0.58, recently_completed_count: 2 },
   }),
+  useUsage: () => ({
+    data: { plan: 'free', documents: { used: 1, limit: 25 }, reports: { used: 2, limit: 10 }, chat_messages: { used: 3, limit: 200 } },
+  }),
+  useCreateCheckoutSession: () => ({
+    mutateAsync: vi.fn(),
+  }),
 }));
 
 test('renders metric widgets', () => {
