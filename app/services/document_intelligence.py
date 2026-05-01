@@ -25,6 +25,7 @@ class DocumentIntelligenceService:
 
     def create_from_analysis(self, db: Session, document: Document, analysis: dict) -> DocumentIntelligence:
         intelligence = self._upsert_from_analysis(db, document, analysis)
+        self._refresh_gmail_thread_summary(db, document)
         self._refresh_review_items(db, document, intelligence)
         action_items_service.refresh_from_analysis(db, document.id, analysis.get("action_items", []))
         return intelligence
@@ -108,6 +109,56 @@ class DocumentIntelligenceService:
         persisted = (intelligence.entities or {}).get("timeline_events", []) if isinstance(intelligence.entities, dict) else []
         logger.info("timeline_post_persist document_id=%s persisted_count=%s", document.id, len(persisted) if isinstance(persisted, list) else 0)
         return intelligence
+
+    def _refresh_gmail_thread_summary(self, db: Session, document: Document) -> None:
+        if document.source != "gmail":
+            return
+        metadata = document.extracted_metadata if isinstance(document.extracted_metadata, dict) else {}
+        thread_id = metadata.get("gmail_thread_id")
+        if not thread_id:
+            return
+
+        candidate_docs = db.query(Document).filter(
+            Document.user_id == document.user_id,
+            Document.source == "gmail",
+        ).all()
+        thread_docs = [
+            doc for doc in candidate_docs
+            if isinstance(doc.extracted_metadata, dict)
+            and str(doc.extracted_metadata.get("gmail_thread_id") or "") == str(thread_id)
+        ]
+        if len(thread_docs) < 2:
+            return
+
+        summary_parts: list[str] = []
+        seen: set[str] = set()
+        for thread_doc in thread_docs:
+            text = ((thread_doc.summary or "").strip() or (thread_doc.raw_text or "").strip())
+            if not text:
+                continue
+            snippet = re.sub(r"\s+", " ", text)[:280].strip()
+            if not snippet:
+                continue
+            norm = snippet.lower()
+            if norm in seen:
+                continue
+            seen.add(norm)
+            summary_parts.append(snippet)
+            if len(summary_parts) >= 4:
+                break
+        if len(summary_parts) < 2:
+            return
+
+        thread_summary = " | ".join(summary_parts)
+        for thread_doc in thread_docs:
+            doc_metadata = thread_doc.extracted_metadata if isinstance(thread_doc.extracted_metadata, dict) else {}
+            if doc_metadata.get("thread_summary") == thread_summary:
+                continue
+            updated_metadata = dict(doc_metadata)
+            updated_metadata["thread_summary"] = thread_summary
+            thread_doc.extracted_metadata = updated_metadata
+            db.add(thread_doc)
+        db.commit()
 
     def _deduplicate_timeline_events(self, db: Session, document: Document, incoming_events: list[dict]) -> list[dict]:
         existing_norm = self._existing_timeline_event_signatures(db, document)
