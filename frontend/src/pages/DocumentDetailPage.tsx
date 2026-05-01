@@ -15,6 +15,7 @@ import {
   useDocumentActionItems,
   useDocumentAuditHistory,
   useDocumentIntelligence,
+  useDocumentClusters,
   useDocumentRelationships,
   useOverrideDocumentCategory,
   usePatchDocumentIntelligence,
@@ -58,6 +59,7 @@ export function DocumentDetailPage() {
   const actionItemsQuery = useDocumentActionItems(id);
   const auditQuery = useDocumentAuditHistory(id);
   const relationshipsQuery = useDocumentRelationships(id);
+  const clustersQuery = useDocumentClusters();
   const confirmRelationship = useConfirmDocumentRelationship(id);
   const dismissRelationship = useDismissDocumentRelationship(id);
   const patchIntelligence = usePatchDocumentIntelligence(id);
@@ -133,6 +135,10 @@ export function DocumentDetailPage() {
     attachment: filteredRelationships.filter((item) => item.relationship_type === 'attachment'),
     related: filteredRelationships.filter((item) => item.relationship_type !== 'thread' && item.relationship_type !== 'attachment'),
   };
+  const currentDocumentClusterId = useMemo(() => {
+    const clusters = clustersQuery.data ?? [];
+    return clusters.find((cluster) => cluster.document_ids.includes(id))?.cluster_id ?? null;
+  }, [clustersQuery.data, id]);
   const renderRelationshipItem = (item: (typeof relationshipGroups)['related'][number]) => (
     <li key={item.id} className="rounded border border-slate-800 p-3">
       <div className="flex flex-wrap items-center gap-2">
@@ -181,6 +187,16 @@ export function DocumentDetailPage() {
             )}
           </div>
         </details>
+      )}
+      {currentDocumentClusterId && (
+        <div className="mt-2">
+          <Link
+            className="text-xs text-blue-300 hover:text-blue-200 hover:underline"
+            to={`/documents?cluster=${encodeURIComponent(currentDocumentClusterId)}`}
+          >
+            View related cluster
+          </Link>
+        </div>
       )}
       {item.status === 'pending' && item.relationship_type !== 'thread' && item.relationship_type !== 'attachment' && (
         <div className="mt-3 flex flex-wrap gap-2">
