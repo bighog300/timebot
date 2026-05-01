@@ -205,8 +205,13 @@ def test_report_create_and_download_rebuild(client, monkeypatch, db):
         choices = [DummyChoice()]
 
     class DummyComp:
+        calls = 0
+
         def create(self, **kwargs):
-            return DummyResp()
+            self.calls += 1
+            if self.calls == 1:
+                return DummyResp()
+            return type("DummyResp2", (), {"choices": [type("DummyChoice2", (), {"message": type("M", (), {"content": '{\"summary\":\"S\",\"timeline\":\"T\",\"relationships\":\"R\"}'})()})()]})()
 
     class DummyChat:
         completions = DummyComp()
@@ -216,14 +221,44 @@ def test_report_create_and_download_rebuild(client, monkeypatch, db):
     res = client.post("/api/v1/reports", json={"title": "My Report", "prompt": "summarize", "document_ids": []})
     assert res.status_code == 200
     data = res.json()
+    assert data["content_markdown"].startswith("# Report")
+    assert data["sections"] == {"summary": "S", "timeline": "T", "relationships": "R"}
     get_res = client.get(data["download_url"])
     assert get_res.status_code == 200
     # remove file then ensure recreated
     from app.models.chat import GeneratedReport
     rep = db.query(GeneratedReport).first()
+    assert rep.content_markdown.startswith("# Report")
+    assert rep.sections == {"summary": "S", "timeline": "T", "relationships": "R"}
     Path(rep.file_path).unlink(missing_ok=True)
     get_res2 = client.get(data["download_url"])
     assert get_res2.status_code == 200
+
+
+def test_report_sections_fallback_when_missing(client, monkeypatch, db):
+    class DummyComp:
+        calls = 0
+
+        def create(self, **kwargs):
+            self.calls += 1
+            if self.calls == 1:
+                return type("DR", (), {"choices": [type("DC", (), {"message": type("M", (), {"content": "# Report\\n\\nStill works"})()})()]})()
+            return type("DR2", (), {"choices": [type("DC2", (), {"message": type("M", (), {"content": "not-json"})()})()]})()
+
+    class DummyChat:
+        completions = DummyComp()
+
+    monkeypatch.setattr("app.config.settings.OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr("app.api.v1.reports.openai_client_service._client", type("C", (), {"chat": DummyChat()})())
+
+    created = client.post("/api/v1/reports", json={"title": "Fallback Report", "prompt": "summarize"}).json()
+    assert created["sections"] is None
+    assert created["content_markdown"].startswith("# Report")
+
+    detail = client.get(f"/api/v1/reports/{created['id']}")
+    assert detail.status_code == 200
+    assert detail.json()["sections"] is None
+    assert detail.json()["content_markdown"].startswith("# Report")
 
 
 def test_chat_stream_requires_auth():

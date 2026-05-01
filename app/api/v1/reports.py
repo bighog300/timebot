@@ -1,4 +1,5 @@
 from pathlib import Path
+import json
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
@@ -23,6 +24,35 @@ class ReportRequest(BaseModel):
     document_ids: list[str] = []
     include_timeline: bool = True
     include_full_text: bool = False
+
+
+def _parse_sections(content: str) -> dict[str, str] | None:
+    try:
+        payload = json.loads(content)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    sections = {
+        "summary": str(payload.get("summary", "")).strip(),
+        "timeline": str(payload.get("timeline", "")).strip(),
+        "relationships": str(payload.get("relationships", "")).strip(),
+    }
+    return sections if any(sections.values()) else None
+
+
+def _serialize_report(report: GeneratedReport) -> dict:
+    return {
+        "id": str(report.id),
+        "title": report.title,
+        "prompt": report.prompt,
+        "content_markdown": report.content_markdown,
+        "markdown_content": report.content_markdown,
+        "sections": report.sections,
+        "source_refs": report.source_refs,
+        "created_at": report.created_at,
+        "download_url": f"/api/v1/reports/{report.id}/download",
+    }
 
 
 @router.post("")
@@ -59,10 +89,31 @@ def create_report(payload: ReportRequest, db: Session = Depends(get_db), user: U
     except APIError as exc:
         raise HTTPException(status_code=503, detail=f"Report AI request failed: {exc}") from exc
     content = (response.choices[0].message.content or "").strip() or f"# {payload.title}\n\nInsufficient evidence in accessible documents."
+    sections_prompt = (
+        f"{report_prompt_content}\n\n"
+        "Return strict JSON with exactly keys: summary, timeline, relationships.\n"
+        "Each value must be markdown text grounded only in the provided context.\n\n"
+        f"User request:\n{payload.prompt}\n\nContext:\n{context}\n"
+    )
+    sections = None
+    try:
+        sections_response = openai_client_service.client.chat.completions.create(
+            model=bot_settings.model,
+            temperature=bot_settings.temperature,
+            max_tokens=bot_settings.max_tokens,
+            messages=[
+                {"role": "system", "content": get_active_prompt_content(db, "chat", bot_settings.system_prompt)},
+                {"role": "user", "content": sections_prompt},
+            ],
+        )
+        sections = _parse_sections((sections_response.choices[0].message.content or "").strip())
+    except APIError:
+        sections = None
     report = GeneratedReport(
         title=payload.title,
         prompt=payload.prompt,
         content_markdown=content,
+        sections=sections,
         source_document_ids=payload.document_ids,
         source_refs=context["source_refs"],
         created_by_id=user.id,
@@ -78,12 +129,13 @@ def create_report(payload: ReportRequest, db: Session = Depends(get_db), user: U
     report.file_path = str(file_path)
     db.add(report)
     db.commit()
-    return {"id": str(report.id), "title": report.title, "content_markdown": report.content_markdown, "source_refs": report.source_refs, "download_url": f"/api/v1/reports/{report.id}/download"}
+    return _serialize_report(report)
 
 
 @router.get("")
 def list_reports(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    return db.query(GeneratedReport).filter(GeneratedReport.created_by_id == user.id).order_by(GeneratedReport.created_at.desc()).all()
+    reports = db.query(GeneratedReport).filter(GeneratedReport.created_by_id == user.id).order_by(GeneratedReport.created_at.desc()).all()
+    return [_serialize_report(report) for report in reports]
 
 
 @router.get("/{report_id}")
@@ -91,7 +143,7 @@ def get_report(report_id: UUID, db: Session = Depends(get_db), user: User = Depe
     report = db.query(GeneratedReport).filter(GeneratedReport.id == report_id, GeneratedReport.created_by_id == user.id).first()
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
-    return report
+    return _serialize_report(report)
 
 
 @router.get("/{report_id}/download")
