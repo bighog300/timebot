@@ -75,6 +75,20 @@ export function TimelinePage() {
   const [zoomMode, setZoomMode] = useState<TimelineZoom>('fit');
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
 
+  const [isMobileView, setIsMobileView] = useState<boolean>(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
+    return window.matchMedia('(max-width: 767px)').matches;
+  });
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+    const media = window.matchMedia('(max-width: 767px)');
+    const onChange = (event: MediaQueryListEvent) => setIsMobileView(event.matches);
+    setIsMobileView(media.matches);
+    media.addEventListener('change', onChange);
+    return () => media.removeEventListener('change', onChange);
+  }, []);
+
   useEffect(() => {
     const container = scrollContainerRef.current;
     if (!container) return;
@@ -204,6 +218,96 @@ export function TimelinePage() {
   return (
     <div className="w-full min-w-0 max-w-[calc(100vw-2rem)] space-y-3 overflow-hidden">
       <h1 className="text-xl font-semibold">Timeline</h1>
+      {isMobileView ? <div className="space-y-3 md:hidden" data-testid="timeline-mobile-list">
+        {groupedEvents.map((group, idx) => {
+          const item = group.primary;
+          const similarCount = group.events.length - 1;
+          const isExpanded = Boolean(expandedGroups[group.normalizedKey]);
+          const distinctDocuments = new Set(group.events.map((source) => source.event.document_id));
+          const groupMaxConfidence = group.events.reduce<number | null>((max, sourceEvent) => {
+            const value = sourceEvent.event.confidence;
+            if (typeof value !== 'number' || Number.isNaN(value)) return max;
+            return max === null ? value : Math.max(max, value);
+          }, null);
+          const primaryConfidenceLabel = formatConfidence(group.events.length > 1 ? groupMaxConfidence : item.event.confidence);
+          const categoryLabel = item.event.category?.trim() || null;
+          const uncertaintyLabel = getTimelineUncertaintyLabel(item.event);
+          const signalStrengthLabel = getSignalStrengthLabel(item.event);
+          const primaryDocumentId = item.event.document_id?.trim();
+          const primaryDocumentPath = primaryDocumentId ? `/documents/${primaryDocumentId}` : null;
+          const dateLabel = `${item.event.start_date || item.event.date}${item.event.end_date ? ` → ${item.event.end_date}` : ''}`;
+
+          return (
+            <article key={`mobile-${group.normalizedKey}-${item.event.document_id}-${idx}`} className="rounded-xl border border-slate-700 bg-slate-900/80 p-3">
+              <button
+                type="button"
+                className={`w-full space-y-1 text-left ${primaryDocumentPath ? 'cursor-pointer' : 'cursor-default'}`}
+                onClick={() => {
+                  if (!primaryDocumentPath) return;
+                  navigate(primaryDocumentPath);
+                }}
+                aria-label={primaryDocumentPath ? `Open document for timeline event ${item.event.title}` : `Timeline event ${item.event.title}`}
+              >
+                <p className="text-sm font-medium text-slate-100">{item.event.title}</p>
+                <p className="text-xs text-slate-300">{item.event.document_title}</p>
+                <p className="text-xs text-slate-400">{dateLabel}</p>
+              </button>
+              <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-slate-300">
+                {categoryLabel ? <span>Type: {categoryLabel}</span> : null}
+                {primaryConfidenceLabel ? <span>Confidence: {primaryConfidenceLabel}</span> : null}
+                {signalStrengthLabel ? <span>Signal: {signalStrengthLabel}</span> : null}
+                {item.event.is_milestone ? <span className="rounded-full border border-emerald-500/60 px-2 py-0.5 text-emerald-200">Milestone</span> : null}
+                {uncertaintyLabel ? <span className="rounded-full border border-amber-600/60 px-2 py-0.5 text-amber-200">{uncertaintyLabel}</span> : null}
+              </div>
+              {group.events.length > 1 ? (
+                <div className="mt-3 border-t border-slate-700 pt-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs text-slate-400">{group.events.length} events • {distinctDocuments.size} documents • +{similarCount} similar</p>
+                    <button
+                      type="button"
+                      className="rounded border border-slate-600 px-2 py-0.5 text-[11px] text-slate-200"
+                      onClick={() => setExpandedGroups((prev) => ({ ...prev, [group.normalizedKey]: !prev[group.normalizedKey] }))}
+                      aria-expanded={isExpanded}
+                    >
+                      {isExpanded ? 'Hide' : 'Show'}
+                    </button>
+                  </div>
+                  {isExpanded ? (
+                    <ul className="mt-2 space-y-2" data-testid="timeline-mobile-group-expanded">
+                      {group.events.map((sourceEvent, sourceIdx) => {
+                        const sourceUncertaintyLabel = getTimelineUncertaintyLabel(sourceEvent.event);
+                        const sourceDocumentId = sourceEvent.event.document_id?.trim();
+                        const sourceDocumentPath = sourceDocumentId ? `/documents/${sourceDocumentId}` : null;
+                        return (
+                          <li key={`mobile-source-${sourceEvent.event.document_id}-${sourceIdx}`} className="rounded-md border border-slate-700 p-2 text-xs text-slate-300">
+                            <p>{sourceEvent.event.document_title}: {sourceEvent.event.start_date || sourceEvent.event.date}</p>
+                            {sourceDocumentPath ? (
+                              <button
+                                type="button"
+                                className="text-blue-300 underline-offset-2 hover:underline"
+                                onClick={() => navigate(sourceDocumentPath)}
+                                aria-label={`Open document for grouped timeline source event ${sourceEvent.event.title}`}
+                              >
+                                Open document
+                              </button>
+                            ) : null}
+                            <p className="text-[11px] text-slate-400">
+                              {sourceEvent.event.category ? `Type: ${sourceEvent.event.category} • ` : ''}
+                              {sourceEvent.event.source ? `Source: ${sourceEvent.event.source} • ` : ''}
+                              {formatConfidence(sourceEvent.event.confidence) ? `Confidence: ${formatConfidence(sourceEvent.event.confidence)}` : ''}
+                            </p>
+                            {sourceUncertaintyLabel ? <p className="text-[11px] text-amber-200">{sourceUncertaintyLabel}</p> : null}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  ) : null}
+                </div>
+              ) : null}
+            </article>
+          );
+        })}
+      </div> : null}
       <div className="flex flex-wrap items-center gap-2">
         {ZOOM_OPTIONS.map((option) => (
           <button
@@ -249,7 +353,7 @@ export function TimelinePage() {
           </div>
         </div>
       ) : null}
-      <div className="w-full max-w-full min-w-0 overflow-hidden rounded-2xl border border-slate-700 bg-slate-900 shadow-sm" data-testid="timeline-card">
+      <div className="hidden w-full max-w-full min-w-0 overflow-hidden rounded-2xl border border-slate-700 bg-slate-900 shadow-sm md:block" data-testid="timeline-card">
         <div
           ref={scrollContainerRef}
           className="timeline-scroll w-full max-w-full min-w-0 max-h-[calc(100vh-240px)] overflow-auto overscroll-contain"

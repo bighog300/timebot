@@ -15,6 +15,20 @@ vi.mock('react-router-dom', async () => {
 
 vi.mock('@/services/api', () => ({ api: { getTimeline: vi.fn() } }));
 
+
+const mockMatchMedia = (matches: boolean) => {
+  vi.stubGlobal('matchMedia', vi.fn().mockImplementation(() => ({
+    matches,
+    media: '(max-width: 767px)',
+    onchange: null,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  })));
+};
+
 function renderPage() {
   const qc = new QueryClient();
   return render(
@@ -43,6 +57,7 @@ describe('TimelinePage', () => {
   beforeEach(() => {
     vi.stubGlobal('ResizeObserver', ResizeObserverMock);
     vi.mocked(api.getTimeline).mockReset();
+    mockMatchMedia(false);
     navigateMock.mockReset();
   });
 
@@ -184,6 +199,26 @@ describe('TimelinePage', () => {
     );
     renderPage();
     fireEvent.click(await screen.findByRole('button', { name: 'Show' }));
+    fireEvent.click(screen.getAllByRole('button', { name: /Open document for grouped timeline source event audit complete/i })[0]);
+    expect(navigateMock).toHaveBeenCalledWith('/documents/d1');
+  });
+
+  it('renders mobile stacked cards with expandable grouped events and document links', async () => {
+    mockMatchMedia(true);
+    vi.mocked(api.getTimeline).mockResolvedValue(
+      makeTimelineResponse([
+        { title: 'Audit Complete', date: '2025-04-04', confidence: 0.92, is_milestone: true, document_id: 'd1', document_title: 'Audit A', source_quote: 'done', start_date: null, end_date: null },
+        { title: 'audit complete', date: '2025-04-05', confidence: 0.81, metadata: { is_approximate: true }, document_id: 'd2', document_title: 'Audit B', source_quote: 'done 2', start_date: null, end_date: null },
+      ]),
+    );
+
+    renderPage();
+    expect(await screen.findByTestId('timeline-mobile-list')).toBeTruthy();
+    fireEvent.click(screen.getAllByRole('button', { name: 'Show' })[0]);
+    expect(screen.getByTestId('timeline-mobile-group-expanded')).toBeTruthy();
+    expect(screen.getAllByText('Milestone').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Approximate date').length).toBeGreaterThan(0);
+
     fireEvent.click(screen.getAllByRole('button', { name: /Open document for grouped timeline source event audit complete/i })[0]);
     expect(navigateMock).toHaveBeenCalledWith('/documents/d1');
   });
