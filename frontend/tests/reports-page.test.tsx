@@ -8,6 +8,7 @@ vi.mock('@/hooks/useApi', () => ({
   useReports: () => ({ data: [{ id: 'r1', title: 'R1' }] }),
   useReport: (...args: unknown[]) => mockUseReport(...args),
   useCreateReport: () => ({ mutateAsync: vi.fn(async () => ({ id: 'r1' })) }),
+  useUpdateReport: () => ({ mutateAsync: vi.fn(), isPending: false }),
 }));
 
 vi.mock('@/store/uiStore', () => ({ useUIStore: () => ({ pushToast: vi.fn() }) }));

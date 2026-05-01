@@ -30,6 +30,7 @@ import type {
   ChatStreamEvent,
   GeneratedReport,
   ReportCreateRequest,
+  ReportUpdateRequest,
   GmailPreviewRequest,
   GmailPreviewResponse,
   GmailImportResponse,
@@ -125,6 +126,7 @@ export const api = {
   createReport: async (payload: ReportCreateRequest): Promise<GeneratedReport> => (await http.post('/reports', payload)).data,
   listReports: async (): Promise<GeneratedReport[]> => (await http.get('/reports')).data,
   getReport: async (reportId: string): Promise<GeneratedReport> => (await http.get(`/reports/${reportId}`)).data,
+  updateReport: async (reportId: string, payload: ReportUpdateRequest): Promise<GeneratedReport> => (await http.patch(`/reports/${reportId}`, payload)).data,
   getReportDownloadUrl: (reportId: string): string => `${http.defaults.baseURL}/reports/${reportId}/download`,
 
   listAdminUsers: async (limit = 20, offset = 0): Promise<AdminUsersPage> => (await http.get('/admin/users', { params: { limit, offset } })).data,

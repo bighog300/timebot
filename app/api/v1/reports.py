@@ -26,6 +26,26 @@ class ReportRequest(BaseModel):
     include_full_text: bool = False
 
 
+class ReportUpdateRequest(BaseModel):
+    title: str | None = None
+    sections: dict[str, str] | None = None
+
+
+def _validate_sections(sections: object) -> dict[str, str]:
+    if not isinstance(sections, dict):
+        raise HTTPException(status_code=422, detail="sections must be an object")
+    allowed_keys = {"summary", "timeline", "relationships", "executive_summary", "timeline_analysis", "relationship_analysis"}
+    invalid_keys = [key for key in sections.keys() if key not in allowed_keys]
+    if invalid_keys:
+        raise HTTPException(status_code=422, detail=f"unsupported sections keys: {', '.join(sorted(invalid_keys))}")
+    normalized: dict[str, str] = {}
+    for key, value in sections.items():
+        if not isinstance(value, str):
+            raise HTTPException(status_code=422, detail=f"sections.{key} must be a string")
+        normalized[key] = value.strip()
+    return normalized
+
+
 def _parse_sections(content: str) -> dict[str, str] | None:
     try:
         payload = json.loads(content)
@@ -143,6 +163,26 @@ def get_report(report_id: UUID, db: Session = Depends(get_db), user: User = Depe
     report = db.query(GeneratedReport).filter(GeneratedReport.id == report_id, GeneratedReport.created_by_id == user.id).first()
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
+    return _serialize_report(report)
+
+
+@router.patch("/{report_id}")
+def update_report(report_id: UUID, payload: ReportUpdateRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    report = db.query(GeneratedReport).filter(GeneratedReport.id == report_id, GeneratedReport.created_by_id == user.id).first()
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+    if payload.title is None and payload.sections is None:
+        raise HTTPException(status_code=422, detail="No updatable fields provided")
+    if payload.title is not None:
+        title = payload.title.strip()
+        if not title:
+            raise HTTPException(status_code=422, detail="title cannot be empty")
+        report.title = title
+    if payload.sections is not None:
+        report.sections = _validate_sections(payload.sections)
+    db.add(report)
+    db.commit()
+    db.refresh(report)
     return _serialize_report(report)
 
 
