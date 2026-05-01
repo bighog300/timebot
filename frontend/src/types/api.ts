@@ -394,11 +394,18 @@ export interface GeneratedReport {
   sections?: {
     executive_summary?: string | null;
     summary?: string | null;
+    timeline?: string | null;
     timeline_analysis?: string | null;
+    relationships?: string | null;
     relationship_analysis?: string | null;
   } | null;
   source_refs: SourceRef[];
   created_at: string;
+}
+
+export interface ReportUpdateRequest {
+  title?: string;
+  sections?: Record<string, string | null | undefined>;
 }
 
 

@@ -447,6 +447,16 @@ export function useInvalidateChatSession() {
 export function useReports() { const authReady = useAuthReady(); return useQuery({ queryKey: keys.reports, queryFn: api.listReports, enabled: authReady }); }
 export function useReport(reportId: string) { const authReady = useAuthReady(); return useQuery({ queryKey: keys.report(reportId), queryFn: () => api.getReport(reportId), enabled: authReady && Boolean(reportId) }); }
 export function useCreateReport() { const qc = useQueryClient(); return useMutation({ mutationFn: api.createReport, onSuccess: () => qc.invalidateQueries({ queryKey: keys.reports }) }); }
+export function useUpdateReport() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ reportId, payload }: { reportId: string; payload: Parameters<typeof api.updateReport>[1] }) => api.updateReport(reportId, payload),
+    onSuccess: (report) => {
+      qc.setQueryData(keys.report(report.id), report);
+      qc.invalidateQueries({ queryKey: keys.reports });
+    },
+  });
+}
 
 export function useGmailPreview() {
   return useMutation({

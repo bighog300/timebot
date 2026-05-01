@@ -261,6 +261,89 @@ def test_report_sections_fallback_when_missing(client, monkeypatch, db):
     assert detail.json()["content_markdown"].startswith("# Report")
 
 
+def test_report_owner_can_update_sections(client, monkeypatch):
+    class DummyComp:
+        calls = 0
+
+        def create(self, **kwargs):
+            self.calls += 1
+            if self.calls == 1:
+                return type("DR", (), {"choices": [type("DC", (), {"message": type("M", (), {"content": "# Report\n\nBody"})()})()]})()
+            return type("DR2", (), {"choices": [type("DC2", (), {"message": type("M", (), {"content": '{"summary":"S","timeline":"T","relationships":"R"}'})()})()]})()
+
+    monkeypatch.setattr("app.config.settings.OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr("app.api.v1.reports.openai_client_service._client", type("C", (), {"chat": type("Chat", (), {"completions": DummyComp()})()})())
+    created = client.post("/api/v1/reports", json={"title": "Editable", "prompt": "p"}).json()
+    updated = client.patch(f"/api/v1/reports/{created['id']}", json={"sections": {"summary": "Updated S", "timeline": "Updated T", "relationships": "Updated R"}})
+    assert updated.status_code == 200
+    assert updated.json()["sections"]["summary"] == "Updated S"
+
+
+def test_report_update_forbidden_for_other_user(client, db, monkeypatch):
+    from app.models.user import User
+    from app.services.auth import auth_service
+    from app.api.deps import get_current_user
+    from app.main import app
+
+    class DummyComp:
+        calls = 0
+
+        def create(self, **kwargs):
+            self.calls += 1
+            if self.calls == 1:
+                return type("DR", (), {"choices": [type("DC", (), {"message": type("M", (), {"content": "# Report\n\nBody"})()})()]})()
+            return type("DR2", (), {"choices": [type("DC2", (), {"message": type("M", (), {"content": '{"summary":"S","timeline":"T","relationships":"R"}'})()})()]})()
+
+    monkeypatch.setattr("app.config.settings.OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr("app.api.v1.reports.openai_client_service._client", type("C", (), {"chat": type("Chat", (), {"completions": DummyComp()})()})())
+    created = client.post("/api/v1/reports", json={"title": "Private", "prompt": "p"}).json()
+
+    other = User(email="other@example.com", display_name="other", password_hash=auth_service.hash_password("pw"), is_active=True, role="editor")
+    db.add(other)
+    db.commit()
+    app.dependency_overrides[get_current_user] = lambda: other
+    res = client.patch(f"/api/v1/reports/{created['id']}", json={"sections": {"summary": "hack"}})
+    app.dependency_overrides.pop(get_current_user, None)
+    assert res.status_code == 404
+
+
+def test_report_update_rejects_invalid_sections_payload(client, monkeypatch):
+    class DummyComp:
+        calls = 0
+
+        def create(self, **kwargs):
+            self.calls += 1
+            if self.calls == 1:
+                return type("DR", (), {"choices": [type("DC", (), {"message": type("M", (), {"content": "# Report\n\nBody"})()})()]})()
+            return type("DR2", (), {"choices": [type("DC2", (), {"message": type("M", (), {"content": '{"summary":"S","timeline":"T","relationships":"R"}'})()})()]})()
+
+    monkeypatch.setattr("app.config.settings.OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr("app.api.v1.reports.openai_client_service._client", type("C", (), {"chat": type("Chat", (), {"completions": DummyComp()})()})())
+    created = client.post("/api/v1/reports", json={"title": "Invalid", "prompt": "p"}).json()
+    bad = client.patch(f"/api/v1/reports/{created['id']}", json={"sections": {"summary": 1}})
+    assert bad.status_code == 422
+
+
+def test_markdown_download_remains_after_section_edit(client, monkeypatch):
+    class DummyComp:
+        calls = 0
+
+        def create(self, **kwargs):
+            self.calls += 1
+            if self.calls == 1:
+                return type("DR", (), {"choices": [type("DC", (), {"message": type("M", (), {"content": "# Report\n\nBody"})()})()]})()
+            return type("DR2", (), {"choices": [type("DC2", (), {"message": type("M", (), {"content": '{"summary":"S","timeline":"T","relationships":"R"}'})()})()]})()
+
+    monkeypatch.setattr("app.config.settings.OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr("app.api.v1.reports.openai_client_service._client", type("C", (), {"chat": type("Chat", (), {"completions": DummyComp()})()})())
+    created = client.post("/api/v1/reports", json={"title": "Downloadable", "prompt": "p"}).json()
+    patched = client.patch(f"/api/v1/reports/{created['id']}", json={"sections": {"summary": "Edited", "timeline": "T", "relationships": "R"}})
+    assert patched.status_code == 200
+    download = client.get(created["download_url"])
+    assert download.status_code == 200
+    assert "# Report" in download.text
+
+
 def test_chat_stream_requires_auth():
     from fastapi.testclient import TestClient
     from app.main import app
