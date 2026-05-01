@@ -14,6 +14,7 @@ from app.config import settings
 from app.models.document import Document
 from app.models.relationships import DocumentRelationship
 from app.services.document_clusters import document_cluster_service
+from app.services.insights_service import insights_service
 
 logger = logging.getLogger(__name__)
 _CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
@@ -230,7 +231,22 @@ def retrieve_chat_context(
         if len(cluster_payload) >= 5:
             break
 
-    result = {"documents": documents, "source_refs": source_refs, "document_clusters": cluster_payload}
+    severity_rank = {"high": 0, "medium": 1, "low": 2}
+    structured = insights_service.build_structured_insights(db=db, user_id=user_id)
+    raw_insights = structured.get("insights", []) if isinstance(structured, dict) else []
+    related_insights: list[dict[str, Any]] = []
+    for insight in raw_insights:
+        if not isinstance(insight, dict):
+            continue
+        related_doc_ids = insight.get("related_document_ids") or []
+        if selected_doc_ids and isinstance(related_doc_ids, list) and related_doc_ids:
+            if not any(str(doc_id) in selected_doc_ids for doc_id in related_doc_ids):
+                continue
+        related_insights.append(insight)
+    related_insights.sort(key=lambda item: (severity_rank.get(str(item.get("severity", "")).lower(), 99), str(item.get("title", "")).lower()))
+    insights_payload = related_insights[:5]
+
+    result = {"documents": documents, "source_refs": source_refs, "document_clusters": cluster_payload, "insights": insights_payload}
     if cache_enabled and cache_key is not None:
         _cache_set(cache_key, result)
 
@@ -342,6 +358,16 @@ def format_chat_context(context: dict[str, Any], max_items_per_section: int = 25
         lines.append(f"- {title}: {status}{suffix}")
     if not has_email_outcomes:
         lines.append("- None")
+
+    insights = [i for i in (context.get("insights") or []) if isinstance(i, dict)]
+    if insights:
+        lines.extend(["", "Key Insights", "-"])
+        for insight in insights[:5]:
+            title = insight.get("title") or "Untitled insight"
+            severity = insight.get("severity") or "unknown"
+            insight_type = insight.get("type") or "unknown"
+            description = insight.get("description") or ""
+            lines.append(f"- [{severity}] {title} ({insight_type}): {description}")
 
     lines.extend(["", "Full Text Excerpts", "-"])
     has_full_text = False

@@ -706,6 +706,37 @@ def test_format_chat_context_includes_document_clusters_when_available(db, test_
     assert ctx["source_refs"]
 
 
+def test_retrieve_chat_context_includes_key_insights_with_severity_priority(db, test_user, monkeypatch):
+    _mk_doc(db, test_user.id, "insight-doc.txt", "Alpha summary")
+    monkeypatch.setattr(
+        "app.services.chat_retrieval.insights_service.build_structured_insights",
+        lambda **_kwargs: {
+            "insights": [
+                {"title": "Low item", "type": "risk", "severity": "low", "description": "L", "related_document_ids": []},
+                {"title": "High item", "type": "risk", "severity": "high", "description": "H", "related_document_ids": []},
+                {"title": "Medium item", "type": "risk", "severity": "medium", "description": "M", "related_document_ids": []},
+                {"title": "Other 1", "type": "risk", "severity": "high", "description": "O1", "related_document_ids": []},
+                {"title": "Other 2", "type": "risk", "severity": "medium", "description": "O2", "related_document_ids": []},
+                {"title": "Other 3", "type": "risk", "severity": "low", "description": "O3", "related_document_ids": []},
+            ]
+        },
+    )
+    ctx = retrieve_chat_context(db, "alpha", test_user.id, None, True, False, 5)
+    formatted = __import__("app.services.chat_retrieval", fromlist=["format_chat_context"]).format_chat_context(ctx)
+
+    assert len(ctx["insights"]) == 5
+    severities = [i.get("severity") for i in ctx["insights"]]
+    assert severities == ["high", "high", "medium", "medium", "low"]
+    assert "Key Insights" in formatted
+
+
+def test_format_chat_context_omits_key_insights_section_when_no_insights():
+    from app.services.chat_retrieval import format_chat_context
+
+    formatted = format_chat_context({"documents": [{"title": "alpha.txt", "summary": "summary"}], "insights": []})
+    assert "Key Insights" not in formatted
+
+
 def test_streaming_and_non_streaming_use_same_formatted_context(client, monkeypatch, db):
     captured: dict[str, str] = {}
 
@@ -756,6 +787,7 @@ def test_streaming_and_non_streaming_use_same_formatted_context(client, monkeypa
             ],
             "source_refs": [{"document_id": "d1", "document_title": "alpha.txt", "kind": "summary", "quote": "Alpha summary with milestone", "page_number": None}],
             "document_clusters": [{"cluster_size": 2, "relationship_count": 1, "document_titles": ["alpha.txt", "beta.txt"], "dominant_signals": ["shared_participants"]}],
+            "insights": [{"title": "Milestone risk", "type": "risk", "severity": "high", "description": "Potential slip in delivery timeline"}],
         },
     )
 
@@ -777,6 +809,7 @@ def test_streaming_and_non_streaming_use_same_formatted_context(client, monkeypa
     assert "milestone=yes" in non_stream_context
     assert "reason=high_confidence" in non_stream_context or "reason=high_confidence, keyword" in non_stream_context
     assert "signal_strength=strong" in non_stream_context
+    assert "Key Insights" in non_stream_context
 
 
 def test_format_chat_context_includes_timeline_gap_section_only_when_present():
