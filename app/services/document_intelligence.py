@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 import logging
+import re
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -15,6 +16,10 @@ from app.services.review_queue import review_queue_service
 
 
 class DocumentIntelligenceService:
+    _TIMELINE_STOPWORDS = {
+        "a", "an", "and", "are", "as", "at", "be", "by", "for", "from", "in", "is", "it", "of", "on", "or", "that", "the", "to", "was", "were", "with",
+    }
+
     def get_for_document(self, db: Session, document: Document) -> DocumentIntelligence | None:
         return db.query(DocumentIntelligence).filter(DocumentIntelligence.document_id == document.id).first()
 
@@ -59,11 +64,10 @@ class DocumentIntelligenceService:
             intelligence.summary = incoming_summary
         elif not intelligence.summary:
             intelligence.summary = ""
+        timeline_events = analysis.get("timeline_events", []) or []
         intelligence.key_points = analysis.get("key_points", [])
         intelligence.suggested_tags = analysis.get("tags", [])
-        intelligence.entities = analysis.get("entities", {})
-
-        timeline_events = analysis.get("timeline_events", []) or []
+        analysis_entities = analysis.get("entities", {})
         preview_event = timeline_events[0] if timeline_events and isinstance(timeline_events[0], dict) else {}
         logger.info(
             "timeline_pre_persist document_id=%s count=%s first_title=%s first_date=%s first_start=%s first_end=%s",
@@ -75,8 +79,11 @@ class DocumentIntelligenceService:
             preview_event.get("end_date"),
         )
         if isinstance(timeline_events, list):
-            intelligence.entities = dict(intelligence.entities or {})
+            timeline_events = self._deduplicate_timeline_events(db, document, timeline_events)
+            intelligence.entities = dict(analysis_entities or {})
             intelligence.entities["timeline_events"] = timeline_events
+        else:
+            intelligence.entities = analysis_entities
         intelligence.confidence = confidence_label
         intelligence.model_name = settings.OPENAI_MODEL
         intelligence.model_version = analysis.get("model_version")
@@ -101,6 +108,67 @@ class DocumentIntelligenceService:
         persisted = (intelligence.entities or {}).get("timeline_events", []) if isinstance(intelligence.entities, dict) else []
         logger.info("timeline_post_persist document_id=%s persisted_count=%s", document.id, len(persisted) if isinstance(persisted, list) else 0)
         return intelligence
+
+    def _deduplicate_timeline_events(self, db: Session, document: Document, incoming_events: list[dict]) -> list[dict]:
+        existing_norm = self._existing_timeline_event_signatures(db, document)
+        kept: list[dict] = []
+        for event in incoming_events:
+            if not isinstance(event, dict):
+                continue
+            sig = self._timeline_event_signature(event)
+            if sig and sig in existing_norm:
+                continue
+            if sig:
+                existing_norm.add(sig)
+            kept.append(event)
+        return kept
+
+    def _existing_timeline_event_signatures(self, db: Session, document: Document) -> set[str]:
+        related_docs: list[Document] = [document]
+        try:
+            metadata = getattr(document, "extracted_metadata", {}) or {}
+            thread_id = metadata.get("gmail_thread_id") if isinstance(metadata, dict) else None
+            if thread_id:
+                related_docs = db.query(Document).filter(
+                    Document.user_id == document.user_id,
+                    Document.source == "gmail",
+                    Document.extracted_metadata["gmail_thread_id"].astext == str(thread_id),
+                    Document.id != document.id,
+                ).all()
+                related_docs = [document, *related_docs]
+        except Exception:
+            related_docs = [document]
+
+        signatures: set[str] = set()
+        for doc in related_docs:
+            entities = getattr(doc, "entities", {}) or {}
+            events = entities.get("timeline_events", []) if isinstance(entities, dict) else []
+            if not isinstance(events, list):
+                continue
+            for event in events:
+                if isinstance(event, dict):
+                    sig = self._timeline_event_signature(event)
+                    if sig:
+                        signatures.add(sig)
+        return signatures
+
+    def _timeline_event_signature(self, event: dict) -> str:
+        text_bits = [
+            str(event.get("title") or ""),
+            str(event.get("description") or ""),
+            str(event.get("date") or ""),
+            str(event.get("start_date") or ""),
+            str(event.get("end_date") or ""),
+        ]
+        normalized = self._normalize_event_text(" ".join(text_bits))
+        return normalized.strip()
+
+    def _normalize_event_text(self, text: str) -> str:
+        lowered = (text or "").lower().strip()
+        no_punct = re.sub(r"[^\w\s]", " ", lowered)
+        squashed = re.sub(r"\s+", " ", no_punct).strip()
+        words = [w for w in squashed.split(" ") if w and w not in self._TIMELINE_STOPWORDS]
+        return " ".join(words)
 
     def update_intelligence(
         self,
