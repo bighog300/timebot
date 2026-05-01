@@ -32,6 +32,12 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str = ""
     OPENAI_MODEL: str = "gpt-4o-mini"
     OPENAI_EMBEDDING_MODEL: str = "text-embedding-3-small"
+    GEMINI_API_KEY: str = ""
+    GEMINI_MODEL: str = "gemini-1.5-flash"
+    ANTHROPIC_API_KEY: str = ""
+    ANTHROPIC_MODEL: str = "claude-3-5-sonnet-latest"
+    DEFAULT_AI_PROVIDER: str = "openai"
+    AI_PROVIDER_FALLBACKS: str = "openai"
 
     QDRANT_HOST: str = "localhost"
     QDRANT_PORT: int = 6333
