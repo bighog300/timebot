@@ -104,13 +104,12 @@ describe('chat page streaming', () => {
       { id: 'm2', session_id: 's1', role: 'assistant', content: 'Answer', created_at: '2026-01-01T00:00:01Z', source_refs: [{ document_id: 'd2', document_title: 'Doc B', snippet: 'Snippet B' }] },
     ]);
     render(<MemoryRouter><ChatPage /></MemoryRouter>);
-    const citationSummary = screen.getByText(/^(Citations|Sources) \(1\)$/);
-    const details = citationSummary.closest('details');
-    expect(details).toHaveAttribute('open');
-    fireEvent.click(citationSummary);
-    expect(details).not.toHaveAttribute('open');
-    fireEvent.click(citationSummary);
-    expect(details).toHaveAttribute('open');
+    const toggle = screen.getByRole('button', { name: /(Citations|Sources) \(1\)/ });
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
   });
 
   it('handles missing optional citation fields safely', () => {
