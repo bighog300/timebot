@@ -210,13 +210,13 @@ export function ChatPage() {
   const messages: ChatMessage[] = session.data?.messages || [];
 
   return <div className='grid min-h-[calc(100vh-8rem)] gap-3 md:gap-4 lg:grid-cols-[280px_minmax(0,1fr)]'>
-    <aside className='order-2 space-y-3 lg:order-1 lg:sticky lg:top-4 lg:self-start'>
+    <aside className='order-2 min-w-0 space-y-3 lg:order-1 lg:sticky lg:top-4 lg:self-start'>
       <button onClick={onNew} className='rounded bg-slate-700 px-3 py-2 text-sm'>New Chat</button>
       <div className='grid max-h-52 gap-2 overflow-auto pr-1 md:max-h-none'>
-        {(sessions.data || []).map((s) => <button key={s.id} onClick={() => setSessionId(s.id)} className='block w-full rounded border border-slate-700 p-2 text-left text-sm'>{s.title || `Session ${s.id.slice(0, 8)}`}</button>)}
+        {(sessions.data || []).map((s) => <button key={s.id} onClick={() => setSessionId(s.id)} className='block w-full min-w-0 rounded border border-slate-700 p-2 text-left text-sm break-words'>{s.title || `Session ${s.id.slice(0, 8)}`}</button>)}
       </div>
     </aside>
-    <div className='order-1 flex min-h-0 flex-col space-y-3 lg:order-2'>
+    <div className='order-1 flex min-h-0 min-w-0 flex-col space-y-3 lg:order-2'>
       <h1 className='text-xl font-semibold'>Chat</h1>
       <div data-testid='chat-message-list' className='min-h-[18rem] flex-1 space-y-2 overflow-y-auto rounded-xl border border-slate-700 p-2.5 sm:p-4 lg:px-5'>
         {messages.map((m, index) => (
@@ -257,7 +257,7 @@ export function ChatPage() {
         {streamError && <div className='text-sm text-rose-400'>Streaming failed. Retry sending your message. ({streamError})</div>}
         {(session.isLoading || isStreaming) && <div>{isStreaming ? 'Streaming...' : 'Loading...'}</div>}
       </div>
-      <div data-testid='chat-input-panel' className='sticky bottom-0 z-10 space-y-2 rounded border border-slate-700 bg-slate-950/95 p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] shadow-[0_-8px_24px_rgba(2,6,23,0.45)] backdrop-blur'>
+      <div data-testid='chat-input-panel' className='sticky bottom-0 z-10 space-y-2 rounded border border-slate-700 bg-slate-950/95 p-2 sm:p-3 pb-[max(0.5rem,env(safe-area-inset-bottom))] shadow-[0_-8px_24px_rgba(2,6,23,0.45)] backdrop-blur'>
         <textarea disabled={isStreaming} value={message} onChange={(e) => setMessage(e.target.value)} className='max-h-40 w-full rounded border border-slate-700 bg-slate-900 p-2' placeholder='Ask a question' />
         <input value={docIds} onChange={(e) => setDocIds(e.target.value)} placeholder='Document IDs comma-separated (optional)' className='w-full rounded border border-slate-700 bg-slate-900 p-2 text-sm' />
         <div className='flex flex-wrap items-center gap-3'>
