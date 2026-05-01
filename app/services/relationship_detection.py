@@ -45,6 +45,7 @@ except ModuleNotFoundError:  # pragma: no cover - local test fallback when deps 
         is_archived = _ModelFieldFallback()
         upload_date = _ModelFieldFallback()
 from app.services.embedding_service import embedding_service
+from app.services.prompt_templates import get_active_prompt_content
 from app.services.relationship_review import relationship_review_service
 
 logger = logging.getLogger(__name__)
@@ -58,6 +59,13 @@ class RelationshipCandidate:
     confidence: float
     metadata: Dict
 
+
+DEFAULT_RELATIONSHIP_PROMPT = """follow up
+follow-up
+update
+next steps
+status update
+phase 2"""
 
 STOPWORDS = {"a", "an", "and", "are", "as", "at", "be", "but", "by", "for", "from", "if", "in", "into", "is", "it", "no", "not", "of", "on", "or", "s", "such", "t", "that", "the", "their", "then", "there", "these", "they", "this", "to", "was", "will", "with", "you", "your"}
 
@@ -87,7 +95,7 @@ class RelationshipDetectionService:
 
         logger.info("Relationship detection compare-docs count=%d source_doc_id=%s", len(candidates), document_id)
         logger.info("Relationship detection source-intelligence entity_keys=%s", sorted((doc.entities or {}).keys()))
-        matches = [self._score_pair(doc, other, log_prefix="detect_for_document") for other in candidates]
+        matches = [self._score_pair(doc, other, db=db, log_prefix="detect_for_document") for other in candidates]
         detected = [m for m in matches if m is not None]
         logger.info("Relationship candidates pre-threshold count=%d doc_id=%s", len(matches), document_id)
         logger.info("Relationship candidates found=%d doc_id=%s", len(detected), document_id)
@@ -104,7 +112,7 @@ class RelationshipDetectionService:
             if left.user_id != right.user_id:
                 logger.debug("Relationship skipped permission/user mismatch left=%s right=%s", left.id, right.id)
                 continue
-            result = self._score_pair(left, right, log_prefix="backfill")
+            result = self._score_pair(left, right, db=db, log_prefix="backfill")
             if result:
                 candidates.append(result)
 
@@ -112,7 +120,7 @@ class RelationshipDetectionService:
         persisted["scanned"] = len(docs)
         return persisted
 
-    def _score_pair(self, left: Document, right: Document, log_prefix: str = "") -> Optional[RelationshipCandidate]:
+    def _score_pair(self, left: Document, right: Document, db: Session | None = None, log_prefix: str = "") -> Optional[RelationshipCandidate]:
         if left.id == right.id:
             logger.debug("Relationship skipped same doc left=%s right=%s", left.id, right.id)
             return None
@@ -133,7 +141,8 @@ class RelationshipDetectionService:
         entity_overlap = self._entity_overlap(left.entities or {}, right.entities or {})
         category_overlap = 1.0 if (left.user_category_id and left.user_category_id == right.user_category_id) or (left.ai_category_id and left.ai_category_id == right.ai_category_id) else 0.0
         timeline_overlap = self._timeline_overlap(left, right)
-        follow_up_signal = self._follow_up_signal(left, right)
+        runtime_prompt = get_active_prompt_content(db, "relationship_detection", DEFAULT_RELATIONSHIP_PROMPT) if db is not None else DEFAULT_RELATIONSHIP_PROMPT
+        follow_up_signal = self._follow_up_signal(left, right, runtime_prompt)
         keyword_overlap = self._keyword_overlap(left, right)
         title_similarity = SequenceMatcher(None, (left.filename or "").lower(), (right.filename or "").lower()).ratio()
         text_similarity = SequenceMatcher(None, (left.summary or "").lower(), (right.summary or "").lower()).ratio()
@@ -226,9 +235,9 @@ class RelationshipDetectionService:
         toks = {t for t in re.findall(r"[a-z0-9]{3,}", (text or "").lower()) if t not in STOPWORDS}
         return toks
 
-    def _follow_up_signal(self, left: Document, right: Document) -> float:
+    def _follow_up_signal(self, left: Document, right: Document, prompt_text: str) -> float:
         blob = f"{left.filename or ''} {left.summary or ''} {right.filename or ''} {right.summary or ''}".lower()
-        phrases = ["follow up", "follow-up", "update", "next steps", "status update", "phase 2"]
+        phrases = [line.strip().lower() for line in (prompt_text or "").splitlines() if line.strip()]
         return 1.0 if any(p in blob for p in phrases) else 0.0
 
     def _entity_overlap(self, left_entities: Dict, right_entities: Dict) -> float:
