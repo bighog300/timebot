@@ -1,5 +1,7 @@
 from uuid import UUID
 import json
+import logging
+import time
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
@@ -15,6 +17,7 @@ from app.services.openai_client import APIError, openai_client_service
 from app.config import settings
 
 router = APIRouter(prefix="/chat", tags=["chat"])
+logger = logging.getLogger(__name__)
 
 
 class CreateSessionRequest(BaseModel):
@@ -81,6 +84,23 @@ def _build_chat_payload(db: Session, user: User, payload: MessageRequest):
     return bot_settings, context, prompt
 
 
+
+
+def _log_chat_request(*, session_id: UUID, user_id: UUID, endpoint_type: str, retrieval_count: int, history_count: int, success: bool, latency_ms: float):
+    logger.info(
+        "chat_request",
+        extra={
+            "event": "chat_request",
+            "session_id": str(session_id),
+            "user_id": str(user_id),
+            "endpoint_type": endpoint_type,
+            "retrieval_count": retrieval_count,
+            "history_message_count": history_count,
+            "success": success,
+            "latency_ms": round(latency_ms, 2),
+        },
+    )
+
 def _append_sources(assistant_content: str, source_refs: list[dict]) -> str:
     if not source_refs:
         return assistant_content
@@ -117,6 +137,8 @@ def post_message(session_id: UUID, payload: MessageRequest, db: Session = Depend
     bot_settings, context, prompt = _build_chat_payload(db, user, payload)
     prior_messages = _load_recent_session_messages(db, s.id, settings.CHAT_MAX_HISTORY_MESSAGES)
     user_message = ChatMessage(session_id=s.id, role="user", content=payload.message)
+    start = time.perf_counter()
+    success = False
     if not prompt:
         assistant_content = "Not enough information was found in accessible Timebot documents to answer this confidently."
     else:
@@ -128,13 +150,16 @@ def post_message(session_id: UUID, payload: MessageRequest, db: Session = Depend
                 messages=_build_model_messages(bot_settings, prompt, prior_messages),
             )
         except APIError as exc:
+            _log_chat_request(session_id=s.id, user_id=user.id, endpoint_type="non_streaming", retrieval_count=len(context.get("source_refs", [])), history_count=len(prior_messages), success=False, latency_ms=(time.perf_counter()-start)*1000)
             raise HTTPException(status_code=503, detail=f"Chat AI request failed: {exc}") from exc
         assistant_content = (response.choices[0].message.content or "").strip() or "Not enough information was found in accessible Timebot documents."
         assistant_content = _append_sources(assistant_content, context["source_refs"])
+    success = True
     assistant_message = ChatMessage(session_id=s.id, role="assistant", content=assistant_content, source_refs=context["source_refs"])
     db.add(user_message)
     db.add(assistant_message)
     db.commit()
+    _log_chat_request(session_id=s.id, user_id=user.id, endpoint_type="non_streaming", retrieval_count=len(context.get("source_refs", [])), history_count=len(prior_messages), success=success, latency_ms=(time.perf_counter()-start)*1000)
     return {"message": assistant_message.content, "source_refs": context["source_refs"]}
 
 
@@ -148,6 +173,8 @@ def stream_message(session_id: UUID, payload: MessageRequest, db: Session = Depe
         return f"event: {event_type}\ndata: {json.dumps(data)}\n\n"
 
     def event_stream():
+        start = time.perf_counter()
+        success = False
         user_message = ChatMessage(session_id=s.id, role="user", content=payload.message)
         db.add(user_message)
 
@@ -165,6 +192,7 @@ def stream_message(session_id: UUID, payload: MessageRequest, db: Session = Depe
                     stream=True,
                 )
             except APIError as exc:
+                _log_chat_request(session_id=s.id, user_id=user.id, endpoint_type="streaming", retrieval_count=len(context.get("source_refs", [])), history_count=len(prior_messages), success=False, latency_ms=(time.perf_counter()-start)*1000)
                 raise HTTPException(status_code=503, detail=f"Chat AI request failed: {exc}") from exc
 
             for chunk in stream:
@@ -179,6 +207,8 @@ def stream_message(session_id: UUID, payload: MessageRequest, db: Session = Depe
         assistant_message = ChatMessage(session_id=s.id, role="assistant", content=assistant_text, source_refs=context["source_refs"])
         db.add(assistant_message)
         db.commit()
+        success = True
+        _log_chat_request(session_id=s.id, user_id=user.id, endpoint_type="streaming", retrieval_count=len(context.get("source_refs", [])), history_count=len(prior_messages), success=success, latency_ms=(time.perf_counter()-start)*1000)
 
         yield _event("final", {"message": assistant_text, "source_refs": context["source_refs"]})
 
