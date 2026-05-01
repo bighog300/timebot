@@ -97,9 +97,21 @@ def retrieve_chat_context(
                 rel_text = f"{rel.relationship_type} {rel.target_document.filename}"
                 rel_score = _score_text(query_terms, [rel_text])
                 if rel_score > 0:
-                    relationships.append({"relationship_type": rel.relationship_type, "target_document_id": str(rel.target_doc_id), "target_document_title": rel.target_document.filename})
+                    rel_metadata = rel.relationship_metadata if isinstance(rel.relationship_metadata, dict) else {}
+                    relationships.append(
+                        {
+                            "relationship_type": rel.relationship_type,
+                            "target_document_id": str(rel.target_doc_id),
+                            "target_document_title": rel.target_document.filename,
+                            "relationship_metadata": rel_metadata,
+                        }
+                    )
                     score += rel_score
                     source_refs.append({"document_id": str(doc.id), "document_title": title, "kind": "relationship", "quote": rel_text, "page_number": None})
+
+        thread_outcome = None
+        if isinstance(doc.extracted_metadata, dict):
+            thread_outcome = doc.extracted_metadata.get("thread_outcome")
 
         if include_full_text:
             text_path = Path(settings.effective_artifact_dir) / "extracted_text"
@@ -113,10 +125,91 @@ def retrieve_chat_context(
                     source_refs.append({"document_id": str(doc.id), "document_title": title, "kind": "full_text_excerpt", "quote": ex, "page_number": None})
 
         if score > 0 or (not query_terms and (summary or timeline_events)):
-            ranked.append((score, doc, {"document_id": str(doc.id), "title": title, "summary": summary, "category": category, "matched_snippets": matched_snippets[:5], "timeline_events": timeline_events[:5], "relationships": relationships[:5], "_source_refs": source_refs}))
+            ranked.append((score, doc, {"document_id": str(doc.id), "title": title, "summary": summary, "category": category, "matched_snippets": matched_snippets[:5], "timeline_events": timeline_events[:5], "relationships": relationships[:5], "email_thread_outcome": thread_outcome, "_source_refs": source_refs}))
 
     ranked.sort(key=lambda x: x[0], reverse=True)
     selected = ranked[: max(1, max_documents)]
     documents = [item[2] for item in selected]
     source_refs = [ref for _, _, d in selected for ref in d.pop("_source_refs", [])]
     return {"documents": documents, "source_refs": source_refs}
+
+
+def format_chat_context(context: dict[str, Any], max_items_per_section: int = 25) -> str:
+    docs = context.get("documents") or []
+    lines: list[str] = []
+
+    lines.append("Document Summaries")
+    lines.append("-")
+    for d in docs[:max_items_per_section]:
+        title = d.get("title") or d.get("document_id")
+        summary = d.get("summary") or "(no summary)"
+        category = d.get("category")
+        cat_suffix = f" [Category: {category}]" if category else ""
+        lines.append(f"- {title}{cat_suffix}: {summary}")
+    if len(lines) == 2:
+        lines.append("- None")
+
+    lines.extend(["", "Timeline Events", "-"])
+    has_timeline = False
+    for d in docs[:max_items_per_section]:
+        title = d.get("title") or d.get("document_id")
+        for event in (d.get("timeline_events") or [])[:max_items_per_section]:
+            if not isinstance(event, dict):
+                continue
+            has_timeline = True
+            date = event.get("date") or event.get("start_date") or "unknown-date"
+            event_title = event.get("title") or "(untitled event)"
+            description = event.get("description") or ""
+            lines.append(f"- [{date}] {title}: {event_title} — {description}".strip())
+    if not has_timeline:
+        lines.append("- None")
+
+    lines.extend(["", "Relationships", "-"])
+    has_relationships = False
+    for d in docs[:max_items_per_section]:
+        source_title = d.get("title") or d.get("document_id")
+        for rel in (d.get("relationships") or [])[:max_items_per_section]:
+            if not isinstance(rel, dict):
+                continue
+            has_relationships = True
+            target = rel.get("target_document_title") or rel.get("target_document_id") or "(unknown target)"
+            rel_type = rel.get("relationship_type") or "related_to"
+            explanation = ((rel.get("relationship_metadata") or {}).get("explanation") if isinstance(rel.get("relationship_metadata"), dict) else None)
+            explanation_suffix = f" | explanation: {explanation}" if explanation else ""
+            lines.append(f"- {source_title} -> {target} ({rel_type}){explanation_suffix}")
+    if not has_relationships:
+        lines.append("- None")
+
+    lines.extend(["", "Email Thread Outcomes", "-"])
+    has_email_outcomes = False
+    for d in docs[:max_items_per_section]:
+        outcome = d.get("email_thread_outcome")
+        if not isinstance(outcome, dict):
+            continue
+        has_email_outcomes = True
+        title = d.get("title") or d.get("document_id")
+        status = outcome.get("status", "unknown")
+        reason = outcome.get("reason")
+        confidence = outcome.get("confidence")
+        meta = []
+        if reason:
+            meta.append(f"reason={reason}")
+        if confidence is not None:
+            meta.append(f"confidence={confidence}")
+        suffix = f" ({', '.join(meta)})" if meta else ""
+        lines.append(f"- {title}: {status}{suffix}")
+    if not has_email_outcomes:
+        lines.append("- None")
+
+    lines.extend(["", "Full Text Excerpts", "-"])
+    has_full_text = False
+    for d in docs[:max_items_per_section]:
+        title = d.get("title") or d.get("document_id")
+        excerpts = d.get("matched_snippets") or []
+        for excerpt in excerpts[:2]:
+            has_full_text = True
+            lines.append(f"- {title}: {excerpt}")
+    if not has_full_text:
+        lines.append("- None")
+
+    return "\n".join(lines)
