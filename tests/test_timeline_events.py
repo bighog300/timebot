@@ -121,3 +121,37 @@ def test_non_milestone_event_remains_unflagged():
     res = timeline_service.build_timeline(FakeDB([doc]))
     assert res["events"][0]["is_milestone"] is False
     assert res["events"][0]["milestone_reason"] is None
+
+
+def test_gaps_detected_for_spaced_events():
+    doc = _doc()
+    doc.entities = {"timeline_events": [
+        {"title": "Kickoff", "date": "2026-01-01", "confidence": 0.8},
+        {"title": "Review", "date": "2026-03-05", "confidence": 0.8},
+    ]}
+    res = timeline_service.build_timeline(FakeDB([doc]))
+    assert len(res["gaps"]) == 1
+    assert res["gaps"][0] == {"start_date": "2026-01-01", "end_date": "2026-03-05", "gap_duration_days": 63}
+
+
+def test_no_gaps_when_events_are_dense():
+    doc = _doc()
+    doc.entities = {"timeline_events": [
+        {"title": "Day 1", "date": "2026-01-01", "confidence": 0.8},
+        {"title": "Day 2", "date": "2026-01-15", "confidence": 0.8},
+        {"title": "Day 3", "date": "2026-01-28", "confidence": 0.8},
+    ]}
+    res = timeline_service.build_timeline(FakeDB([doc]))
+    assert res["gaps"] == []
+
+
+def test_gap_detection_safe_for_single_or_no_events():
+    single = _doc()
+    single.entities = {"timeline_events": [{"title": "Only event", "date": "2026-02-01", "confidence": 0.8}]}
+    single_res = timeline_service.build_timeline(FakeDB([single]))
+    assert single_res["gaps"] == []
+
+    empty = _doc()
+    empty.entities = {}
+    empty_res = timeline_service.build_timeline(FakeDB([empty]))
+    assert empty_res["gaps"] == []

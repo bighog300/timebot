@@ -23,6 +23,7 @@ except ModuleNotFoundError:  # pragma: no cover
 class TimelineService:
     _MILESTONE_CONFIDENCE_THRESHOLD = 0.8
     _MILESTONE_KEYWORDS = ("signed", "approved", "completed", "launched", "deadline")
+    _GAP_THRESHOLD_DAYS = 30
 
     def build_timeline(self, db: Session, *, group_by: str = "day", category_ids: Optional[List[str]] = None, sources: Optional[List[str]] = None, file_types: Optional[List[str]] = None, document_id: Optional[str] = None, start_date: Optional[str] = None, end_date: Optional[str] = None, category: Optional[str] = None, min_confidence: float = 0.0, limit: int = 500) -> Dict[str, Any]:
         query = db.query(Document).filter(Document.is_archived.is_(False))
@@ -54,9 +55,10 @@ class TimelineService:
             filtered.append(ev)
         self._annotate_milestones(filtered)
         filtered.sort(key=lambda e: e.get("start_date") or e.get("date") or "", reverse=False)
+        gaps = self._detect_gaps(filtered)
         buckets = [{"period": "all", "count": len(filtered), "events": filtered}]
         logging.getLogger(__name__).info("timeline_service_result docs=%s events_returned=%s", len(docs), len(filtered))
-        return {"group_by": group_by, "total_documents": len(docs), "total_events": len(filtered), "events": filtered, "buckets": buckets}
+        return {"group_by": group_by, "total_documents": len(docs), "total_events": len(filtered), "events": filtered, "buckets": buckets, "gaps": gaps}
 
     def _annotate_milestones(self, events: List[Dict[str, Any]]) -> None:
         if not events:
@@ -153,6 +155,36 @@ class TimelineService:
                         "source": "date_extraction_fallback",
                     })
         return events
+
+    def _detect_gaps(self, events: List[Dict[str, Any]], *, threshold_days: Optional[int] = None) -> List[Dict[str, Any]]:
+        if len(events) < 2:
+            return []
+
+        threshold = threshold_days if isinstance(threshold_days, int) and threshold_days > 0 else self._GAP_THRESHOLD_DAYS
+        dated_events: List[tuple[datetime, Dict[str, Any]]] = []
+        for event in events:
+            event_date = self._parse_date(event.get("start_date")) or self._parse_date(event.get("date"))
+            if event_date:
+                dated_events.append((event_date, event))
+
+        if len(dated_events) < 2:
+            return []
+
+        dated_events.sort(key=lambda item: item[0])
+        gaps: List[Dict[str, Any]] = []
+        for idx in range(1, len(dated_events)):
+            previous_date = dated_events[idx - 1][0].date()
+            current_date = dated_events[idx][0].date()
+            gap_duration = (current_date - previous_date).days
+            if gap_duration > threshold:
+                gaps.append(
+                    {
+                        "start_date": previous_date.isoformat(),
+                        "end_date": current_date.isoformat(),
+                        "gap_duration_days": gap_duration,
+                    }
+                )
+        return gaps
 
     def _parse_date(self, value: Any) -> Optional[datetime]:
         if isinstance(value, datetime):

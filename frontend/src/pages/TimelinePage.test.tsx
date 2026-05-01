@@ -37,6 +37,7 @@ describe('TimelinePage', () => {
     total_documents: 1,
     total_events: events.length,
     events,
+    gaps: [],
   });
 
   beforeEach(() => {
@@ -177,5 +178,25 @@ describe('TimelinePage', () => {
 
     const monthWidth = Number((screen.getByTestId('timeline-axis') as HTMLElement).style.width.replace('px', ''));
     expect(monthWidth).toBeGreaterThan(fitWidth);
+  });
+
+  it('renders gap labels when response includes timeline gaps', async () => {
+    vi.mocked(api.getTimeline).mockResolvedValue({
+      ...makeTimelineResponse([{ title: 'Kickoff', date: '2025-01-01', confidence: 0.9, document_id: 'd1', document_title: 'Doc', source_quote: 'K', start_date: null, end_date: null }]),
+      gaps: [{ start_date: '2025-01-01', end_date: '2025-03-01', gap_duration_days: 59 }],
+    });
+    renderPage();
+    expect(await screen.findByText('No activity for 59 days (2025-01-01 → 2025-03-01)')).toBeTruthy();
+  });
+
+  it('does not crash when gaps are missing in timeline response', async () => {
+    vi.mocked(api.getTimeline).mockResolvedValue({
+      total_documents: 1,
+      total_events: 1,
+      events: [{ title: 'Kickoff', date: '2025-01-01', confidence: 0.9, document_id: 'd1', document_title: 'Doc', source_quote: 'K', start_date: null, end_date: null }],
+    } as TimelineResponse);
+    renderPage();
+    expect(await screen.findByText('Kickoff')).toBeTruthy();
+    expect(screen.queryByText(/No activity for/)).toBeNull();
   });
 });

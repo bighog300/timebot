@@ -120,6 +120,7 @@ export function TimelinePage() {
 
     return Array.from(groups.values());
   }, [normalizedEvents]);
+  const gaps = data?.gaps ?? [];
 
   const chart = useMemo(() => {
     if (!normalizedEvents.length) return null;
@@ -227,6 +228,17 @@ export function TimelinePage() {
         ) : null}
       </div>
       {chart.isScrollable ? <p className="text-xs text-slate-400">Drag or scroll inside the chart to pan timeline.</p> : null}
+      {gaps.length ? (
+        <div className="rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2">
+          <div className="space-y-1">
+            {gaps.map((gap, idx) => (
+              <p key={`${gap.start_date}-${gap.end_date}-${idx}`} className="text-xs text-slate-300">
+                No activity for {gap.gap_duration_days} days ({gap.start_date} → {gap.end_date})
+              </p>
+            ))}
+          </div>
+        </div>
+      ) : null}
       <div className="w-full max-w-full min-w-0 overflow-hidden rounded-2xl border border-slate-700 bg-slate-900 shadow-sm" data-testid="timeline-card">
         <div
           ref={scrollContainerRef}
