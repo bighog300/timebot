@@ -66,6 +66,11 @@ function getMessageTextClasses(): string {
   return 'whitespace-pre-wrap break-words leading-7 [overflow-wrap:anywhere]';
 }
 
+function isNewConversationTurn(messages: ChatMessage[], index: number): boolean {
+  if (index === 0) return true;
+  return messages[index].role === 'user';
+}
+
 function CitationSection({ sourceRefs }: { sourceRefs: SourceRef[] }) {
   const [expanded, setExpanded] = useState(true);
   const contentId = useId();
@@ -201,9 +206,17 @@ export function ChatPage() {
     </div>
     <div className='flex min-h-0 flex-col space-y-3'>
       <h1 className='text-xl font-semibold'>Chat</h1>
-      <div data-testid='chat-message-list' className='min-h-[18rem] flex-1 space-y-4 overflow-y-auto rounded-xl border border-slate-700 p-3 sm:p-4'>
-        {messages.map((m) => (
-          <div key={m.id} className={getMessageContainerClasses(m.role)} data-testid={`chat-message-${m.role}`}>
+      <div data-testid='chat-message-list' className='min-h-[18rem] flex-1 space-y-2 overflow-y-auto rounded-xl border border-slate-700 p-3 sm:p-4'>
+        {messages.map((m, index) => (
+          <div key={m.id} className={isNewConversationTurn(messages, index) ? 'pt-2 first:pt-0' : 'pt-1'} data-testid='chat-flow-turn'>
+            {index > 0 && isNewConversationTurn(messages, index) && (
+              <div
+                aria-hidden='true'
+                data-testid='chat-turn-divider'
+                className='mx-auto mb-3 h-px w-16 bg-gradient-to-r from-transparent via-slate-700 to-transparent opacity-70'
+              />
+            )}
+            <div className={getMessageContainerClasses(m.role)} data-testid={`chat-message-${m.role}`}>
             <div className='mb-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-300'>{m.role}</div>
             <div className={getMessageTextClasses()}>{m.content}</div>
             {m.role === 'assistant' && (
@@ -215,6 +228,7 @@ export function ChatPage() {
                 />
               </>
             )}
+          </div>
           </div>
         ))}
         {isStreaming && (

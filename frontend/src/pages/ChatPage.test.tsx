@@ -55,6 +55,26 @@ describe('ChatPage mobile layout', () => {
     expect(userMessage.className).not.toEqual(assistantMessage.className);
   });
 
+  it('adds subtle turn grouping and keeps chronological order', () => {
+    vi.mocked(useChatSession).mockReturnValueOnce({
+      data: {
+        messages: [
+          { id: 'm-user-1', role: 'user', content: 'First question' },
+          { id: 'm-assistant-1', role: 'assistant', content: 'First answer' },
+          { id: 'm-user-2', role: 'user', content: 'Second question' },
+        ],
+      },
+      isLoading: false,
+    } as never);
+    render(<MemoryRouter><ChatPage /></MemoryRouter>);
+    const messages = screen.getAllByTestId(/chat-message-(user|assistant)/);
+    expect(messages).toHaveLength(3);
+    expect(messages[0]).toHaveTextContent('First question');
+    expect(messages[1]).toHaveTextContent('First answer');
+    expect(messages[2]).toHaveTextContent('Second question');
+    expect(screen.queryAllByTestId('chat-turn-divider')).toHaveLength(1);
+  });
+
   it('renders citation cards in narrow-friendly container', () => {
     render(<MemoryRouter><ChatPage /></MemoryRouter>);
     expect(screen.getAllByText('Citations (2)').length).toBeGreaterThan(0);
@@ -91,5 +111,11 @@ describe('ChatPage mobile layout', () => {
     expect(screen.getAllByPlaceholderText('Ask a question').length).toBeGreaterThan(0);
     expect(screen.getByRole('button', { name: 'Send' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Generate report from this conversation/answer' })).toBeTruthy();
+  });
+
+  it('renders follow-up suggestions for assistant responses', () => {
+    render(<MemoryRouter><ChatPage /></MemoryRouter>);
+    expect(screen.getByText('Suggested follow-ups')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'What are the key risks?' })).toBeTruthy();
   });
 });
