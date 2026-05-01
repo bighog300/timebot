@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 import logging
 import re
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set, Literal
 
 try:
     from sqlalchemy.orm import Session
@@ -76,7 +76,7 @@ class TimelineService:
             reasons: List[str] = []
             title = str(event.get("title") or "")
             normalized_title = self._normalize_event_title(title)
-            confidence = float(event.get("confidence") or 0.0)
+            confidence = float(self._normalize_confidence(event.get("confidence")) or 0.0)
             if confidence >= self._MILESTONE_CONFIDENCE_THRESHOLD:
                 reasons.append("high_confidence")
 
@@ -118,7 +118,8 @@ class TimelineService:
                 'date': event.get('date'),
                 'start_date': event.get('start_date'),
                 'end_date': event.get('end_date'),
-                'confidence': float(event.get('confidence') or 0.0),
+                'confidence': self._normalize_confidence(event.get('confidence')),
+                'signal_strength': self._signal_strength_label(self._normalize_confidence(event.get('confidence'))),
                 'source_quote': event.get('source_quote'),
                 'page_number': event.get('page_number'),
                 'document_id': str(doc.id),
@@ -185,6 +186,33 @@ class TimelineService:
                     }
                 )
         return gaps
+
+
+    def _normalize_confidence(self, value: Any) -> Optional[float]:
+        if value is None:
+            return None
+        try:
+            parsed = float(value)
+        except (TypeError, ValueError):
+            return None
+        if parsed != parsed:
+            return None
+        if parsed < 0:
+            return 0.0
+        if parsed <= 1:
+            return parsed
+        if parsed <= 100:
+            return parsed / 100.0
+        return 1.0
+
+    def _signal_strength_label(self, confidence: Optional[float]) -> Optional[Literal["strong", "medium", "weak"]]:
+        if confidence is None:
+            return None
+        if confidence >= 0.8:
+            return "strong"
+        if confidence >= 0.5:
+            return "medium"
+        return "weak"
 
     def _parse_date(self, value: Any) -> Optional[datetime]:
         if isinstance(value, datetime):

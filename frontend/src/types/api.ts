@@ -94,6 +94,7 @@ export interface TimelineEvent {
   start_date?: string | null;
   end_date?: string | null;
   confidence?: number | null;
+  signal_strength?: "strong" | "medium" | "weak" | null;
   source_quote?: string | null;
   page_number?: number | null;
   document_id: string;

@@ -9,7 +9,8 @@ class TimelineEvent(BaseModel):
     date: Optional[str] = None
     start_date: Optional[str] = None
     end_date: Optional[str] = None
-    confidence: float
+    confidence: Optional[float] = None
+    signal_strength: Optional[str] = None
     source_quote: Optional[str] = None
     page_number: Optional[int] = None
     document_id: str

@@ -74,6 +74,30 @@ describe('TimelinePage', () => {
     expect(screen.getByText('Confidence: 77%')).toBeTruthy();
   });
 
+
+
+  it('renders signal strength label when confidence is present', async () => {
+    vi.mocked(api.getTimeline).mockResolvedValue(
+      makeTimelineResponse([
+        { title: 'Board Approval', date: '2025-04-02', confidence: 0.77, document_id: 'd1', document_title: 'Board Minutes.pdf', category: 'Governance', source_quote: 'Approved', start_date: null, end_date: null },
+      ]),
+    );
+
+    renderPage();
+    expect(await screen.findByText('Signal: medium')).toBeTruthy();
+  });
+
+  it('handles missing confidence signal strength safely', async () => {
+    vi.mocked(api.getTimeline).mockResolvedValue(
+      makeTimelineResponse([
+        { title: 'Notice Sent', date: '2025-04-03', confidence: null, metadata: null, document_id: 'd1', document_title: 'Notice Letter.pdf', source_quote: 'Sent', start_date: null, end_date: null },
+      ]),
+    );
+
+    renderPage();
+    expect(await screen.findByText('Notice Sent')).toBeTruthy();
+    expect(screen.queryByText(/Signal:/)).toBeNull();
+  });
   it('handles missing confidence without crashing or fabricating values', async () => {
     vi.mocked(api.getTimeline).mockResolvedValue(
       makeTimelineResponse([
