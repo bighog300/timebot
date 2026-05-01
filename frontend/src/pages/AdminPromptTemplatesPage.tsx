@@ -33,25 +33,25 @@ export function AdminPromptTemplatesPage() {
       </table>
     </div>
 
-    <div className='rounded border border-slate-800 p-3 space-y-2'>
+    <div className='space-y-2 rounded border border-slate-800 p-3'>
       <h2 className='font-semibold'>Create template</h2>
       <select value={createForm.prompt_type} onChange={(e) => setCreateForm((v) => ({ ...v, prompt_type: e.target.value as PromptTemplateType }))} className='rounded border border-slate-700 bg-slate-900 p-2 text-sm'>
         {promptTypes.map((type) => <option key={type} value={type}>{type}</option>)}
       </select>
       <input placeholder='Template name' value={createForm.name} onChange={(e) => setCreateForm((v) => ({ ...v, name: e.target.value }))} className='w-full rounded border border-slate-700 bg-slate-900 p-2 text-sm' />
       <textarea placeholder='Prompt content' value={createForm.content} onChange={(e) => setCreateForm((v) => ({ ...v, content: e.target.value }))} className='h-40 w-full rounded border border-slate-700 bg-slate-900 p-2 text-sm' />
-      <button className='rounded bg-emerald-700 px-3 py-2 text-sm' onClick={async () => { try { await createPrompt.mutateAsync(createForm); pushToast('Prompt template created'); setCreateForm({ prompt_type: 'chat', name: '', content: '' }); } catch (e) { pushToast(getErrorDetail(e), 'error'); } }}>Create template</button>
+      <button className='w-full rounded bg-emerald-700 px-3 py-2 text-sm sm:w-auto' onClick={async () => { try { await createPrompt.mutateAsync(createForm); pushToast('Prompt template created'); setCreateForm({ prompt_type: 'chat', name: '', content: '' }); } catch (e) { pushToast(getErrorDetail(e), 'error'); } }}>Create template</button>
     </div>
 
 
-    <div className='rounded border border-slate-800 p-3 space-y-2'>
+    <div className='space-y-2 rounded border border-slate-800 p-3'>
       <h2 className='font-semibold'>Test prompt</h2>
       <select value={testForm.prompt_type} onChange={(e) => setTestForm((v) => ({ ...v, prompt_type: e.target.value as PromptTemplateType }))} className='rounded border border-slate-700 bg-slate-900 p-2 text-sm'>
         {promptTypes.map((type) => <option key={type} value={type}>{type}</option>)}
       </select>
-      <textarea placeholder='Prompt content for preview' value={testForm.prompt_content} onChange={(e) => setTestForm((v) => ({ ...v, prompt_content: e.target.value }))} className='h-32 w-full rounded border border-slate-700 bg-slate-900 p-2 text-sm' />
-      <textarea placeholder='Sample context/query/document text' value={testForm.sample_context} onChange={(e) => setTestForm((v) => ({ ...v, sample_context: e.target.value }))} className='h-32 w-full rounded border border-slate-700 bg-slate-900 p-2 text-sm' />
-      <button className='rounded bg-indigo-700 px-3 py-2 text-sm' onClick={async () => {
+      <textarea placeholder='Prompt content for preview' value={testForm.prompt_content} onChange={(e) => setTestForm((v) => ({ ...v, prompt_content: e.target.value }))} className='h-32 w-full min-w-0 rounded border border-slate-700 bg-slate-900 p-2 text-sm' />
+      <textarea placeholder='Sample context/query/document text' value={testForm.sample_context} onChange={(e) => setTestForm((v) => ({ ...v, sample_context: e.target.value }))} className='h-32 w-full min-w-0 rounded border border-slate-700 bg-slate-900 p-2 text-sm' />
+      <button className='w-full rounded bg-indigo-700 px-3 py-2 text-sm sm:w-auto' onClick={async () => {
         setPreview(''); setPreviewError('');
         try {
           const resp = await testPrompt.mutateAsync(testForm);
@@ -62,15 +62,15 @@ export function AdminPromptTemplatesPage() {
       }}>Run preview</button>
       {testPrompt.isPending && <div className='text-sm text-slate-300'>Generating preview...</div>}
       {previewError && <div className='text-sm text-rose-400' role='alert'>{previewError}</div>}
-      {preview && <pre className='whitespace-pre-wrap rounded border border-slate-700 bg-slate-950 p-2 text-sm'>{preview}</pre>}
+      {preview && <pre className='overflow-x-auto whitespace-pre-wrap break-words rounded border border-slate-700 bg-slate-950 p-2 text-sm'>{preview}</pre>}
     </div>
 
-    {selectedPrompt && <div className='rounded border border-slate-800 p-3 space-y-2'>
+    {selectedPrompt && <div className='space-y-2 rounded border border-slate-800 p-3'>
       <h2 className='font-semibold'>Edit template</h2>
       <div className='text-xs text-slate-400'>{selectedPrompt.prompt_type} · v{selectedPrompt.version}</div>
       <input value={editForm.name} onChange={(e) => setEditForm((v) => ({ ...v, name: e.target.value }))} className='w-full rounded border border-slate-700 bg-slate-900 p-2 text-sm' />
       <textarea value={editForm.content} onChange={(e) => setEditForm((v) => ({ ...v, content: e.target.value }))} className='h-48 w-full rounded border border-slate-700 bg-slate-900 p-2 text-sm' />
-      <button className='rounded bg-indigo-700 px-3 py-2 text-sm' onClick={async () => { try { await updatePrompt.mutateAsync({ promptId: selectedPrompt.id, payload: editForm }); pushToast('Prompt template saved'); } catch (e) { pushToast(getErrorDetail(e), 'error'); } }}>Save changes</button>
+      <button className='w-full rounded bg-indigo-700 px-3 py-2 text-sm sm:w-auto' onClick={async () => { try { await updatePrompt.mutateAsync({ promptId: selectedPrompt.id, payload: editForm }); pushToast('Prompt template saved'); } catch (e) { pushToast(getErrorDetail(e), 'error'); } }}>Save changes</button>
     </div>}
   </div>;
 }
