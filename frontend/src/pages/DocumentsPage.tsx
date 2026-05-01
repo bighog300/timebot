@@ -180,8 +180,8 @@ export function DocumentsPage() {
           accept=".pdf,.doc,.docx,.txt,.xlsx,.xls,.ppt,.pptx,.png,.jpg,.jpeg"
           onChange={onInputChange}
         />
-          <div className="flex flex-wrap items-center gap-2 text-sm text-slate-300">
-            <Button onClick={onUploadClick} disabled={Boolean(uploadDisabledReason)} title={uploadDisabledReason ?? undefined}>
+          <div className="flex w-full flex-wrap items-center gap-2 text-sm text-slate-300">
+            <Button className="w-full sm:w-auto" onClick={onUploadClick} disabled={Boolean(uploadDisabledReason)} title={uploadDisabledReason ?? undefined}>
               {upload.isPending ? 'Uploading…' : 'Choose files'}
             </Button>
             <span>or choose files</span>
@@ -198,25 +198,55 @@ export function DocumentsPage() {
       {isError && <ErrorState message="Failed to load documents" />}
       {data?.length === 0 && <EmptyState label="No documents yet." />}
 
-      <div className="grid gap-3 md:grid-cols-2">
-        {data?.map((doc) => (
-          <Card key={doc.id}>
-            <div className="space-y-2">
-              <div className="flex justify-between gap-2">
-                <Link className="font-medium text-blue-300 hover:underline" to={`/documents/${doc.id}`}>
-                  {doc.filename}
-                </Link>
-                <ProcessingStatusIndicator status={doc.processing_status} processingError={doc.processing_error} />
-              </div>
-              {doc.processing_status === 'failed' && doc.processing_error && (
-                <div className="rounded border border-red-700 bg-red-950/40 px-3 py-2 text-xs text-red-200">{doc.processing_error}</div>
-              )}
-              <p className="line-clamp-2 text-sm text-slate-300">{doc.summary ?? 'No summary yet.'}</p>
-              <div className="text-xs text-slate-500">{new Date(doc.upload_date).toLocaleString()}</div>
+      {Boolean(data?.length) && (
+        <>
+          <div className="hidden overflow-hidden rounded-lg border border-slate-700 md:block" data-testid="documents-desktop-list">
+            <div className="grid grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,3fr)_auto] gap-3 border-b border-slate-700 bg-slate-900/70 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-300">
+              <span>Document</span>
+              <span>Status</span>
+              <span>Summary</span>
+              <span>Uploaded</span>
             </div>
-          </Card>
-        ))}
-      </div>
+            <div className="divide-y divide-slate-700">
+              {data?.map((doc) => (
+                <div key={doc.id} className="grid grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,3fr)_auto] gap-3 px-4 py-3 text-sm">
+                  <Link className="truncate font-medium text-blue-300 hover:underline" to={`/documents/${doc.id}`}>
+                    {doc.filename}
+                  </Link>
+                  <ProcessingStatusIndicator status={doc.processing_status} processingError={doc.processing_error} />
+                  <div className="min-w-0">
+                    {doc.processing_status === 'failed' && doc.processing_error && (
+                      <div className="mb-1 rounded border border-red-700 bg-red-950/40 px-2 py-1 text-xs text-red-200">{doc.processing_error}</div>
+                    )}
+                    <p className="line-clamp-2 text-slate-300">{doc.summary ?? 'No summary yet.'}</p>
+                  </div>
+                  <div className="text-xs text-slate-500">{new Date(doc.upload_date).toLocaleString()}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid gap-3 md:hidden" data-testid="documents-mobile-cards">
+            {data?.map((doc) => (
+              <Card key={doc.id}>
+                <div className="space-y-2">
+                  <div className="flex justify-between gap-2">
+                    <Link className="font-medium text-blue-300 hover:underline" to={`/documents/${doc.id}`}>
+                      {doc.filename}
+                    </Link>
+                    <ProcessingStatusIndicator status={doc.processing_status} processingError={doc.processing_error} />
+                  </div>
+                  {doc.processing_status === 'failed' && doc.processing_error && (
+                    <div className="rounded border border-red-700 bg-red-950/40 px-3 py-2 text-xs text-red-200">{doc.processing_error}</div>
+                  )}
+                  <p className="line-clamp-2 text-sm text-slate-300">{doc.summary ?? 'No summary yet.'}</p>
+                  <div className="text-xs text-slate-500">{new Date(doc.upload_date).toLocaleString()}</div>
+                </div>
+              </Card>
+            ))}
+          </div>
+        </>
+      )}
 
       {Boolean(data?.length) && (
         <Card>
@@ -301,7 +331,7 @@ export function DocumentsPage() {
             <input className="rounded border border-slate-700 bg-slate-900 p-2 text-sm" placeholder="sender@example.com" value={senderEmail} onChange={(e) => setSenderEmail(e.target.value)} />
             <input className="rounded border border-slate-700 bg-slate-900 p-2 text-sm" type="number" min={1} max={100} value={maxResults} onChange={(e) => setMaxResults(Number(e.target.value) || 20)} />
             <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={includeAttachments} onChange={(e) => setIncludeAttachments(e.target.checked)} />Include attachments</label>
-            <Button onClick={onGmailPreview} disabled={previewDisabled}>{gmailPreview.isPending ? 'Previewing…' : 'Preview'}</Button>
+            <Button className="w-full md:w-auto" onClick={onGmailPreview} disabled={previewDisabled}>{gmailPreview.isPending ? 'Previewing…' : 'Preview'}</Button>
           </div>
           {!oauthReady && <div className="text-sm text-yellow-300">Gmail is not connected or not configured.</div>}
           {gmailError && <div className="text-sm text-red-300">{gmailError}</div>}
@@ -328,7 +358,7 @@ export function DocumentsPage() {
                   </div>
                 </div>
               ))}
-              <Button onClick={onGmailImport} disabled={gmailImport.isPending || selectedMessageIds.length === 0}>
+              <Button className="w-full sm:w-auto" onClick={onGmailImport} disabled={gmailImport.isPending || selectedMessageIds.length === 0}>
                 {gmailImport.isPending ? 'Importing…' : 'Import selected'}
               </Button>
             </div>

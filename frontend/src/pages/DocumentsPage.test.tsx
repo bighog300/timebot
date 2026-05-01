@@ -115,4 +115,23 @@ describe('DocumentsPage onboarding and first-value guidance', () => {
     renderPage('/documents');
     expect(screen.getByText('No clusters yet.')).toBeTruthy();
   });
+  it('renders responsive desktop and mobile document layouts without table role assumptions', () => {
+    vi.mocked(useDocuments).mockReturnValue({
+      data: [{ id: 'doc-1', filename: 'A.pdf', summary: 'A summary', upload_date: '2026-01-01T00:00:00Z', processing_status: 'processed' }],
+      isLoading: false,
+      isError: false,
+    } as never);
+
+    renderPage('/documents');
+    expect(screen.getByTestId('documents-desktop-list')).toBeTruthy();
+    expect(screen.getByTestId('documents-mobile-cards')).toBeTruthy();
+    expect(screen.queryByRole('table')).toBeNull();
+  });
+
+  it('keeps upload and gmail actions accessible', () => {
+    renderPage('/documents');
+    expect(screen.getByRole('button', { name: 'Choose files' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Preview' })).toBeTruthy();
+  });
+
 });
