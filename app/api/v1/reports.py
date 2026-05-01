@@ -17,6 +17,7 @@ from app.models.user import User
 from app.services.chat_retrieval import retrieve_chat_context
 from app.services.openai_client import APIError, openai_client_service
 from app.services.report_export import generate_report_pdf
+from app.services.insights_service import insights_service
 
 router = APIRouter(prefix="/reports", tags=["reports"])
 logger = logging.getLogger(__name__)
@@ -66,6 +67,11 @@ def _parse_sections(content: str) -> dict[str, str] | None:
 
 
 def _serialize_report(report: GeneratedReport) -> dict:
+    insights = []
+    if isinstance(report.sections, dict):
+        raw_insights = report.sections.get("insights")
+        if isinstance(raw_insights, list):
+            insights = [item for item in raw_insights if isinstance(item, dict)]
     return {
         "id": str(report.id),
         "title": report.title,
@@ -73,6 +79,7 @@ def _serialize_report(report: GeneratedReport) -> dict:
         "content_markdown": report.content_markdown,
         "markdown_content": report.content_markdown,
         "sections": report.sections,
+        "insights": insights,
         "source_refs": report.source_refs,
         "created_at": report.created_at,
         "download_url": f"/api/v1/reports/{report.id}/download",
@@ -136,6 +143,31 @@ def create_report(payload: ReportRequest, db: Session = Depends(get_db), user: U
         sections = _parse_sections((sections_response.choices[0].message.content or "").strip())
     except APIError:
         sections = None
+    structured = insights_service.build_structured_insights(db, user_id=user.id)
+    insights = structured.get("insights", []) if isinstance(structured, dict) else []
+    if payload.document_ids:
+        doc_id_set = set(payload.document_ids)
+        insights = [
+            item for item in insights
+            if isinstance(item, dict) and bool(doc_id_set.intersection(set(item.get("related_document_ids") or [])))
+        ]
+    key_insights_lines = ["## Key Insights", ""]
+    if insights:
+        for insight in insights:
+            key_insights_lines.extend([
+                f"### {insight.get('title', 'Untitled insight')}",
+                f"- type: {insight.get('type', 'unknown')}",
+                f"- description: {insight.get('description', '')}",
+                f"- severity: {insight.get('severity', 'unknown')}",
+                "",
+            ])
+    else:
+        key_insights_lines.extend(["No structured insights available.", ""])
+    if "## Key Insights" not in content:
+        content = f"{content.rstrip()}\n\n" + "\n".join(key_insights_lines).rstrip() + "\n"
+    if sections is None:
+        sections = {}
+    sections["insights"] = insights
     report = GeneratedReport(
         title=payload.title,
         prompt=payload.prompt,

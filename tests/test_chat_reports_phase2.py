@@ -219,18 +219,23 @@ def test_report_create_and_download_rebuild(client, monkeypatch, db):
 
     monkeypatch.setattr("app.config.settings.OPENAI_API_KEY", "test-key")
     monkeypatch.setattr("app.api.v1.reports.openai_client_service._client", type("C", (), {"chat": DummyChat()})())
+    monkeypatch.setattr("app.api.v1.reports.insights_service.build_structured_insights", lambda *_args, **_kwargs: {"generated_at": "x", "count": 1, "insights": [{"id": "i1", "type": "risk", "title": "Risk 1", "description": "desc", "severity": "medium", "related_document_ids": [], "related_event_ids": [], "evidence": [], "created_at": "x"}]})
     res = client.post("/api/v1/reports", json={"title": "My Report", "prompt": "summarize", "document_ids": []})
     assert res.status_code == 200
     data = res.json()
     assert data["content_markdown"].startswith("# Report")
-    assert data["sections"] == {"summary": "S", "timeline": "T", "relationships": "R"}
+    assert data["sections"]["summary"] == "S"
+    assert data["sections"]["timeline"] == "T"
+    assert data["sections"]["relationships"] == "R"
+    assert data["insights"][0]["title"] == "Risk 1"
+    assert "## Key Insights" in data["content_markdown"]
     get_res = client.get(data["download_url"])
     assert get_res.status_code == 200
     # remove file then ensure recreated
     from app.models.chat import GeneratedReport
     rep = db.query(GeneratedReport).first()
     assert rep.content_markdown.startswith("# Report")
-    assert rep.sections == {"summary": "S", "timeline": "T", "relationships": "R"}
+    assert rep.sections["summary"] == "S"
     Path(rep.file_path).unlink(missing_ok=True)
     get_res2 = client.get(data["download_url"])
     assert get_res2.status_code == 200
@@ -251,14 +256,17 @@ def test_report_sections_fallback_when_missing(client, monkeypatch, db):
 
     monkeypatch.setattr("app.config.settings.OPENAI_API_KEY", "test-key")
     monkeypatch.setattr("app.api.v1.reports.openai_client_service._client", type("C", (), {"chat": DummyChat()})())
+    monkeypatch.setattr("app.api.v1.reports.insights_service.build_structured_insights", lambda *_args, **_kwargs: {"generated_at": "x", "count": 0, "insights": []})
 
     created = client.post("/api/v1/reports", json={"title": "Fallback Report", "prompt": "summarize"}).json()
-    assert created["sections"] is None
+    assert isinstance(created["sections"], dict)
     assert created["content_markdown"].startswith("# Report")
+    assert created["insights"] == []
+    assert "## Key Insights" in created["content_markdown"]
 
     detail = client.get(f"/api/v1/reports/{created['id']}")
     assert detail.status_code == 200
-    assert detail.json()["sections"] is None
+    assert isinstance(detail.json()["sections"], dict)
     assert detail.json()["content_markdown"].startswith("# Report")
 
 
