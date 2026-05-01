@@ -34,6 +34,9 @@ import type {
   GmailPreviewRequest,
   GmailPreviewResponse,
   GmailImportResponse,
+  PromptTemplate,
+  PromptTemplateCreateRequest,
+  PromptTemplateUpdateRequest,
 } from '@/types/api';
 
 
@@ -134,6 +137,11 @@ export const api = {
   updateAdminUserRole: async (userId: string, role: string) => (await http.patch(`/admin/users/${userId}/role`, { role })).data,
   getAdminMetrics: async (): Promise<AdminMetrics> => (await http.get('/admin/metrics')).data,
   listAdminAudit: async (limit = 20, offset = 0): Promise<AdminAuditPage> => (await http.get('/admin/audit', { params: { limit, offset } })).data,
+
+  listPromptTemplates: async (): Promise<PromptTemplate[]> => (await http.get('/admin/prompts')).data,
+  createPromptTemplate: async (payload: PromptTemplateCreateRequest): Promise<PromptTemplate> => (await http.post('/admin/prompts', payload)).data,
+  updatePromptTemplate: async (promptId: string, payload: PromptTemplateUpdateRequest): Promise<PromptTemplate> => (await http.put(`/admin/prompts/${promptId}`, payload)).data,
+  activatePromptTemplate: async (promptId: string): Promise<PromptTemplate> => (await http.post(`/admin/prompts/${promptId}/activate`)).data,
   listDocuments: async (includeArchived = false): Promise<Document[]> =>
     (await http.get('/documents/', { params: { include_archived: includeArchived } })).data,
   getDocument: async (id: string): Promise<Document> => (await http.get(`/documents/${id}`)).data,

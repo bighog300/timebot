@@ -27,7 +27,7 @@ const baseLinks = [
   ['/reports', 'Reports'],
 ] as const;
 
-const adminLinks = [['/admin', 'Admin'], ['/admin/chatbot-settings', 'Chatbot Settings']] as const;
+const adminLinks = [['/admin', 'Admin'], ['/admin/chatbot-settings', 'Chatbot Settings'], ['/admin/prompts', 'Prompt Templates']] as const;
 
 export function AppShell() {
   const { toasts, dismissToast } = useUIStore();
