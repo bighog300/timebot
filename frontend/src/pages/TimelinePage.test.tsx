@@ -143,4 +143,47 @@ describe('TimelinePage', () => {
     fireEvent.click(await screen.findByRole('button', { name: /Due/i }));
     expect(navigateMock).toHaveBeenCalledWith(expect.stringMatching(/^\/documents\/.+/));
   });
+
+  it('groups similar events by normalized title', async () => {
+    vi.mocked(api.getTimeline).mockResolvedValue(
+      makeTimelineResponse([
+        { title: 'Payment Due!', date: '2025-02-15', confidence: 0.9, document_id: 'd1', document_title: 'Doc A', source_quote: 'A', start_date: null, end_date: null },
+        { title: ' payment due ', date: '2025-02-16', confidence: 0.86, document_id: 'd2', document_title: 'Doc B', source_quote: 'B', start_date: null, end_date: null },
+      ]),
+    );
+    renderPage();
+    await screen.findByText('Payment Due!');
+    expect(screen.getAllByRole('button', { name: /Payment Due!/i })).toHaveLength(1);
+    expect(screen.getByText('2 sources')).toBeTruthy();
+    expect(screen.getByText('+1 similar events')).toBeTruthy();
+  });
+
+  it('does not group distinct events', async () => {
+    vi.mocked(api.getTimeline).mockResolvedValue(
+      makeTimelineResponse([
+        { title: 'Payment Due', date: '2025-02-15', confidence: 0.9, document_id: 'd1', document_title: 'Doc A', source_quote: 'A', start_date: null, end_date: null },
+        { title: 'Contract Signed', date: '2025-02-16', confidence: 0.86, document_id: 'd2', document_title: 'Doc B', source_quote: 'B', start_date: null, end_date: null },
+      ]),
+    );
+    renderPage();
+    expect(await screen.findByText('Payment Due')).toBeTruthy();
+    expect(screen.getByText('Contract Signed')).toBeTruthy();
+    expect(screen.queryByText(/sources/)).toBeNull();
+    expect(screen.queryByText(/similar events/)).toBeNull();
+  });
+
+  it('expands grouped events to show underlying sources', async () => {
+    vi.mocked(api.getTimeline).mockResolvedValue(
+      makeTimelineResponse([
+        { title: 'Renewal Notice', date: '2025-02-15', confidence: 0.9, document_id: 'd1', document_title: 'Doc A', source_quote: 'A', start_date: null, end_date: null },
+        { title: 'renewal notice', date: '2025-02-16', confidence: 0.86, document_id: 'd2', document_title: 'Doc B', source_quote: 'B', start_date: null, end_date: null },
+        { title: 'renewal notice', date: '2025-02-17', confidence: 0.85, document_id: 'd3', document_title: 'Doc C', source_quote: 'C', start_date: null, end_date: null },
+      ]),
+    );
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Show' }));
+    expect(screen.getByText('Doc A: 2025-02-15')).toBeTruthy();
+    expect(screen.getByText('Doc B: 2025-02-16')).toBeTruthy();
+    expect(screen.getByText('Doc C: 2025-02-17')).toBeTruthy();
+  });
 });
