@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useCreateChatSession, useChatSession, useChatSessions, useCreateReport, useInvalidateChatSession } from '@/hooks/useApi';
 import { useUIStore } from '@/store/uiStore';
@@ -67,30 +67,41 @@ function getMessageTextClasses(): string {
 }
 
 function CitationSection({ sourceRefs }: { sourceRefs: SourceRef[] }) {
+  const [expanded, setExpanded] = useState(true);
+  const contentId = useId();
   if (sourceRefs.length === 0) return null;
 
   return (
-    <details className='mt-2 rounded border border-slate-700/80 bg-slate-900/40 p-2 text-xs' open>
-      <summary className='cursor-pointer text-slate-300'>Citations ({sourceRefs.length})</summary>
-      <div className='mt-2 grid gap-2 sm:grid-cols-2'>
+    <section className='mt-2 rounded border border-slate-700/80 bg-slate-900/40 p-2 text-xs'>
+      <button
+        type='button'
+        aria-expanded={expanded}
+        aria-controls={contentId}
+        onClick={() => setExpanded((prev) => !prev)}
+        className='group flex w-full items-center justify-between gap-2 rounded px-1 py-1 text-left text-slate-300 transition-colors hover:bg-slate-800/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/80 active:bg-slate-800'
+      >
+        <span className='font-medium'>Citations ({sourceRefs.length})</span>
+        <span className='text-[11px] text-slate-400'>{expanded ? 'Tap/click to collapse' : 'Tap/click to expand'}</span>
+      </button>
+      {expanded && <div id={contentId} className='mt-2 grid gap-2 sm:grid-cols-2'>
         {sourceRefs.map((ref, index) => {
           const title = ref.document_title || ref.title || 'Untitled source';
           const typeLabel = ref.source_type || ref.kind || null;
           const snippet = ref.snippet || ref.preview || null;
           const card = (
-            <div className='h-full rounded border border-slate-700 bg-slate-900/70 p-2'>
+            <div className='h-full rounded border border-slate-700 bg-slate-900/70 p-2 transition-colors hover:border-slate-500 hover:bg-slate-900 focus-within:border-cyan-500'>
               <div className='break-words font-medium text-cyan-300'>{title}</div>
               {typeLabel && <div className='mt-1 text-[11px] uppercase tracking-wide text-slate-400'>{typeLabel}</div>}
-              {snippet && <div className='mt-1 break-words text-slate-300'>{snippet}</div>}
+              {snippet && <div className='mt-1 break-words text-slate-300 [overflow-wrap:anywhere]'>{snippet}</div>}
             </div>
           );
           if (ref.document_id) {
-            return <Link key={`${ref.document_id}-${index}`} className='block' to={`/documents/${ref.document_id}`}>{card}</Link>;
+            return <Link key={`${ref.document_id}-${index}`} className='block rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/80' to={`/documents/${ref.document_id}`}>{card}</Link>;
           }
           return <div key={`citation-${index}`}>{card}</div>;
         })}
-      </div>
-    </details>
+      </div>}
+    </section>
   );
 }
 
