@@ -11,16 +11,16 @@ function CitationSection({ sourceRefs }: { sourceRefs: SourceRef[] }) {
   return (
     <details className='mt-2 rounded border border-slate-700/80 bg-slate-900/40 p-2 text-xs' open>
       <summary className='cursor-pointer text-slate-300'>Citations ({sourceRefs.length})</summary>
-      <div className='mt-2 space-y-2'>
+      <div className='mt-2 grid gap-2 sm:grid-cols-2'>
         {sourceRefs.map((ref, index) => {
           const title = ref.document_title || ref.title || 'Untitled source';
           const typeLabel = ref.source_type || ref.kind || null;
           const snippet = ref.snippet || ref.preview || null;
           const card = (
-            <div className='rounded border border-slate-700 bg-slate-900/70 p-2'>
-              <div className='font-medium text-cyan-300'>{title}</div>
+            <div className='h-full rounded border border-slate-700 bg-slate-900/70 p-2'>
+              <div className='break-words font-medium text-cyan-300'>{title}</div>
               {typeLabel && <div className='mt-1 text-[11px] uppercase tracking-wide text-slate-400'>{typeLabel}</div>}
-              {snippet && <div className='mt-1 text-slate-300'>{snippet}</div>}
+              {snippet && <div className='mt-1 break-words text-slate-300'>{snippet}</div>}
             </div>
           );
           if (ref.document_id) {
@@ -85,23 +85,33 @@ export function ChatPage() {
 
   const messages: ChatMessage[] = session.data?.messages || [];
 
-  return <div className='grid gap-4 md:grid-cols-[260px_minmax(0,1fr)]'>
-    <div className='space-y-3'><button onClick={onNew} className='rounded bg-slate-700 px-3 py-2 text-sm'>New Chat</button>
-      {(sessions.data||[]).map(s => <button key={s.id} onClick={()=>setSessionId(s.id)} className='block w-full rounded border border-slate-700 p-2 text-left text-sm'>{s.title || `Session ${s.id.slice(0,8)}`}</button>)}
-    </div>
+  return <div className='grid min-h-[calc(100vh-8rem)] gap-4 md:grid-cols-[260px_minmax(0,1fr)]'>
     <div className='space-y-3'>
+      <button onClick={onNew} className='rounded bg-slate-700 px-3 py-2 text-sm'>New Chat</button>
+      <div className='grid max-h-52 gap-2 overflow-auto pr-1 md:max-h-none'>
+        {(sessions.data || []).map((s) => <button key={s.id} onClick={() => setSessionId(s.id)} className='block w-full rounded border border-slate-700 p-2 text-left text-sm'>{s.title || `Session ${s.id.slice(0, 8)}`}</button>)}
+      </div>
+    </div>
+    <div className='flex min-h-0 flex-col space-y-3'>
       <h1 className='text-xl font-semibold'>Chat</h1>
-      <div className='rounded border border-slate-700 p-3 space-y-3'>
-        {messages.map(m => <div key={m.id}><div className='text-xs uppercase text-slate-400'>{m.role}</div><div>{m.content}</div>{m.role==='assistant' && <CitationSection sourceRefs={m.source_refs || []} />}</div>)}
-        {isStreaming && <div data-testid='streaming-message'><div className='text-xs uppercase text-slate-400'>assistant</div><div>{streamingMessage || 'Streaming response...'}</div><CitationSection sourceRefs={streamingSourceRefs} /></div>}
+      <div data-testid='chat-message-list' className='min-h-[18rem] flex-1 space-y-3 overflow-y-auto rounded border border-slate-700 p-3'>
+        {messages.map((m) => <div key={m.id} className='rounded bg-slate-900/40 p-2'><div className='text-xs uppercase text-slate-400'>{m.role}</div><div className='whitespace-pre-wrap break-words'>{m.content}</div>{m.role === 'assistant' && <CitationSection sourceRefs={m.source_refs || []} />}</div>)}
+        {isStreaming && <div data-testid='streaming-message' className='rounded bg-slate-900/40 p-2'><div className='text-xs uppercase text-slate-400'>assistant</div><div className='min-h-[2.5rem] whitespace-pre-wrap break-words'>{streamingMessage || 'Streaming response...'}</div><CitationSection sourceRefs={streamingSourceRefs} /></div>}
         {streamError && <div className='text-sm text-rose-400'>Streaming failed. Retry sending your message. ({streamError})</div>}
         {(session.isLoading || isStreaming) && <div>{isStreaming ? 'Streaming...' : 'Loading...'}</div>}
       </div>
-      <textarea disabled={isStreaming} value={message} onChange={(e)=>setMessage(e.target.value)} className='w-full rounded border border-slate-700 bg-slate-900 p-2' placeholder='Ask a question' />
-      <input value={docIds} onChange={(e)=>setDocIds(e.target.value)} placeholder='Document IDs comma-separated (optional)' className='w-full rounded border border-slate-700 bg-slate-900 p-2 text-sm'/>
-      <label><input type='checkbox' checked={includeTimeline} onChange={(e)=>setIncludeTimeline(e.target.checked)} /> include timeline</label>
-      <label className='ml-3'><input type='checkbox' checked={includeFullText} onChange={(e)=>setIncludeFullText(e.target.checked)} /> include full text</label>
-      <div className='flex gap-2'><button disabled={isStreaming} onClick={onSend} className='rounded bg-indigo-700 px-3 py-2 text-sm disabled:opacity-60'>Send</button><button onClick={async()=>{if(!currentSessionId) return; await createReport.mutateAsync({ title:'Chat report', prompt:'Generate report from this conversation', include_timeline: includeTimeline, include_full_text: includeFullText, document_ids: ids }); pushToast('Report generated');}} className='rounded bg-emerald-700 px-3 py-2 text-sm'>Generate report from this conversation/answer</button></div>
+      <div data-testid='chat-input-panel' className='sticky bottom-0 z-10 space-y-2 rounded border border-slate-700 bg-slate-950/95 p-2 backdrop-blur'>
+        <textarea disabled={isStreaming} value={message} onChange={(e) => setMessage(e.target.value)} className='max-h-40 w-full rounded border border-slate-700 bg-slate-900 p-2' placeholder='Ask a question' />
+        <input value={docIds} onChange={(e) => setDocIds(e.target.value)} placeholder='Document IDs comma-separated (optional)' className='w-full rounded border border-slate-700 bg-slate-900 p-2 text-sm' />
+        <div className='flex flex-wrap items-center gap-3'>
+          <label><input type='checkbox' checked={includeTimeline} onChange={(e) => setIncludeTimeline(e.target.checked)} /> include timeline</label>
+          <label><input type='checkbox' checked={includeFullText} onChange={(e) => setIncludeFullText(e.target.checked)} /> include full text</label>
+        </div>
+        <div className='flex flex-wrap gap-2'>
+          <button disabled={isStreaming} onClick={onSend} className='rounded bg-indigo-700 px-3 py-2 text-sm disabled:opacity-60'>Send</button>
+          <button onClick={async () => { if (!currentSessionId) return; await createReport.mutateAsync({ title: 'Chat report', prompt: 'Generate report from this conversation', include_timeline: includeTimeline, include_full_text: includeFullText, document_ids: ids }); pushToast('Report generated'); }} className='rounded bg-emerald-700 px-3 py-2 text-sm'>Generate report from this conversation/answer</button>
+        </div>
+      </div>
     </div>
   </div>;
 }
