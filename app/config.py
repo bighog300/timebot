@@ -72,6 +72,8 @@ class Settings(BaseSettings):
     INITIAL_ADMIN_EMAIL: str = ""
     INITIAL_ADMIN_PASSWORD: str = ""
     INITIAL_ADMIN_NAME: str = "Timebot Admin"
+    STRIPE_SECRET_KEY: str = ""
+    STRIPE_WEBHOOK_SECRET: str = ""
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 

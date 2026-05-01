@@ -18,6 +18,7 @@ from app.services.chat_retrieval import retrieve_chat_context
 from app.services.openai_client import APIError, openai_client_service
 from app.services.report_export import generate_report_pdf
 from app.services.insights_service import insights_service
+from app.services.monetization import ActionType, ensure_user_limit, refresh_usage_counters
 
 router = APIRouter(prefix="/reports", tags=["reports"])
 logger = logging.getLogger(__name__)
@@ -88,6 +89,7 @@ def _serialize_report(report: GeneratedReport) -> dict:
 
 @router.post("")
 def create_report(payload: ReportRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    ensure_user_limit(db, user, ActionType.GENERATE_REPORT)
     bot_settings = _get_or_create_chatbot_settings(db)
     if not openai_client_service.enabled:
         raise HTTPException(status_code=503, detail="Report AI is unavailable: OPENAI_API_KEY is not configured.")
@@ -188,6 +190,8 @@ def create_report(payload: ReportRequest, db: Session = Depends(get_db), user: U
     file_path.write_text(content, encoding="utf-8")
     report.file_path = str(file_path)
     db.add(report)
+    db.commit()
+    refresh_usage_counters(db, user)
     db.commit()
     return _serialize_report(report)
 

@@ -43,6 +43,7 @@ import type {
   PromptTemplateUpdateRequest,
   PromptTemplateTestRequest,
   PromptTemplateTestResponse,
+  UsageSummary,
 } from '@/types/api';
 
 
@@ -133,6 +134,8 @@ export const api = {
     }
   },
   createReport: async (payload: ReportCreateRequest): Promise<GeneratedReport> => (await http.post('/reports', payload)).data,
+  getUsage: async (): Promise<UsageSummary> => (await http.get('/usage')).data,
+  createCheckoutSession: async (plan: string): Promise<{ checkout_session_id: string; checkout_url: string; plan: string }> => (await http.post('/billing/checkout', { plan })).data,
   listReports: async (): Promise<GeneratedReport[]> => (await http.get('/reports')).data,
   getReport: async (reportId: string): Promise<GeneratedReport> => (await http.get(`/reports/${reportId}`)).data,
   updateReport: async (reportId: string, payload: ReportUpdateRequest): Promise<GeneratedReport> => (await http.patch(`/reports/${reportId}`, payload)).data,
