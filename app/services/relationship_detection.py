@@ -73,6 +73,12 @@ STOPWORDS = {"a", "an", "and", "are", "as", "at", "be", "but", "by", "for", "fro
 class RelationshipDetectionService:
     """Deterministic relationship detection with optional semantic boost."""
 
+    def _build_explanation(self, *, confidence: float, signals: list[str], reason: str) -> Dict[str, Any]:
+        clean_confidence = round(max(0.0, min(1.0, float(confidence))), 5)
+        clean_signals = [s for s in signals if isinstance(s, str) and s.strip()]
+        clean_reason = reason.strip() if isinstance(reason, str) and reason.strip() else "relationship detected"
+        return {"confidence": clean_confidence, "signals": clean_signals, "reason": clean_reason}
+
     def detect_for_document(self, db: Session, document_id: UUID, limit: int = 50) -> Dict[str, int]:
         logger.info("Relationship detection started doc_id=%s", document_id)
         doc = db.query(Document).filter(Document.id == document_id).first()
@@ -191,15 +197,16 @@ class RelationshipDetectionService:
             return None
 
         source_id, target_id = (left.id, right.id) if str(left.id) < str(right.id) else (right.id, left.id)
+        normalized_confidence = round(min(score, 1.0), 5)
         return RelationshipCandidate(
             source_doc_id=source_id,
             target_doc_id=target_id,
             relationship_type=relationship_type,
-            confidence=round(min(score, 1.0), 5),
+            confidence=normalized_confidence,
             metadata={
                 "signals": {k: round(v, 5) for k, v in weighted.items()},
                 "titles": [left.filename, right.filename],
-                "explanation": self._build_ai_explanation(weighted=weighted, relationship_type=relationship_type, confidence=round(min(score, 1.0), 5)),
+                "explanation": self._build_ai_explanation(weighted=weighted, relationship_type=relationship_type, confidence=normalized_confidence),
             },
         )
 
@@ -210,7 +217,7 @@ class RelationshipDetectionService:
         if weighted.get("timeline_overlap", 0.0) > 0.0 or weighted.get("date_adjacency", 0.0) > 0.0:
             signals.append("timeline_proximity")
         explanation = f"AI detected a {relationship_type.replace('_', ' ')} relationship from combined similarity signals."
-        return {"confidence": confidence, "signals": signals, "reason": explanation}
+        return self._build_explanation(confidence=confidence, signals=signals, reason=explanation)
 
     def _timeline_overlap(self, left: Document, right: Document) -> float:
         left_dates = self._extract_dates(left)

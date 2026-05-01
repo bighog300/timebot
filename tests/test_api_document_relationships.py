@@ -128,3 +128,22 @@ def test_document_relationships_include_structural_and_ai_with_status(client, db
     assert "related" in by_type
     assert by_type["related"]["status"] == "pending"
     assert by_type["related"]["explanation_metadata"]["signals"] == ["ai_detected"]
+
+
+def test_document_relationships_missing_metadata_renders_safely(client, db, sample_document, test_user):
+    related = _make_doc(db, sample_document, filename="missing-metadata.pdf", user_id=test_user.id)
+    db.add(DocumentRelationshipReview(
+        source_document_id=sample_document.id,
+        target_document_id=related.id,
+        relationship_type="related",
+        status="pending",
+        confidence=0.5,
+        metadata_json=None,
+    ))
+    db.commit()
+
+    resp = client.get(f"/api/v1/documents/{sample_document.id}/relationships")
+    assert resp.status_code == 200
+    rows = resp.json()
+    assert len(rows) == 1
+    assert rows[0]["explanation_metadata"] == {}

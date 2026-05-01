@@ -53,6 +53,13 @@ class GmailImportService:
     scope = "https://www.googleapis.com/auth/gmail.readonly"
     SUPPORTED_ATTACHMENT_EXTS = {"pdf", "doc", "docx", "txt", "xls", "xlsx", "ppt", "pptx", "png", "jpg", "jpeg"}
 
+    def _build_explanation(self, *, confidence: float, signals: list[str], reason: str) -> dict:
+        return {
+            "confidence": round(max(0.0, min(1.0, float(confidence))), 5),
+            "signals": [s for s in signals if isinstance(s, str) and s.strip()],
+            "reason": reason.strip() if isinstance(reason, str) and reason.strip() else "relationship detected",
+        }
+
     def _ensure_relationship(self, db: Session, *, source_doc_id, target_doc_id, relationship_type: str, confidence: float, metadata: dict) -> None:
         existing = db.query(DocumentRelationship).filter(
             DocumentRelationship.source_doc_id == source_doc_id,
@@ -216,11 +223,11 @@ class GmailImportService:
                             confidence=0.99,
                             metadata={
                                 "gmail_thread_id": thread_id,
-                                "explanation": {
-                                    "confidence": 0.99,
-                                    "signals": ["structural_email_thread"],
-                                    "reason": "same email thread",
-                                },
+                                "explanation": self._build_explanation(
+                                    confidence=0.99,
+                                    signals=["structural_email_thread"],
+                                    reason="same email thread",
+                                ),
                             },
                         )
                 db.commit()
@@ -264,11 +271,11 @@ class GmailImportService:
                             metadata={
                                 "filename": filename,
                                 "gmail_message_id": mid,
-                                "explanation": {
-                                    "confidence": 1.0,
-                                    "signals": ["structural_attachment"],
-                                    "reason": "attachment relationship",
-                                },
+                                "explanation": self._build_explanation(
+                                    confidence=1.0,
+                                    signals=["structural_attachment"],
+                                    reason="attachment relationship",
+                                ),
                             },
                         )
                         db.commit()
