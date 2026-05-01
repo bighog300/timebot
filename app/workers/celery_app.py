@@ -1,4 +1,5 @@
 from celery import Celery
+from kombu import Queue
 import logging
 
 from app.config import settings
@@ -33,10 +34,24 @@ celery_app.conf.update(
     task_track_started=True,
     task_default_priority=5,
     result_expires=3600,
+    # Queue topology:
+    # - ingestion: document intake/orchestration jobs
+    # - ai_analysis: model/embedding/relationship analysis jobs
+    # - reports: reserved for future async report generation work
+    # - maintenance: cleanup/backfill/periodic jobs
+    task_default_queue="ingestion",
+    task_queues=(
+        Queue("ingestion"),
+        Queue("ai_analysis"),
+        Queue("reports"),
+        Queue("maintenance"),
+    ),
     task_routes={
-        "app.workers.tasks.process_document_task": {"queue": "documents"},
-        "app.workers.tasks.reprocess_document_task": {"queue": "documents"},
-        "app.workers.tasks.embed_document_task": {"queue": "documents"},
+        "app.workers.tasks.process_document_task": {"queue": "ingestion", "priority": 6},
+        "app.workers.tasks.reprocess_document_task": {"queue": "ingestion", "priority": 5},
+        "app.workers.tasks.embed_document_task": {"queue": "ai_analysis", "priority": 4},
+        "app.workers.tasks.detect_relationships_task": {"queue": "ai_analysis", "priority": 4},
+        "app.workers.tasks.backfill_relationships_task": {"queue": "maintenance", "priority": 2},
         "app.workers.tasks.cleanup_old_tasks": {"queue": "maintenance"},
     },
     beat_schedule={
