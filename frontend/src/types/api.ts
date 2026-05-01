@@ -319,8 +319,12 @@ export interface ChatbotSettings {
 }
 
 export interface SourceRef {
-  document_id: string;
-  document_title: string;
+  document_id?: string | null;
+  document_title?: string | null;
+  source_type?: string | null;
+  kind?: string | null;
+  preview?: string | null;
+  title?: string | null;
   snippet?: string | null;
 }
 

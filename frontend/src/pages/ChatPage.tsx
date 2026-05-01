@@ -5,6 +5,34 @@ import { useUIStore } from '@/store/uiStore';
 import { api, getErrorDetail } from '@/services/api';
 import type { ChatMessage, SourceRef } from '@/types/api';
 
+function CitationSection({ sourceRefs }: { sourceRefs: SourceRef[] }) {
+  if (sourceRefs.length === 0) return null;
+
+  return (
+    <details className='mt-2 rounded border border-slate-700/80 bg-slate-900/40 p-2 text-xs' open>
+      <summary className='cursor-pointer text-slate-300'>Citations ({sourceRefs.length})</summary>
+      <div className='mt-2 space-y-2'>
+        {sourceRefs.map((ref, index) => {
+          const title = ref.document_title || ref.title || 'Untitled source';
+          const typeLabel = ref.source_type || ref.kind || null;
+          const snippet = ref.snippet || ref.preview || null;
+          const card = (
+            <div className='rounded border border-slate-700 bg-slate-900/70 p-2'>
+              <div className='font-medium text-cyan-300'>{title}</div>
+              {typeLabel && <div className='mt-1 text-[11px] uppercase tracking-wide text-slate-400'>{typeLabel}</div>}
+              {snippet && <div className='mt-1 text-slate-300'>{snippet}</div>}
+            </div>
+          );
+          if (ref.document_id) {
+            return <Link key={`${ref.document_id}-${index}`} className='block' to={`/documents/${ref.document_id}`}>{card}</Link>;
+          }
+          return <div key={`citation-${index}`}>{card}</div>;
+        })}
+      </div>
+    </details>
+  );
+}
+
 export function ChatPage() {
   const { pushToast } = useUIStore();
   const sessions = useChatSessions();
@@ -64,8 +92,8 @@ export function ChatPage() {
     <div className='space-y-3'>
       <h1 className='text-xl font-semibold'>Chat</h1>
       <div className='rounded border border-slate-700 p-3 space-y-3'>
-        {messages.map(m => <div key={m.id}><div className='text-xs uppercase text-slate-400'>{m.role}</div><div>{m.content}</div>{m.role==='assistant' && (m.source_refs?.length||0)>0 && <div className='mt-2 text-xs'><div>Sources</div>{m.source_refs?.map((r,i)=><Link className='block text-cyan-300' key={i} to={`/documents/${r.document_id}`}>{r.document_title}</Link>)}</div>}</div>)}
-        {isStreaming && <div data-testid='streaming-message'><div className='text-xs uppercase text-slate-400'>assistant</div><div>{streamingMessage || 'Streaming response...'}</div>{streamingSourceRefs.length > 0 && <div className='mt-2 text-xs'><div>Sources</div>{streamingSourceRefs.map((r,i)=><Link className='block text-cyan-300' key={i} to={`/documents/${r.document_id}`}>{r.document_title}</Link>)}</div>}</div>}
+        {messages.map(m => <div key={m.id}><div className='text-xs uppercase text-slate-400'>{m.role}</div><div>{m.content}</div>{m.role==='assistant' && <CitationSection sourceRefs={m.source_refs || []} />}</div>)}
+        {isStreaming && <div data-testid='streaming-message'><div className='text-xs uppercase text-slate-400'>assistant</div><div>{streamingMessage || 'Streaming response...'}</div><CitationSection sourceRefs={streamingSourceRefs} /></div>}
         {streamError && <div className='text-sm text-rose-400'>Streaming failed. Retry sending your message. ({streamError})</div>}
         {(session.isLoading || isStreaming) && <div>{isStreaming ? 'Streaming...' : 'Loading...'}</div>}
       </div>
