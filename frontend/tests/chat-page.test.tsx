@@ -89,9 +89,14 @@ describe('chat page streaming', () => {
   });
 
   it('disables input while streaming', async () => {
+    let resolveStream!: () => void;
+    const streamDone = new Promise<void>((resolve) => {
+      resolveStream = resolve;
+    });
+
     mocks.streamMock.mockImplementationOnce(async (_sessionId, _payload, handlers) => {
       handlers.onEvent({ type: 'chunk', content: 'partial' });
-      await new Promise((resolve) => setTimeout(resolve, 10));
+      await streamDone;
     });
 
     render(<MemoryRouter><ChatPage /></MemoryRouter>);
@@ -100,8 +105,13 @@ describe('chat page streaming', () => {
     fireEvent.change(input, { target: { value: 'hi' } });
     fireEvent.click(send);
 
-    await waitFor(() => expect(send).toBeDisabled());
-    expect(input).toBeDisabled();
+    await waitFor(() => {
+      expect(send).toBeDisabled();
+      expect(input).toBeDisabled();
+    });
+
+    resolveStream();
+    await waitFor(() => expect(send).not.toBeDisabled());
   });
 
   it('shows error state on stream failure', async () => {
