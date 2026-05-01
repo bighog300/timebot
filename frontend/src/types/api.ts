@@ -148,6 +148,7 @@ export interface StructuredInsight {
   description: string;
   severity: string;
   related_event_ids?: string[] | null;
+  related_document_ids?: string[] | null;
   related_documents?: StructuredInsightDocumentRef[] | null;
   evidence_refs?: StructuredInsightEvidenceRef[] | null;
 }
