@@ -18,10 +18,17 @@ class TimelineEvent(BaseModel):
     source: Optional[str] = "extracted"
 
 
+class TimelineGap(BaseModel):
+    start_date: str
+    end_date: str
+    gap_duration_days: int
+
+
 class TimelineResponse(BaseModel):
     total_documents: int
     total_events: int
     events: List[TimelineEvent]
+    gaps: Optional[List[TimelineGap]] = None
 
 
 class InsightsResponse(BaseModel):

@@ -110,6 +110,11 @@ export interface TimelineResponse {
   total_documents: number;
   total_events: number;
   events: TimelineEvent[];
+  gaps?: Array<{
+    start_date: string;
+    end_date: string;
+    gap_duration_days: number;
+  }> | null;
 }
 
 export interface InsightsResponse {
