@@ -10,6 +10,7 @@ import type {
   DocumentIntelligence,
   DocumentRelationshipListItem,
   InsightsResponse,
+  StructuredInsight,
   QueueItem,
   QueueStats,
   RelationshipReviewItem,
@@ -255,6 +256,7 @@ export const api = {
   getInsightsTrends: async (): Promise<{ lookback_days: number; trends: Array<Record<string, unknown>> }> =>
     (await http.get('/insights/trends')).data,
   getInsightsRollups: async (): Promise<Record<string, unknown>> => (await http.get('/insights/rollups')).data,
+  getStructuredInsights: async (): Promise<StructuredInsight[]> => (await http.get('/insights/structured')).data,
   listConnections: async (): Promise<Connection[]> => (await http.get('/connections')).data,
   startConnectProvider: async (type: string): Promise<ConnectStartResponse> =>
     (await http.post(`/connections/${type}/connect/start`)).data,

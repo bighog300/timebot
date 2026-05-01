@@ -445,6 +445,11 @@ export function useInsightsOverview() {
   return useQuery({ queryKey: ['insights-overview'], queryFn: api.getInsightsOverview, enabled: authReady });
 }
 
+export function useStructuredInsights() {
+  const authReady = useAuthReady();
+  return useQuery({ queryKey: ['insights-structured'], queryFn: api.getStructuredInsights, enabled: authReady });
+}
+
 export function useConnections() {
   const authReady = useAuthReady();
   return useQuery({ queryKey: keys.connections, queryFn: api.listConnections, enabled: authReady });
