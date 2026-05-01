@@ -100,6 +100,8 @@ export interface TimelineEvent {
   document_title: string;
   category?: string | null;
   source?: string | null;
+  date_precision?: string | null;
+  metadata?: Record<string, unknown> | null;
 }
 
 export interface TimelineResponse {
