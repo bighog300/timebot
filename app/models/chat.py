@@ -62,6 +62,7 @@ class GeneratedReport(Base):
     title = Column(String(255), nullable=False)
     prompt = Column(Text, nullable=False)
     content_markdown = Column(Text, nullable=False)
+    sections = Column(JSONB, nullable=True)
     source_document_ids = Column(JSONB, default=list)
     source_refs = Column(JSONB, default=list)
     file_path = Column(Text)
