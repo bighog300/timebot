@@ -17,16 +17,16 @@ export function AdminPage() {
 
   return <div className='space-y-6'>
     <h1 className='text-xl font-semibold'>Admin Panel</h1>
-    <div className='grid grid-cols-2 gap-3 md:grid-cols-4'>{Object.entries(metrics.data || {}).map(([k,v])=><Card key={k}><div className='text-sm text-slate-400'>{k}</div><div className='text-lg'>{String(v)}</div></Card>)}</div>
+    <div className='grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-4'>{Object.entries(metrics.data || {}).map(([k,v])=><Card key={k}><div className='text-sm text-slate-400 break-words'>{k}</div><div className='text-lg break-words'>{String(v)}</div></Card>)}</div>
     <Card>
       <h2 className='mb-2 text-lg'>Processing Summary</h2>
       {processingSummary.isLoading ? 'Loading processing summary...' : processingSummary.isError ? 'Failed loading processing summary' : (
-        <div className='grid grid-cols-2 gap-2 text-sm md:grid-cols-5'>
-          <div><div className='text-slate-400'>pending</div><div>{processingSummary.data?.pending ?? 0}</div></div>
-          <div><div className='text-slate-400'>processing</div><div>{processingSummary.data?.processing ?? 0}</div></div>
-          <div><div className='text-slate-400'>completed</div><div>{processingSummary.data?.completed ?? 0}</div></div>
-          <div><div className='text-slate-400'>failed</div><div>{processingSummary.data?.failed ?? 0}</div></div>
-          <div><div className='text-slate-400'>recently failed</div><div>{processingSummary.data?.recently_failed ?? 0}</div></div>
+        <div className='grid grid-cols-1 gap-2 text-sm sm:grid-cols-2 md:grid-cols-5'>
+          <div className='rounded border border-slate-800 p-2'><div className='text-slate-400'>pending</div><div>{processingSummary.data?.pending ?? 0}</div></div>
+          <div className='rounded border border-slate-800 p-2'><div className='text-slate-400'>processing</div><div>{processingSummary.data?.processing ?? 0}</div></div>
+          <div className='rounded border border-slate-800 p-2'><div className='text-slate-400'>completed</div><div>{processingSummary.data?.completed ?? 0}</div></div>
+          <div className='rounded border border-slate-800 p-2'><div className='text-slate-400'>failed</div><div>{processingSummary.data?.failed ?? 0}</div></div>
+          <div className='rounded border border-slate-800 p-2'><div className='text-slate-400'>recently failed</div><div>{processingSummary.data?.recently_failed ?? 0}</div></div>
         </div>
       )}
     </Card>
