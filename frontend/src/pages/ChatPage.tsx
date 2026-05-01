@@ -53,6 +53,19 @@ function FollowUpSuggestions({
   );
 }
 
+
+function getMessageContainerClasses(role: ChatMessage['role']): string {
+  if (role === 'user') {
+    return 'ml-auto w-full max-w-3xl rounded-2xl border border-indigo-500/40 bg-indigo-500/10 px-4 py-3 shadow-sm sm:w-[92%]';
+  }
+
+  return 'mr-auto w-full max-w-3xl rounded-2xl border border-slate-700/90 bg-slate-900/50 px-4 py-3 shadow-sm sm:w-[95%]';
+}
+
+function getMessageTextClasses(): string {
+  return 'whitespace-pre-wrap break-words leading-7 [overflow-wrap:anywhere]';
+}
+
 function CitationSection({ sourceRefs }: { sourceRefs: SourceRef[] }) {
   if (sourceRefs.length === 0) return null;
 
@@ -177,9 +190,31 @@ export function ChatPage() {
     </div>
     <div className='flex min-h-0 flex-col space-y-3'>
       <h1 className='text-xl font-semibold'>Chat</h1>
-      <div data-testid='chat-message-list' className='min-h-[18rem] flex-1 space-y-3 overflow-y-auto rounded border border-slate-700 p-3'>
-        {messages.map((m) => <div key={m.id} className='rounded bg-slate-900/40 p-2'><div className='text-xs uppercase text-slate-400'>{m.role}</div><div className='whitespace-pre-wrap break-words'>{m.content}</div>{m.role === 'assistant' && <><CitationSection sourceRefs={m.source_refs || []} /><FollowUpSuggestions suggestions={getFollowUpSuggestions({ includeTimeline, includeFullText, sourceRefCount: (m.source_refs || []).length })} onSelect={setMessage} /></>}</div>)}
-        {isStreaming && <div data-testid='streaming-message' className='rounded bg-slate-900/40 p-2'><div className='text-xs uppercase text-slate-400'>assistant</div><div className='min-h-[4rem] whitespace-pre-wrap break-words leading-relaxed'>{streamingMessage || ' '}</div>{!hasStreamFinal && <div data-testid='streaming-indicator' aria-live='polite' className='mt-2 inline-flex items-center gap-1 text-xs text-slate-400'><span className='h-1.5 w-1.5 animate-pulse rounded-full bg-slate-400 [animation-delay:0ms]' /><span className='h-1.5 w-1.5 animate-pulse rounded-full bg-slate-400 [animation-delay:120ms]' /><span className='h-1.5 w-1.5 animate-pulse rounded-full bg-slate-400 [animation-delay:240ms]' /><span>Assistant is typing</span></div>}<CitationSection sourceRefs={streamingSourceRefs} />{hasStreamFinal && <FollowUpSuggestions suggestions={getFollowUpSuggestions({ includeTimeline, includeFullText, sourceRefCount: streamingSourceRefs.length })} onSelect={setMessage} />}</div>}
+      <div data-testid='chat-message-list' className='min-h-[18rem] flex-1 space-y-4 overflow-y-auto rounded-xl border border-slate-700 p-3 sm:p-4'>
+        {messages.map((m) => (
+          <div key={m.id} className={getMessageContainerClasses(m.role)} data-testid={`chat-message-${m.role}`}>
+            <div className='mb-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-300'>{m.role}</div>
+            <div className={getMessageTextClasses()}>{m.content}</div>
+            {m.role === 'assistant' && (
+              <>
+                <CitationSection sourceRefs={m.source_refs || []} />
+                <FollowUpSuggestions
+                  suggestions={getFollowUpSuggestions({ includeTimeline, includeFullText, sourceRefCount: (m.source_refs || []).length })}
+                  onSelect={setMessage}
+                />
+              </>
+            )}
+          </div>
+        ))}
+        {isStreaming && (
+          <div data-testid='streaming-message' className={getMessageContainerClasses('assistant')}>
+            <div className='mb-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-300'>assistant</div>
+            <div className={`min-h-[4rem] ${getMessageTextClasses()}`}>{streamingMessage || ' '}</div>
+            {!hasStreamFinal && <div data-testid='streaming-indicator' aria-live='polite' className='mt-2 inline-flex items-center gap-1 text-xs text-slate-400'><span className='h-1.5 w-1.5 animate-pulse rounded-full bg-slate-400 [animation-delay:0ms]' /><span className='h-1.5 w-1.5 animate-pulse rounded-full bg-slate-400 [animation-delay:120ms]' /><span className='h-1.5 w-1.5 animate-pulse rounded-full bg-slate-400 [animation-delay:240ms]' /><span>Assistant is typing</span></div>}
+            <CitationSection sourceRefs={streamingSourceRefs} />
+            {hasStreamFinal && <FollowUpSuggestions suggestions={getFollowUpSuggestions({ includeTimeline, includeFullText, sourceRefCount: streamingSourceRefs.length })} onSelect={setMessage} />}
+          </div>
+        )}
         {streamError && <div className='text-sm text-rose-400'>Streaming failed. Retry sending your message. ({streamError})</div>}
         {(session.isLoading || isStreaming) && <div>{isStreaming ? 'Streaming...' : 'Loading...'}</div>}
       </div>

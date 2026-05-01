@@ -24,7 +24,10 @@ describe('ChatPage mobile layout', () => {
     vi.mocked(useCreateReport).mockReturnValue({ mutateAsync: vi.fn() } as never);
     vi.mocked(useChatSession).mockReturnValue({
       data: {
-        messages: [{ id: 'm1', role: 'assistant', content: 'Long long response content that should wrap on small screens', source_refs: [{ document_id: 'doc-1', document_title: 'Very Long Citation Title', snippet: 'Citation preview text to keep readable in small cards.' }] }],
+        messages: [
+          { id: 'm-user', role: 'user', content: 'User question with enough text to check readability and spacing.' },
+          { id: 'm1', role: 'assistant', content: 'Long long response content that should wrap on small screens', source_refs: [{ document_id: 'doc-1', document_title: 'Very Long Citation Title', snippet: 'Citation preview text to keep readable in small cards.' }] },
+        ],
       },
       isLoading: false,
     } as never);
@@ -39,6 +42,17 @@ describe('ChatPage mobile layout', () => {
     expect(screen.getByTestId('chat-message-list').className).toContain('overflow-y-auto');
     expect(screen.getByTestId('chat-input-panel').className).toContain('sticky');
     expect(screen.getByText(/Long long response/).className).toContain('break-words');
+  });
+
+
+
+  it('keeps user and assistant messages visually distinct', () => {
+    render(<MemoryRouter><ChatPage /></MemoryRouter>);
+    const userMessage = screen.getByTestId('chat-message-user');
+    const assistantMessage = screen.getByTestId('chat-message-assistant');
+    expect(userMessage.className).toContain('ml-auto');
+    expect(assistantMessage.className).toContain('mr-auto');
+    expect(userMessage.className).not.toEqual(assistantMessage.className);
   });
 
   it('renders citation cards in narrow-friendly container', () => {
