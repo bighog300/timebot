@@ -86,15 +86,36 @@ export const api = {
       const frames = buffer.split('\n\n');
       buffer = frames.pop() ?? '';
       for (const frame of frames) {
-        const dataLine = frame
-          .split('\n')
-          .map((line) => line.trim())
-          .find((line) => line.startsWith('data:'));
-        if (!dataLine) continue;
-        const raw = dataLine.replace(/^data:\s?/, '');
+        const lines = frame.split('\n').map((line) => line.trim());
+        const eventName = lines.find((line) => line.startsWith('event:'))?.replace(/^event:\s?/, '');
+        const dataLines = lines.filter((line) => line.startsWith('data:')).map((line) => line.replace(/^data:\s?/, ''));
+        if (dataLines.length === 0) continue;
+        const raw = dataLines.join('\n');
         try {
-          const event = JSON.parse(raw) as ChatStreamEvent;
-          handlers.onEvent(event);
+          const payload = JSON.parse(raw) as Partial<ChatStreamEvent> & {
+            delta?: string;
+            message?: string;
+            source_refs?: ChatStreamEvent extends { source_refs: infer T } ? T : never;
+          };
+
+          if (eventName === 'chunk' && typeof payload.delta === 'string') {
+            handlers.onEvent({ type: 'chunk', content: payload.delta });
+            continue;
+          }
+
+          if (eventName === 'final' && typeof payload.message === 'string') {
+            handlers.onEvent({ type: 'final', content: payload.message, source_refs: Array.isArray(payload.source_refs) ? payload.source_refs : [] });
+            continue;
+          }
+
+          if (payload.type === 'chunk' && typeof payload.content === 'string') {
+            handlers.onEvent({ type: 'chunk', content: payload.content });
+            continue;
+          }
+
+          if (payload.type === 'final' && typeof payload.content === 'string') {
+            handlers.onEvent({ type: 'final', content: payload.content, source_refs: Array.isArray(payload.source_refs) ? payload.source_refs : [] });
+          }
         } catch {
           // Ignore malformed stream event payloads and keep stream alive.
         }
