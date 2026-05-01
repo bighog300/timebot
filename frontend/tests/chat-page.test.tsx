@@ -70,6 +70,26 @@ describe('chat page streaming', () => {
     expect(screen.getByText('Doc B')).toBeInTheDocument();
     expect(screen.getByText('Preview B')).toBeInTheDocument();
     expect(screen.queryByText('Should Not Show')).not.toBeInTheDocument();
+    expect(screen.getByText('Suggested follow-ups')).toBeInTheDocument();
+  });
+
+  it('does not render follow-up suggestions for user messages', () => {
+    mocks.messagesMock.mockReturnValueOnce([
+      { id: 'm1', session_id: 's1', role: 'user', content: 'Question only', created_at: '2026-01-01T00:00:00Z' },
+    ]);
+
+    render(<MemoryRouter><ChatPage /></MemoryRouter>);
+    expect(screen.queryByText('Suggested follow-ups')).not.toBeInTheDocument();
+  });
+
+  it('clicking a follow-up suggestion populates the chat input', () => {
+    mocks.messagesMock.mockReturnValueOnce([
+      { id: 'm2', session_id: 's1', role: 'assistant', content: 'Answer', created_at: '2026-01-01T00:00:01Z', source_refs: [{ document_id: 'd2', document_title: 'Doc B', snippet: 'Snippet B' }] },
+    ]);
+
+    render(<MemoryRouter><ChatPage /></MemoryRouter>);
+    fireEvent.click(screen.getByRole('button', { name: 'Which documents support this?' }));
+    expect(screen.getByPlaceholderText('Ask a question')).toHaveValue('Which documents support this?');
   });
 
   it('allows citation section to collapse and expand', () => {
@@ -128,5 +148,29 @@ describe('chat page streaming', () => {
     fireEvent.click(screen.getByText('Send'));
 
     await waitFor(() => expect(screen.getByText(/Streaming failed\. Retry sending your message\./)).toBeInTheDocument());
+  });
+
+  it('shows follow-up suggestions for streaming only after final event', async () => {
+    let resolveStream!: () => void;
+    const streamDone = new Promise<void>((resolve) => {
+      resolveStream = resolve;
+    });
+
+    mocks.streamMock.mockImplementationOnce(async (_sessionId, _payload, handlers) => {
+      handlers.onEvent({ type: 'chunk', content: 'partial' });
+      await Promise.resolve();
+      handlers.onEvent({ type: 'final', content: 'complete', source_refs: [{ document_id: 'd1', document_title: 'Doc A' }] });
+      await streamDone;
+    });
+
+    render(<MemoryRouter><ChatPage /></MemoryRouter>);
+    fireEvent.change(screen.getByPlaceholderText('Ask a question'), { target: { value: 'hi' } });
+    fireEvent.click(screen.getByText('Send'));
+
+    await waitFor(() => expect(screen.getByText('complete')).toBeInTheDocument());
+    expect(screen.getByText('Suggested follow-ups')).toBeInTheDocument();
+
+    resolveStream();
+    await waitFor(() => expect(mocks.invalidateChat).toHaveBeenCalledWith('s1'));
   });
 });

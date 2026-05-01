@@ -5,6 +5,54 @@ import { useUIStore } from '@/store/uiStore';
 import { api, getErrorDetail } from '@/services/api';
 import type { ChatMessage, SourceRef } from '@/types/api';
 
+type FollowUpContext = {
+  includeTimeline: boolean;
+  includeFullText: boolean;
+  sourceRefCount: number;
+};
+
+function getFollowUpSuggestions(context: FollowUpContext): string[] {
+  const suggestions = new Set<string>([
+    'What are the key risks?',
+    'Are there inconsistencies?',
+    'Generate a report from this answer',
+  ]);
+
+  if (context.includeTimeline) suggestions.add('What changed over time?');
+  if (context.sourceRefCount > 0) suggestions.add('Which documents support this?');
+  if (context.includeFullText) suggestions.add('What important details might be missing?');
+
+  return Array.from(suggestions);
+}
+
+function FollowUpSuggestions({
+  suggestions,
+  onSelect,
+}: {
+  suggestions: string[];
+  onSelect: (suggestion: string) => void;
+}) {
+  if (suggestions.length === 0) return null;
+
+  return (
+    <div className='mt-2 space-y-2'>
+      <div className='text-xs uppercase tracking-wide text-slate-400'>Suggested follow-ups</div>
+      <div className='flex flex-wrap gap-2'>
+        {suggestions.map((suggestion) => (
+          <button
+            key={suggestion}
+            type='button'
+            onClick={() => onSelect(suggestion)}
+            className='rounded-full border border-slate-700 bg-slate-900 px-3 py-1 text-xs text-slate-200 hover:border-slate-500'
+          >
+            {suggestion}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function CitationSection({ sourceRefs }: { sourceRefs: SourceRef[] }) {
   if (sourceRefs.length === 0) return null;
 
@@ -49,6 +97,7 @@ export function ChatPage() {
   const [streamingMessage, setStreamingMessage] = useState('');
   const [streamingSourceRefs, setStreamingSourceRefs] = useState<SourceRef[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
+  const [hasStreamFinal, setHasStreamFinal] = useState(false);
   const [streamError, setStreamError] = useState<string | null>(null);
   const ids = useMemo(() => docIds.split(',').map((d) => d.trim()).filter(Boolean), [docIds]);
 
@@ -59,6 +108,7 @@ export function ChatPage() {
       let sid = currentSessionId;
       if (!sid) { const s = await createSession.mutateAsync(undefined); sid = s.id; setSessionId(sid); }
       setIsStreaming(true);
+      setHasStreamFinal(false);
       setStreamingMessage('');
       setStreamingSourceRefs([]);
       await api.sendChatMessageStream(sid, { message, document_ids: ids, include_timeline: includeTimeline, include_full_text: includeFullText }, {
@@ -69,6 +119,7 @@ export function ChatPage() {
           if (event.type === 'final') {
             setStreamingMessage(event.content);
             setStreamingSourceRefs(event.source_refs || []);
+            setHasStreamFinal(true);
           }
         },
       });
@@ -95,8 +146,8 @@ export function ChatPage() {
     <div className='flex min-h-0 flex-col space-y-3'>
       <h1 className='text-xl font-semibold'>Chat</h1>
       <div data-testid='chat-message-list' className='min-h-[18rem] flex-1 space-y-3 overflow-y-auto rounded border border-slate-700 p-3'>
-        {messages.map((m) => <div key={m.id} className='rounded bg-slate-900/40 p-2'><div className='text-xs uppercase text-slate-400'>{m.role}</div><div className='whitespace-pre-wrap break-words'>{m.content}</div>{m.role === 'assistant' && <CitationSection sourceRefs={m.source_refs || []} />}</div>)}
-        {isStreaming && <div data-testid='streaming-message' className='rounded bg-slate-900/40 p-2'><div className='text-xs uppercase text-slate-400'>assistant</div><div className='min-h-[2.5rem] whitespace-pre-wrap break-words'>{streamingMessage || 'Streaming response...'}</div><CitationSection sourceRefs={streamingSourceRefs} /></div>}
+        {messages.map((m) => <div key={m.id} className='rounded bg-slate-900/40 p-2'><div className='text-xs uppercase text-slate-400'>{m.role}</div><div className='whitespace-pre-wrap break-words'>{m.content}</div>{m.role === 'assistant' && <><CitationSection sourceRefs={m.source_refs || []} /><FollowUpSuggestions suggestions={getFollowUpSuggestions({ includeTimeline, includeFullText, sourceRefCount: (m.source_refs || []).length })} onSelect={setMessage} /></>}</div>)}
+        {isStreaming && <div data-testid='streaming-message' className='rounded bg-slate-900/40 p-2'><div className='text-xs uppercase text-slate-400'>assistant</div><div className='min-h-[2.5rem] whitespace-pre-wrap break-words'>{streamingMessage || 'Streaming response...'}</div><CitationSection sourceRefs={streamingSourceRefs} />{hasStreamFinal && <FollowUpSuggestions suggestions={getFollowUpSuggestions({ includeTimeline, includeFullText, sourceRefCount: streamingSourceRefs.length })} onSelect={setMessage} />}</div>}
         {streamError && <div className='text-sm text-rose-400'>Streaming failed. Retry sending your message. ({streamError})</div>}
         {(session.isLoading || isStreaming) && <div>{isStreaming ? 'Streaming...' : 'Loading...'}</div>}
       </div>
