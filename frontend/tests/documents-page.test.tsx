@@ -8,21 +8,22 @@ const mutateAsync = vi.fn();
 const gmailPreviewMutateAsync = vi.fn();
 const gmailImportMutateAsync = vi.fn();
 const pushToast = vi.fn();
+let documentsData = [{ id: '1', filename: 'a.pdf', processing_status: 'completed', summary: 'done', upload_date: new Date().toISOString() }];
 
 vi.mock('@/auth/AuthContext', () => ({ useAuth: () => ({ token: 'token-abc', loading: false }) }));
 vi.mock('@/store/uiStore', () => ({ useUIStore: (selector: (s: { pushToast: typeof pushToast }) => unknown) => selector({ pushToast }) }));
 vi.mock('@/hooks/useApi', () => ({
-  useDocuments: () => ({ data: [{ id: '1', filename: 'a.pdf', processing_status: 'completed', summary: 'done', upload_date: new Date().toISOString() }], isLoading: false, isError: false }),
+  useDocuments: () => ({ data: documentsData, isLoading: false, isError: false }),
   useUploadDocument: () => ({ mutateAsync, isPending: false }),
   useConnections: () => ({ data: [{ type: 'gmail', is_authenticated: true, provider_is_configured: true }] }),
   useGmailPreview: () => ({ mutateAsync: gmailPreviewMutateAsync, isPending: false }),
   useGmailImport: () => ({ mutateAsync: gmailImportMutateAsync, isPending: false }),
 }));
 
-const renderPage = () => {
+const renderPage = (initialPath = '/documents') => {
   const queryClient = new QueryClient();
   return render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[initialPath]}>
       <QueryClientProvider client={queryClient}>
         <DocumentsPage />
       </QueryClientProvider>
@@ -36,6 +37,8 @@ beforeEach(() => {
   pushToast.mockReset();
   gmailPreviewMutateAsync.mockReset();
   gmailImportMutateAsync.mockReset();
+  documentsData = [{ id: '1', filename: 'a.pdf', processing_status: 'completed', summary: 'done', upload_date: new Date().toISOString() }];
+  window.localStorage.clear();
   gmailPreviewMutateAsync.mockResolvedValue({ messages: [] });
   gmailImportMutateAsync.mockResolvedValue({ imported_count: 1, imported_email_count: 1, imported_attachment_count: 0, skipped_attachment_count: 0, skipped_attachments: [], duplicate_message_count: 0, created_document_ids: ['d1'] });
 });
@@ -49,6 +52,30 @@ afterEach(() => {
 test('renders documents list', () => {
   renderPage();
   expect(screen.getByText('a.pdf')).toBeInTheDocument();
+});
+
+test('first-document success panel appears when documents exist after onboarding', () => {
+  renderPage('/documents?onboardingAction=upload');
+  expect(screen.getByText('Your first documents are ready')).toBeInTheDocument();
+});
+
+test('dismissing first-document success panel persists in localStorage', () => {
+  renderPage('/documents?onboardingAction=upload');
+  fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+  expect(screen.queryByText('Your first documents are ready')).not.toBeInTheDocument();
+  expect(window.localStorage.getItem('documents_first_success_dismissed')).toBe('true');
+});
+
+test('first-document success panel does not appear without onboarding context', () => {
+  renderPage('/documents');
+  expect(screen.queryByText('Your first documents are ready')).not.toBeInTheDocument();
+});
+
+test('first-document success panel actions are visible', () => {
+  renderPage('/documents?onboardingAction=gmail');
+  expect(screen.getByRole('link', { name: 'View timeline' })).toBeInTheDocument();
+  expect(screen.getByRole('link', { name: 'Review relationships' })).toBeInTheDocument();
+  expect(screen.getByRole('link', { name: 'Ask the starter chat question' })).toBeInTheDocument();
 });
 
 

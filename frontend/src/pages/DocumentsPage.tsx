@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { type ChangeEvent, type DragEvent, useMemo, useRef, useState } from 'react';
+import { type ChangeEvent, type DragEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '@/auth/AuthContext';
 import { useConnections, useDocuments, useGmailImport, useGmailPreview, useUploadDocument } from '@/hooks/useApi';
@@ -10,6 +10,7 @@ import { ProcessingStatusIndicator } from '@/components/documents/ProcessingStat
 import { useUIStore } from '@/store/uiStore';
 
 export function DocumentsPage() {
+  const FIRST_DOCUMENT_SUCCESS_DISMISSED_KEY = 'documents_first_success_dismissed';
   const location = useLocation();
   const onboardingAction = new URLSearchParams(location.search).get('onboardingAction');
   const { data, isLoading, isError } = useDocuments();
@@ -27,6 +28,16 @@ export function DocumentsPage() {
   const [previewMessages, setPreviewMessages] = useState<Array<{ gmail_message_id: string; sender: string; subject: string; received_at: string | null; snippet: string; already_imported: boolean }>>([]);
   const [selectedMessageIds, setSelectedMessageIds] = useState<string[]>([]);
   const [gmailError, setGmailError] = useState<string | null>(null);
+  const [firstSuccessDismissed, setFirstSuccessDismissed] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.localStorage.getItem(FIRST_DOCUMENT_SUCCESS_DISMISSED_KEY) === 'true';
+  });
+  const showFirstDocumentSuccessPanel = Boolean(data?.length) && Boolean(onboardingAction) && !firstSuccessDismissed;
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem(FIRST_DOCUMENT_SUCCESS_DISMISSED_KEY, firstSuccessDismissed ? 'true' : 'false');
+  }, [firstSuccessDismissed]);
 
   const uploadDisabledReason = authLoading
     ? 'Authentication is still loading. Please wait a moment.'
@@ -202,6 +213,36 @@ export function DocumentsPage() {
           </Card>
         ))}
       </div>
+
+      {Boolean(data?.length) && (
+        showFirstDocumentSuccessPanel ? (
+          <Card>
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <h2 className="text-base font-semibold">Your first documents are ready</h2>
+                <button
+                  type="button"
+                  className="text-sm text-slate-300 underline-offset-2 hover:text-white hover:underline"
+                  onClick={() => setFirstSuccessDismissed(true)}
+                >
+                  Dismiss
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-2 text-sm">
+                <Link className="rounded border border-slate-700 px-3 py-1.5 text-blue-300 hover:bg-slate-800" to="/timeline">
+                  View timeline
+                </Link>
+                <Link className="rounded border border-slate-700 px-3 py-1.5 text-blue-300 hover:bg-slate-800" to="/review/relationships">
+                  Review relationships
+                </Link>
+                <Link className="rounded border border-slate-700 px-3 py-1.5 text-blue-300 hover:bg-slate-800" to="/chat?q=What%20are%20the%20key%20events%20in%20these%20documents%3F">
+                  Ask the starter chat question
+                </Link>
+              </div>
+            </div>
+          </Card>
+        ) : null
+      )}
 
       {Boolean(data?.length) && (
         <Card>
