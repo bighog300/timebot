@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { DocumentDetailPage } from './DocumentDetailPage';
@@ -20,6 +20,8 @@ vi.mock('@/hooks/useApi', () => ({
   useDocumentActionItems: vi.fn(),
   useDocumentAuditHistory: vi.fn(),
   useDocumentRelationships: vi.fn(),
+  useConfirmDocumentRelationship: vi.fn(),
+  useDismissDocumentRelationship: vi.fn(),
   usePatchDocumentIntelligence: vi.fn(),
   useApproveDocumentCategory: vi.fn(),
   useOverrideDocumentCategory: vi.fn(),
@@ -34,6 +36,8 @@ import {
   useDocumentAuditHistory,
   useDocumentIntelligence,
   useDocumentRelationships,
+  useConfirmDocumentRelationship,
+  useDismissDocumentRelationship,
   useOverrideDocumentCategory,
   usePatchDocumentIntelligence,
 } from '@/hooks/useApi';
@@ -58,8 +62,16 @@ function renderPage() {
 }
 
 describe('DocumentDetailPage relationship filtering', () => {
+  afterEach(() => cleanup());
+  const pushToast = vi.fn();
+  const confirmMutate = vi.fn();
+  const dismissMutate = vi.fn();
+
   beforeEach(() => {
-    vi.mocked(useUIStore).mockImplementation(((selector: (state: { pushToast: (msg: string) => void }) => unknown) => selector({ pushToast: vi.fn() })) as never);
+    pushToast.mockReset();
+    confirmMutate.mockReset();
+    dismissMutate.mockReset();
+    vi.mocked(useUIStore).mockImplementation(((selector: (state: { pushToast: (msg: string) => void }) => unknown) => selector({ pushToast })) as never);
     vi.mocked(api.getDocument).mockResolvedValue({ id: 'doc-1', filename: 'Contract.pdf', processing_status: 'processed', processing_error: null, is_favorite: false, is_archived: false, summary: '', ai_category: null } as never);
     vi.mocked(api.findSimilar).mockResolvedValue({ results: [], query: '', total: 0 } as never);
     vi.mocked(useDocumentIntelligence).mockReturnValue({ isLoading: false, isError: false, isSuccess: true, data: null } as never);
@@ -70,6 +82,8 @@ describe('DocumentDetailPage relationship filtering', () => {
     vi.mocked(useApproveDocumentCategory).mockReturnValue({ mutate: vi.fn() } as never);
     vi.mocked(useOverrideDocumentCategory).mockReturnValue({ mutate: vi.fn() } as never);
     vi.mocked(useDocumentRelationships).mockReturnValue({ isLoading: false, isError: false, isSuccess: true, data: baseRelationships } as never);
+    vi.mocked(useConfirmDocumentRelationship).mockReturnValue({ isPending: false, mutate: confirmMutate } as never);
+    vi.mocked(useDismissDocumentRelationship).mockReturnValue({ isPending: false, mutate: dismissMutate } as never);
   });
 
   it('renders filter buttons', async () => {
@@ -108,5 +122,48 @@ describe('DocumentDetailPage relationship filtering', () => {
     renderPage();
     expect(await screen.findByText('No Metadata Doc')).toBeTruthy();
     expect(screen.getAllByText('n/a confidence').length).toBeGreaterThan(0);
+  });
+
+  it('shows Confirm and Reject for pending AI relationships only', async () => {
+    renderPage();
+    await screen.findAllByText('Related Doc');
+    expect(screen.getByRole('button', { name: 'Confirm' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Reject' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Structural' }));
+    expect(screen.queryByRole('button', { name: 'Confirm' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Reject' })).toBeNull();
+  });
+
+  it('clicking Confirm updates visible status', async () => {
+    const onSuccess = vi.fn();
+    vi.mocked(useConfirmDocumentRelationship).mockReturnValue({ isPending: false, mutate: onSuccess } as never);
+    renderPage();
+    await screen.findByText('Related Doc');
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
+    expect(onSuccess).toHaveBeenCalled();
+  });
+
+  it('clicking Reject hides relationship under Pending filter', async () => {
+    vi.mocked(useDocumentRelationships).mockReturnValue({
+      isLoading: false,
+      isError: false,
+      isSuccess: true,
+      data: baseRelationships.map((r) => (r.id === '3' ? { ...r, status: 'dismissed' } : r)),
+    } as never);
+    renderPage();
+    await screen.findByText('Related Doc');
+    fireEvent.click(screen.getByRole('button', { name: 'Pending' }));
+    expect(screen.queryByText('Related Doc')).toBeNull();
+  });
+
+  it('shows error toast when confirm action fails', async () => {
+    vi.mocked(useConfirmDocumentRelationship).mockReturnValue({
+      isPending: false,
+      mutate: (_id: string, opts?: { onError?: () => void }) => opts?.onError?.(),
+    } as never);
+    renderPage();
+    await screen.findByText('Related Doc');
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
+    expect(pushToast).toHaveBeenCalledWith('Failed to confirm relationship');
   });
 });

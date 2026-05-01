@@ -23,6 +23,8 @@ vi.mock('@/hooks/useApi', () => ({
   useApproveDocumentCategory: () => ({ mutate: vi.fn() }),
   useOverrideDocumentCategory: () => ({ mutate: vi.fn() }),
   useDocumentRelationships: () => mockUseDocumentRelationships(),
+  useConfirmDocumentRelationship: () => ({ isPending: false, mutate: vi.fn() }),
+  useDismissDocumentRelationship: () => ({ isPending: false, mutate: vi.fn() }),
 }));
 
 vi.mock('@/store/uiStore', () => ({ useUIStore: () => ({ pushToast: vi.fn() }) }));

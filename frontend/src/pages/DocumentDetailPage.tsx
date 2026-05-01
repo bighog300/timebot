@@ -9,6 +9,8 @@ import { ProcessingStatusIndicator } from '@/components/documents/ProcessingStat
 import { useUIStore } from '@/store/uiStore';
 import {
   useApproveDocumentCategory,
+  useConfirmDocumentRelationship,
+  useDismissDocumentRelationship,
   useCategories,
   useDocumentActionItems,
   useDocumentAuditHistory,
@@ -44,6 +46,8 @@ export function DocumentDetailPage() {
   const actionItemsQuery = useDocumentActionItems(id);
   const auditQuery = useDocumentAuditHistory(id);
   const relationshipsQuery = useDocumentRelationships(id);
+  const confirmRelationship = useConfirmDocumentRelationship(id);
+  const dismissRelationship = useDismissDocumentRelationship(id);
   const patchIntelligence = usePatchDocumentIntelligence(id);
   const approveCategory = useApproveDocumentCategory(id);
   const overrideCategory = useOverrideDocumentCategory(id);
@@ -134,6 +138,24 @@ export function DocumentDetailPage() {
           {item.explanation_metadata.reason || 'Similarity signals detected.'}
           {(item.explanation_metadata.signals?.length ?? 0) > 0 ? ` (${item.explanation_metadata.signals?.join(', ')})` : ''}
         </p>
+      )}
+      {item.status === 'pending' && item.relationship_type !== 'thread' && item.relationship_type !== 'attachment' && (
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Button
+            className="bg-emerald-700 hover:bg-emerald-600"
+            disabled={confirmRelationship.isPending || dismissRelationship.isPending}
+            onClick={() => confirmRelationship.mutate(item.id, { onError: () => pushToast('Failed to confirm relationship') })}
+          >
+            Confirm
+          </Button>
+          <Button
+            className="bg-slate-700 hover:bg-slate-600"
+            disabled={confirmRelationship.isPending || dismissRelationship.isPending}
+            onClick={() => dismissRelationship.mutate(item.id, { onError: () => pushToast('Failed to reject relationship') })}
+          >
+            Reject
+          </Button>
+        </div>
       )}
     </li>
   );

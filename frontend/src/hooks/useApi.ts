@@ -253,6 +253,44 @@ export function useDismissRelationshipReview() {
   });
 }
 
+export function useConfirmDocumentRelationship(documentId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.confirmRelationshipReview(id),
+    onMutate: async (id) => {
+      await qc.cancelQueries({ queryKey: keys.documentRelationships(documentId) });
+      const previous = qc.getQueryData<DocumentRelationshipListItem[]>(keys.documentRelationships(documentId));
+      qc.setQueryData<DocumentRelationshipListItem[]>(keys.documentRelationships(documentId), (items = []) =>
+        items.map((item) => (item.id === id ? { ...item, status: 'confirmed' } : item)),
+      );
+      return { previous };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previous) qc.setQueryData(keys.documentRelationships(documentId), context.previous);
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: keys.documentRelationships(documentId) }),
+  });
+}
+
+export function useDismissDocumentRelationship(documentId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.dismissRelationshipReview(id),
+    onMutate: async (id) => {
+      await qc.cancelQueries({ queryKey: keys.documentRelationships(documentId) });
+      const previous = qc.getQueryData<DocumentRelationshipListItem[]>(keys.documentRelationships(documentId));
+      qc.setQueryData<DocumentRelationshipListItem[]>(keys.documentRelationships(documentId), (items = []) =>
+        items.map((item) => (item.id === id ? { ...item, status: 'dismissed' } : item)),
+      );
+      return { previous };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previous) qc.setQueryData(keys.documentRelationships(documentId), context.previous);
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: keys.documentRelationships(documentId) }),
+  });
+}
+
 export function useActionItems(state: 'open' | 'completed' | 'dismissed' | '', page = 0, limit = 20) {
   const authReady = useAuthReady();
   return useQuery({
