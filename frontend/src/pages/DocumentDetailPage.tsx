@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '@/services/api';
@@ -52,6 +52,7 @@ export function DocumentDetailPage() {
   const [tagsDraft, setTagsDraft] = useState('');
   const [keyPointsDraft, setKeyPointsDraft] = useState('');
   const [categoryOverrideId, setCategoryOverrideId] = useState('');
+  const [relationshipFilter, setRelationshipFilter] = useState<'all' | 'structural' | 'ai_detected' | 'confirmed' | 'pending'>('all');
 
   useEffect(() => {
     if (!intelligenceQuery.data) return;
@@ -98,14 +99,23 @@ export function DocumentDetailPage() {
     onError: () => pushToast('Failed to delete document'),
   });
 
-  if (documentQuery.isLoading) return <LoadingState />;
-  if (documentQuery.isError || !documentQuery.data) return <ErrorState message="Document not found" />;
+  const filteredRelationships = useMemo(() => {
+    const relationships = relationshipsQuery.data ?? [];
+    return relationships.filter((item) => {
+      if (relationshipFilter === 'all') return true;
+      if (relationshipFilter === 'structural') return item.relationship_type === 'thread' || item.relationship_type === 'attachment';
+      if (relationshipFilter === 'confirmed') return item.status === 'confirmed';
+      if (relationshipFilter === 'pending') return item.status === 'pending';
+      const signals = item.explanation_metadata?.signals ?? [];
+      const effectiveConfidence = item.explanation_metadata?.confidence ?? item.confidence;
+      return item.relationship_type !== 'thread' && item.relationship_type !== 'attachment' && (signals.length > 0 || effectiveConfidence != null);
+    });
+  }, [relationshipFilter, relationshipsQuery.data]);
 
-  const doc = documentQuery.data;
   const relationshipGroups = {
-    thread: (relationshipsQuery.data ?? []).filter((item) => item.relationship_type === 'thread'),
-    attachment: (relationshipsQuery.data ?? []).filter((item) => item.relationship_type === 'attachment'),
-    related: (relationshipsQuery.data ?? []).filter((item) => item.relationship_type !== 'thread' && item.relationship_type !== 'attachment'),
+    thread: filteredRelationships.filter((item) => item.relationship_type === 'thread'),
+    attachment: filteredRelationships.filter((item) => item.relationship_type === 'attachment'),
+    related: filteredRelationships.filter((item) => item.relationship_type !== 'thread' && item.relationship_type !== 'attachment'),
   };
   const renderRelationshipItem = (item: (typeof relationshipGroups)['related'][number]) => (
     <li key={item.id} className="rounded border border-slate-800 p-3">
@@ -115,7 +125,7 @@ export function DocumentDetailPage() {
         </Link>
         <span className="rounded bg-slate-800 px-2 py-1 text-xs">{item.relationship_type}</span>
         <span className="rounded bg-slate-800 px-2 py-1 text-xs">{item.status}</span>
-        <span className="text-xs text-slate-400">{item.confidence != null ? `${Math.round(item.confidence * 100)}% confidence` : 'n/a confidence'}</span>
+        <span className="text-xs text-slate-400">{(item.explanation_metadata?.confidence ?? item.confidence) != null ? `${Math.round((item.explanation_metadata?.confidence ?? item.confidence ?? 0) * 100)}% confidence` : 'n/a confidence'}</span>
       </div>
       <p className="mt-2 text-slate-300">{item.related_document_snippet || 'No summary/snippet available.'}</p>
       {item.explanation_metadata && (item.explanation_metadata.reason || (item.explanation_metadata.signals?.length ?? 0) > 0) && (
@@ -127,6 +137,11 @@ export function DocumentDetailPage() {
       )}
     </li>
   );
+
+  if (documentQuery.isLoading) return <LoadingState />;
+  if (documentQuery.isError || !documentQuery.data) return <ErrorState message="Document not found" />;
+
+  const doc = documentQuery.data;
   return (
     <div className="space-y-4">
       <h1 className="text-xl font-semibold">{doc.filename}</h1>
@@ -241,6 +256,13 @@ export function DocumentDetailPage() {
         {relationshipsQuery.isSuccess && (relationshipsQuery.data?.length ?? 0) === 0 && <EmptyState label="No related documents yet." />}
         {relationshipsQuery.isSuccess && (relationshipsQuery.data?.length ?? 0) > 0 && (
           <div className="space-y-4 text-sm">
+            <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Relationship filters">
+              <Button className={relationshipFilter === 'all' ? '' : 'bg-slate-700 hover:bg-slate-600'} onClick={() => setRelationshipFilter('all')}>All</Button>
+              <Button className={relationshipFilter === 'structural' ? '' : 'bg-slate-700 hover:bg-slate-600'} onClick={() => setRelationshipFilter('structural')}>Structural</Button>
+              <Button className={relationshipFilter === 'ai_detected' ? '' : 'bg-slate-700 hover:bg-slate-600'} onClick={() => setRelationshipFilter('ai_detected')}>AI-detected</Button>
+              <Button className={relationshipFilter === 'confirmed' ? '' : 'bg-slate-700 hover:bg-slate-600'} onClick={() => setRelationshipFilter('confirmed')}>Confirmed</Button>
+              <Button className={relationshipFilter === 'pending' ? '' : 'bg-slate-700 hover:bg-slate-600'} onClick={() => setRelationshipFilter('pending')}>Pending</Button>
+            </div>
             <div>
               <h4 className="mb-2 font-medium">Email Thread</h4>
               {relationshipGroups.thread.length === 0 ? <EmptyState label="No email thread relationships." /> : <ul className="space-y-2">{relationshipGroups.thread.map(renderRelationshipItem)}</ul>}
