@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session, joinedload, selectinload
 from app.config import settings
 from app.models.document import Document
 from app.models.relationships import DocumentRelationship
+from app.services.document_clusters import document_cluster_service
 
 logger = logging.getLogger(__name__)
 _CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
@@ -210,7 +211,26 @@ def retrieve_chat_context(
     documents = [item[2] for item in selected]
     source_refs = [ref for _, _, d in selected for ref in d.pop("_source_refs", [])]
 
-    result = {"documents": documents, "source_refs": source_refs}
+    selected_doc_ids = {d.get("document_id") for d in documents if isinstance(d, dict)}
+    clusters = document_cluster_service.list_clusters_for_user(db, user_id=user_id)
+    cluster_payload: list[dict[str, Any]] = []
+    for cluster in clusters:
+        cluster_doc_ids = cluster.get("document_ids") or []
+        if not any(doc_id in selected_doc_ids for doc_id in cluster_doc_ids):
+            continue
+        cluster_payload.append(
+            {
+                "cluster_id": cluster.get("cluster_id"),
+                "cluster_size": len(cluster_doc_ids),
+                "document_titles": cluster.get("document_titles") or [],
+                "relationship_count": cluster.get("relationship_count", 0),
+                "dominant_signals": cluster.get("dominant_signals") or [],
+            }
+        )
+        if len(cluster_payload) >= 5:
+            break
+
+    result = {"documents": documents, "source_refs": source_refs, "document_clusters": cluster_payload}
     if cache_enabled and cache_key is not None:
         _cache_set(cache_key, result)
 
@@ -263,6 +283,20 @@ def format_chat_context(context: dict[str, Any], max_items_per_section: int = 25
             explanation_suffix = f" | explanation: {explanation}" if explanation else ""
             lines.append(f"- {source_title} -> {target} ({rel_type}){explanation_suffix}")
     if not has_relationships:
+        lines.append("- None")
+
+    lines.extend(["", "Document Clusters", "-"])
+    has_clusters = False
+    for cluster in (context.get("document_clusters") or [])[:max_items_per_section]:
+        if not isinstance(cluster, dict):
+            continue
+        has_clusters = True
+        doc_titles = [t for t in (cluster.get("document_titles") or []) if isinstance(t, str) and t.strip()]
+        dominant_signals = [s for s in (cluster.get("dominant_signals") or []) if isinstance(s, str) and s.strip()]
+        lines.append(f"- size={cluster.get('cluster_size')}, relationships={cluster.get('relationship_count')}")
+        lines.append(f"  docs: {', '.join(doc_titles) if doc_titles else '(none)'}")
+        lines.append(f"  dominant_signals: {', '.join(dominant_signals) if dominant_signals else '(none)'}")
+    if not has_clusters:
         lines.append("- None")
 
     lines.extend(["", "Email Thread Outcomes", "-"])

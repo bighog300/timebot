@@ -658,11 +658,48 @@ def test_format_chat_context_includes_labeled_sections_and_metadata(db, test_use
     assert ctx["source_refs"]
 
 
+def test_format_chat_context_includes_document_clusters_when_available(db, test_user):
+    from app.models.relationships import DocumentRelationship
+    from app.services.chat_retrieval import format_chat_context
+
+    source = _mk_doc(db, test_user.id, "cluster-source.txt", "Cluster source summary about kickoff")
+    target = _mk_doc(db, test_user.id, "cluster-target.txt", "Cluster target summary for planning")
+    rel = DocumentRelationship(
+        source_doc_id=source.id,
+        target_doc_id=target.id,
+        relationship_type="related_to",
+        relationship_metadata={"explanation": {"signals": ["timeline_overlap", "email_thread"]}},
+    )
+    db.add(rel)
+    db.commit()
+
+    ctx = retrieve_chat_context(db, "cluster source related_to kickoff", test_user.id, None, True, False, 5)
+    formatted = format_chat_context(ctx)
+
+    assert "Document Clusters" in formatted
+    assert "cluster-source.txt" in formatted
+    assert "cluster-target.txt" in formatted
+    assert "dominant_signals:" in formatted
+    assert "timeline_overlap" in formatted
+    assert ctx["source_refs"]
+
+
 def test_streaming_and_non_streaming_use_same_formatted_context(client, monkeypatch, db):
     from app.models.user import User
+    from app.models.relationships import DocumentRelationship
 
     user = db.query(User).first()
-    _mk_doc(db, user.id, "alpha.txt", "Alpha summary with milestone")
+    source = _mk_doc(db, user.id, "alpha.txt", "Alpha summary with milestone")
+    target = _mk_doc(db, user.id, "beta.txt", "Beta summary with downstream milestone")
+    db.add(
+        DocumentRelationship(
+            source_doc_id=source.id,
+            target_doc_id=target.id,
+            relationship_type="related_to",
+            relationship_metadata={"explanation": {"signals": ["shared_participants"]}},
+        )
+    )
+    db.commit()
 
     captured: dict[str, str] = {}
 
@@ -698,6 +735,8 @@ def test_streaming_and_non_streaming_use_same_formatted_context(client, monkeypa
     non_stream_context = captured["non_stream"].split("Question:\n", 1)[0]
     stream_context = captured["stream"].split("Question:\n", 1)[0]
     assert non_stream_context == stream_context
+    assert "Document Clusters" in non_stream_context
+    assert "shared_participants" in non_stream_context
 
 
 def test_answer_mode_detection_keywords():
