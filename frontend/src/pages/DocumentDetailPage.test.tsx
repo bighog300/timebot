@@ -26,6 +26,7 @@ vi.mock('@/hooks/useApi', () => ({
   usePatchDocumentIntelligence: vi.fn(),
   useApproveDocumentCategory: vi.fn(),
   useOverrideDocumentCategory: vi.fn(),
+  useStructuredInsights: vi.fn(),
 }));
 
 import { useUIStore } from '@/store/uiStore';
@@ -42,6 +43,7 @@ import {
   useDismissDocumentRelationship,
   useOverrideDocumentCategory,
   usePatchDocumentIntelligence,
+  useStructuredInsights,
 } from '@/hooks/useApi';
 
 const baseRelationships = [
@@ -85,6 +87,12 @@ describe('DocumentDetailPage relationship filtering', () => {
     vi.mocked(useOverrideDocumentCategory).mockReturnValue({ mutate: vi.fn() } as never);
     vi.mocked(useDocumentRelationships).mockReturnValue({ isLoading: false, isError: false, isSuccess: true, data: baseRelationships } as never);
     vi.mocked(useDocumentClusters).mockReturnValue({ isLoading: false, isError: false, isSuccess: true, data: [{ cluster_id: 'cluster-1', document_ids: ['doc-1', 'r3'], document_titles: ['Contract.pdf', 'Related Doc'], relationship_count: 1, dominant_signals: ['ai_detected'] }] } as never);
+    vi.mocked(useStructuredInsights).mockReturnValue({
+      isLoading: false,
+      isError: false,
+      isSuccess: true,
+      data: [],
+    } as never);
     vi.mocked(useConfirmDocumentRelationship).mockReturnValue({ isPending: false, mutate: confirmMutate } as never);
     vi.mocked(useDismissDocumentRelationship).mockReturnValue({ isPending: false, mutate: dismissMutate } as never);
   });
@@ -221,5 +229,35 @@ describe('DocumentDetailPage relationship filtering', () => {
     renderPage();
     await screen.findByText('Related Doc');
     expect(screen.queryByRole('link', { name: 'View related cluster' })).toBeNull();
+  });
+
+  it('renders document-level insights for this document only', async () => {
+    vi.mocked(useStructuredInsights).mockReturnValue({
+      isLoading: false,
+      isError: false,
+      isSuccess: true,
+      data: [
+        { type: 'risk', title: 'Late delivery risk', severity: 'high', description: 'Potential delay noted.', related_documents: [{ document_id: 'doc-1', title: 'Contract.pdf' }] },
+        { type: 'change', title: 'Scope changed', severity: 'medium', description: 'Scope modified.', related_documents: [{ document_id: 'doc-2', title: 'Other.pdf' }] },
+      ],
+    } as never);
+    renderPage();
+    expect(await screen.findByText('Insights for this document')).toBeTruthy();
+    expect(screen.getByText('Late delivery risk')).toBeTruthy();
+    expect(screen.queryByText('Scope changed')).toBeNull();
+    expect(screen.getByText('risk')).toBeTruthy();
+    expect(screen.getByText('Severity: high')).toBeTruthy();
+    expect(screen.getByText('Potential delay noted.')).toBeTruthy();
+  });
+
+  it('renders empty state when no insights match this document id', async () => {
+    vi.mocked(useStructuredInsights).mockReturnValue({
+      isLoading: false,
+      isError: false,
+      isSuccess: true,
+      data: [{ type: 'risk', title: 'Other doc risk', severity: 'low', description: 'No match.', related_documents: [{ document_id: 'doc-999' }] }],
+    } as never);
+    renderPage();
+    expect(await screen.findByText('No insights found for this document.')).toBeTruthy();
   });
 });
