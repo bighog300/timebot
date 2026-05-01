@@ -31,15 +31,19 @@ afterEach(() => {
 describe('chat page streaming', () => {
   it('uses streaming endpoint and renders chunks/final sources', async () => {
     let resolveStream!: () => void;
+    let resolveBeforeFinal!: () => void;
     const streamDone = new Promise<void>((resolve) => {
       resolveStream = resolve;
+    });
+    const beforeFinal = new Promise<void>((resolve) => {
+      resolveBeforeFinal = resolve;
     });
 
     mocks.streamMock.mockImplementationOnce(async (_sessionId, _payload, handlers) => {
       handlers.onEvent({ type: 'chunk', content: 'Hello ' });
       await Promise.resolve();
       handlers.onEvent({ type: 'chunk', content: 'world' });
-      await Promise.resolve();
+      await beforeFinal;
       handlers.onEvent({ type: 'final', content: 'Hello world', source_refs: [{ document_id: 'd1', document_title: 'Doc A', source_type: 'document', snippet: 'Snippet A' }] });
       await streamDone;
     });
@@ -49,6 +53,8 @@ describe('chat page streaming', () => {
     fireEvent.click(screen.getByText('Send'));
 
     await waitFor(() => expect(mocks.streamMock).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByTestId('streaming-indicator')).toBeInTheDocument());
+    resolveBeforeFinal();
     await waitFor(() => expect(screen.getByText('Hello world')).toBeInTheDocument());
     expect(screen.getByText(/^(Citations|Sources) \(1\)$/)).toBeInTheDocument();
     expect(screen.getByText('Doc A')).toBeInTheDocument();
@@ -56,6 +62,7 @@ describe('chat page streaming', () => {
 
     resolveStream();
     await waitFor(() => expect(mocks.invalidateChat).toHaveBeenCalledWith('s1'));
+    await waitFor(() => expect(screen.queryByTestId('streaming-message')).not.toBeInTheDocument());
     expect(mocks.streamMock).toHaveBeenCalledWith('s1', expect.objectContaining({ message: 'hi' }), expect.any(Object));
   });
 

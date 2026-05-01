@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useCreateChatSession, useChatSession, useChatSessions, useCreateReport, useInvalidateChatSession } from '@/hooks/useApi';
 import { useUIStore } from '@/store/uiStore';
@@ -99,7 +99,21 @@ export function ChatPage() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [hasStreamFinal, setHasStreamFinal] = useState(false);
   const [streamError, setStreamError] = useState<string | null>(null);
+  const chunkBufferRef = useRef('');
+  const frameRef = useRef<number | null>(null);
+  const hasFinalEventRef = useRef(false);
   const ids = useMemo(() => docIds.split(',').map((d) => d.trim()).filter(Boolean), [docIds]);
+
+  useEffect(() => () => {
+    if (frameRef.current !== null) window.cancelAnimationFrame(frameRef.current);
+  }, []);
+
+  const flushChunkBuffer = () => {
+    if (!chunkBufferRef.current) return;
+    const buffer = chunkBufferRef.current;
+    chunkBufferRef.current = '';
+    setStreamingMessage((prev) => prev + buffer);
+  };
 
   const onNew = async () => { const s = await createSession.mutateAsync(undefined); setSessionId(s.id); };
   const onSend = async () => {
@@ -108,15 +122,28 @@ export function ChatPage() {
       let sid = currentSessionId;
       if (!sid) { const s = await createSession.mutateAsync(undefined); sid = s.id; setSessionId(sid); }
       setIsStreaming(true);
+      hasFinalEventRef.current = false;
       setHasStreamFinal(false);
       setStreamingMessage('');
       setStreamingSourceRefs([]);
       await api.sendChatMessageStream(sid, { message, document_ids: ids, include_timeline: includeTimeline, include_full_text: includeFullText }, {
         onEvent: (event) => {
           if (event.type === 'chunk') {
-            setStreamingMessage((prev) => prev + event.content);
+            chunkBufferRef.current += event.content;
+            if (frameRef.current === null) {
+              frameRef.current = window.requestAnimationFrame(() => {
+                flushChunkBuffer();
+                frameRef.current = null;
+              });
+            }
           }
           if (event.type === 'final') {
+            hasFinalEventRef.current = true;
+            if (frameRef.current !== null) {
+              window.cancelAnimationFrame(frameRef.current);
+              frameRef.current = null;
+            }
+            flushChunkBuffer();
             setStreamingMessage(event.content);
             setStreamingSourceRefs(event.source_refs || []);
             setHasStreamFinal(true);
@@ -130,6 +157,11 @@ export function ChatPage() {
       setStreamError(detail);
       pushToast(detail.includes('503') ? 'OpenAI unavailable. Please retry shortly.' : detail, 'error');
     } finally {
+      if (!hasFinalEventRef.current && frameRef.current !== null) {
+        window.cancelAnimationFrame(frameRef.current);
+        frameRef.current = null;
+        flushChunkBuffer();
+      }
       setIsStreaming(false);
     }
   };
@@ -147,7 +179,7 @@ export function ChatPage() {
       <h1 className='text-xl font-semibold'>Chat</h1>
       <div data-testid='chat-message-list' className='min-h-[18rem] flex-1 space-y-3 overflow-y-auto rounded border border-slate-700 p-3'>
         {messages.map((m) => <div key={m.id} className='rounded bg-slate-900/40 p-2'><div className='text-xs uppercase text-slate-400'>{m.role}</div><div className='whitespace-pre-wrap break-words'>{m.content}</div>{m.role === 'assistant' && <><CitationSection sourceRefs={m.source_refs || []} /><FollowUpSuggestions suggestions={getFollowUpSuggestions({ includeTimeline, includeFullText, sourceRefCount: (m.source_refs || []).length })} onSelect={setMessage} /></>}</div>)}
-        {isStreaming && <div data-testid='streaming-message' className='rounded bg-slate-900/40 p-2'><div className='text-xs uppercase text-slate-400'>assistant</div><div className='min-h-[2.5rem] whitespace-pre-wrap break-words'>{streamingMessage || 'Streaming response...'}</div><CitationSection sourceRefs={streamingSourceRefs} />{hasStreamFinal && <FollowUpSuggestions suggestions={getFollowUpSuggestions({ includeTimeline, includeFullText, sourceRefCount: streamingSourceRefs.length })} onSelect={setMessage} />}</div>}
+        {isStreaming && <div data-testid='streaming-message' className='rounded bg-slate-900/40 p-2'><div className='text-xs uppercase text-slate-400'>assistant</div><div className='min-h-[4rem] whitespace-pre-wrap break-words leading-relaxed'>{streamingMessage || ' '}</div>{!hasStreamFinal && <div data-testid='streaming-indicator' aria-live='polite' className='mt-2 inline-flex items-center gap-1 text-xs text-slate-400'><span className='h-1.5 w-1.5 animate-pulse rounded-full bg-slate-400 [animation-delay:0ms]' /><span className='h-1.5 w-1.5 animate-pulse rounded-full bg-slate-400 [animation-delay:120ms]' /><span className='h-1.5 w-1.5 animate-pulse rounded-full bg-slate-400 [animation-delay:240ms]' /><span>Assistant is typing</span></div>}<CitationSection sourceRefs={streamingSourceRefs} />{hasStreamFinal && <FollowUpSuggestions suggestions={getFollowUpSuggestions({ includeTimeline, includeFullText, sourceRefCount: streamingSourceRefs.length })} onSelect={setMessage} />}</div>}
         {streamError && <div className='text-sm text-rose-400'>Streaming failed. Retry sending your message. ({streamError})</div>}
         {(session.isLoading || isStreaming) && <div>{isStreaming ? 'Streaming...' : 'Loading...'}</div>}
       </div>
