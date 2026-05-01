@@ -295,6 +295,11 @@ export interface DocumentRelationshipListItem {
   direction: 'source' | 'target';
   created_at: string;
   updated_at: string | null;
+  explanation_metadata?: {
+    confidence?: number;
+    signals?: string[];
+    reason?: string;
+  } | null;
 }
 
 

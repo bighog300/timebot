@@ -111,6 +111,7 @@ def list_document_relationships(
                 direction="source" if is_source else "target",
                 created_at=item.created_at,
                 updated_at=item.reviewed_at,
+                explanation_metadata=(item.metadata_json or {}).get("explanation", {}),
             )
         )
     return payload

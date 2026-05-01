@@ -118,6 +118,13 @@ export function DocumentDetailPage() {
         <span className="text-xs text-slate-400">{item.confidence != null ? `${Math.round(item.confidence * 100)}% confidence` : 'n/a confidence'}</span>
       </div>
       <p className="mt-2 text-slate-300">{item.related_document_snippet || 'No summary/snippet available.'}</p>
+      {item.explanation_metadata && (item.explanation_metadata.reason || (item.explanation_metadata.signals?.length ?? 0) > 0) && (
+        <p className="mt-2 text-xs text-slate-400">
+          <span className="font-medium text-slate-300">Why related:</span>{' '}
+          {item.explanation_metadata.reason || 'Similarity signals detected.'}
+          {(item.explanation_metadata.signals?.length ?? 0) > 0 ? ` (${item.explanation_metadata.signals?.join(', ')})` : ''}
+        </p>
+      )}
     </li>
   );
   return (

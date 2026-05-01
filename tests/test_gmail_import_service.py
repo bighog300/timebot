@@ -94,6 +94,8 @@ def test_attachment_import_and_skip_and_duplicates(db, test_user, monkeypatch):
     ).first()
     assert review is not None
     assert review.status == "confirmed"
+    assert review.metadata_json["explanation"]["signals"] == ["structural_attachment"]
+    assert review.metadata_json["explanation"]["reason"] == "attachment relationship"
 
 
 def test_thread_relationship_created_and_deduplicated(db, test_user, monkeypatch):
@@ -114,3 +116,5 @@ def test_thread_relationship_created_and_deduplicated(db, test_user, monkeypatch
     ).all()
     assert len(rels) == 1
     assert rels[0].confidence >= 0.9
+    assert rels[0].relationship_metadata["explanation"]["signals"] == ["structural_email_thread"]
+    assert rels[0].relationship_metadata["explanation"]["reason"] == "same email thread"

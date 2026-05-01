@@ -54,6 +54,7 @@ describe('DocumentDetailPage related documents panel', () => {
           id: 'rel-1', status: 'confirmed', relationship_type: 'related', confidence: 0.88,
           related_document_id: 'doc-2', related_document_title: 'Doc 2', related_document_name: 'Doc 2',
           related_document_snippet: 'Snippet 2', direction: 'source', created_at: new Date().toISOString(), updated_at: null,
+          explanation_metadata: { reason: 'AI detected shared terms.', signals: ['ai_detected', 'shared_terms'] },
         },
         {
           id: 'rel-2', status: 'confirmed', relationship_type: 'thread', confidence: 0.99,
@@ -73,6 +74,22 @@ describe('DocumentDetailPage related documents panel', () => {
     expect(screen.getByText('Related Documents')).toBeInTheDocument();
     expect(await screen.findByText('Doc 2')).toBeInTheDocument();
     expect(screen.getByText('Snippet 2')).toBeInTheDocument();
+    expect(screen.getByText(/Why related:/)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Doc 2' })).toHaveAttribute('href', '/documents/doc-2');
+  });
+
+  it('does not crash when explanation metadata is missing', async () => {
+    mockUseDocumentRelationships.mockReturnValue({
+      isLoading: false, isError: false, isSuccess: true,
+      data: [
+        {
+          id: 'rel-4', status: 'confirmed', relationship_type: 'related', confidence: 0.51,
+          related_document_id: 'doc-5', related_document_title: 'Doc 5', related_document_name: 'Doc 5',
+          related_document_snippet: 'Snippet 5', direction: 'source', created_at: new Date().toISOString(), updated_at: null,
+        },
+      ],
+    });
+    renderPage();
+    expect(await screen.findByText('Doc 5')).toBeInTheDocument();
   });
 });
