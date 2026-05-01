@@ -391,6 +391,12 @@ export interface GeneratedReport {
   title: string;
   prompt: string;
   markdown_content?: string;
+  sections?: {
+    executive_summary?: string | null;
+    summary?: string | null;
+    timeline_analysis?: string | null;
+    relationship_analysis?: string | null;
+  } | null;
   source_refs: SourceRef[];
   created_at: string;
 }
