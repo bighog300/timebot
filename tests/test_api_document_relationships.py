@@ -91,3 +91,40 @@ def test_document_relationships_enforces_permissions(client, db, sample_document
     resp = client.get(f"/api/v1/documents/{sample_document.id}/relationships")
     assert resp.status_code == 200
     assert resp.json() == []
+
+
+def test_document_relationships_include_structural_and_ai_with_status(client, db, sample_document, test_user):
+    structural = _make_doc(db, sample_document, filename="thread-related.pdf", user_id=test_user.id)
+    ai_related = _make_doc(db, sample_document, filename="ai-related.pdf", user_id=test_user.id)
+    db.add_all([
+        DocumentRelationshipReview(
+            source_document_id=sample_document.id,
+            target_document_id=structural.id,
+            relationship_type="thread",
+            status="confirmed",
+            confidence=1.0,
+            metadata_json={"explanation": {"reason": "Same Gmail thread"}},
+        ),
+        DocumentRelationshipReview(
+            source_document_id=sample_document.id,
+            target_document_id=ai_related.id,
+            relationship_type="related",
+            status="pending",
+            confidence=0.82,
+            metadata_json={"explanation": {"signals": ["ai_detected"], "reason": "AI semantic similarity"}},
+        ),
+    ])
+    db.commit()
+
+    resp = client.get(f"/api/v1/documents/{sample_document.id}/relationships")
+    assert resp.status_code == 200
+    rows = resp.json()
+    by_type = {row["relationship_type"]: row for row in rows}
+
+    assert "thread" in by_type
+    assert by_type["thread"]["status"] == "confirmed"
+    assert by_type["thread"]["explanation_metadata"]["reason"] == "Same Gmail thread"
+
+    assert "related" in by_type
+    assert by_type["related"]["status"] == "pending"
+    assert by_type["related"]["explanation_metadata"]["signals"] == ["ai_detected"]

@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 import logging
 from uuid import UUID
 
-from sqlalchemy.orm import Session, aliased, joinedload
+from sqlalchemy.orm import Session, aliased, contains_eager, joinedload
 
 from app.models.document import Document
 from app.models.intelligence import DocumentRelationshipReview
@@ -13,19 +13,22 @@ logger = logging.getLogger(__name__)
 
 class RelationshipReviewService:
     @staticmethod
-    def _base_query(db: Session):
-        return db.query(DocumentRelationshipReview).options(
-            joinedload(DocumentRelationshipReview.source_document).joinedload(Document.intelligence),
-            joinedload(DocumentRelationshipReview.target_document).joinedload(Document.intelligence),
+    def _base_query(db: Session, *, source_doc, target_doc):
+        return (
+            db.query(DocumentRelationshipReview)
+            .join(source_doc, source_doc.id == DocumentRelationshipReview.source_document_id)
+            .join(target_doc, target_doc.id == DocumentRelationshipReview.target_document_id)
+            .options(
+                contains_eager(DocumentRelationshipReview.source_document, alias=source_doc).joinedload(Document.intelligence),
+                contains_eager(DocumentRelationshipReview.target_document, alias=target_doc).joinedload(Document.intelligence),
+            )
         )
 
     def list_items(self, db: Session, *, user_id: UUID, status: str = "pending") -> list[DocumentRelationshipReview]:
         source_doc = aliased(Document)
         target_doc = aliased(Document)
         items = (
-            self._base_query(db)
-            .join(source_doc, source_doc.id == DocumentRelationshipReview.source_document_id)
-            .join(target_doc, target_doc.id == DocumentRelationshipReview.target_document_id)
+            self._base_query(db, source_doc=source_doc, target_doc=target_doc)
             .filter(source_doc.user_id == user_id, target_doc.user_id == user_id, DocumentRelationshipReview.status == status)
             .order_by(DocumentRelationshipReview.created_at.asc())
             .all()
@@ -37,9 +40,7 @@ class RelationshipReviewService:
         source_doc = aliased(Document)
         target_doc = aliased(Document)
         return (
-            self._base_query(db)
-            .join(source_doc, source_doc.id == DocumentRelationshipReview.source_document_id)
-            .join(target_doc, target_doc.id == DocumentRelationshipReview.target_document_id)
+            self._base_query(db, source_doc=source_doc, target_doc=target_doc)
             .filter(
                 source_doc.user_id == user_id,
                 target_doc.user_id == user_id,
@@ -61,9 +62,7 @@ class RelationshipReviewService:
         source_doc = aliased(Document)
         target_doc = aliased(Document)
         query = (
-            self._base_query(db)
-            .join(source_doc, source_doc.id == DocumentRelationshipReview.source_document_id)
-            .join(target_doc, target_doc.id == DocumentRelationshipReview.target_document_id)
+            self._base_query(db, source_doc=source_doc, target_doc=target_doc)
             .filter(
                 source_doc.user_id == user_id,
                 target_doc.user_id == user_id,
