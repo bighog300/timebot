@@ -628,7 +628,18 @@ def test_format_chat_context_includes_labeled_sections_and_metadata(db, test_use
         test_user.id,
         "source.txt",
         "Source summary for alpha",
-        {"timeline_events": [{"title": "Kickoff", "date": "2025-01-01", "description": "Project kickoff"}]},
+        {
+            "timeline_events": [
+                {
+                    "title": "Kickoff",
+                    "date": "2025-01-01",
+                    "description": "Project kickoff",
+                    "is_milestone": True,
+                    "milestone_reason": "keyword",
+                    "signal_strength": "strong",
+                }
+            ],
+        },
     )
     target = _mk_doc(db, test_user.id, "target.txt", "Target summary")
     source.extracted_metadata = {
@@ -653,6 +664,9 @@ def test_format_chat_context_includes_labeled_sections_and_metadata(db, test_use
     assert "Full Text Excerpts" in formatted
     assert "source.txt" in formatted
     assert "[2025-01-01]" in formatted
+    assert "milestone=yes" in formatted
+    assert "reason=keyword" in formatted
+    assert "signal_strength=strong" in formatted
     assert "explanation:" in formatted
     assert "approved" in formatted
     assert ctx["source_refs"]
@@ -685,22 +699,6 @@ def test_format_chat_context_includes_document_clusters_when_available(db, test_
 
 
 def test_streaming_and_non_streaming_use_same_formatted_context(client, monkeypatch, db):
-    from app.models.user import User
-    from app.models.relationships import DocumentRelationship
-
-    user = db.query(User).first()
-    source = _mk_doc(db, user.id, "alpha.txt", "Alpha summary with milestone")
-    target = _mk_doc(db, user.id, "beta.txt", "Beta summary with downstream milestone")
-    db.add(
-        DocumentRelationship(
-            source_doc_id=source.id,
-            target_doc_id=target.id,
-            relationship_type="related_to",
-            relationship_metadata={"explanation": {"signals": ["shared_participants"]}},
-        )
-    )
-    db.commit()
-
     captured: dict[str, str] = {}
 
     class DummyChunk:
@@ -721,6 +719,37 @@ def test_streaming_and_non_streaming_use_same_formatted_context(client, monkeypa
 
     monkeypatch.setattr("app.config.settings.OPENAI_API_KEY", "test-key")
     monkeypatch.setattr("app.api.v1.chat.openai_client_service._client", type("C", (), {"chat": DummyChat()})())
+    monkeypatch.setattr(
+        "app.api.v1.chat.retrieve_chat_context",
+        lambda *_args, **_kwargs: {
+            "documents": [
+                {
+                    "document_id": "d1",
+                    "title": "alpha.txt",
+                    "summary": "Alpha summary with milestone",
+                    "timeline_events": [
+                        {
+                            "title": "Launch complete",
+                            "date": "2025-03-01",
+                            "description": "Launch was completed",
+                            "is_milestone": True,
+                            "milestone_reason": "high_confidence, keyword",
+                            "signal_strength": "strong",
+                        }
+                    ],
+                    "relationships": [
+                        {
+                            "target_document_title": "beta.txt",
+                            "relationship_type": "related_to",
+                            "relationship_metadata": {"explanation": "shared_participants"},
+                        }
+                    ],
+                }
+            ],
+            "source_refs": [{"document_id": "d1", "document_title": "alpha.txt", "kind": "summary", "quote": "Alpha summary with milestone", "page_number": None}],
+            "document_clusters": [{"cluster_size": 2, "relationship_count": 1, "document_titles": ["alpha.txt", "beta.txt"], "dominant_signals": ["shared_participants"]}],
+        },
+    )
 
     s = client.post("/api/v1/chat/sessions", json={"title": "ctx-shared"}).json()
     non_stream = client.post(f"/api/v1/chat/sessions/{s['id']}/messages", json={"message": "alpha"})
@@ -737,6 +766,40 @@ def test_streaming_and_non_streaming_use_same_formatted_context(client, monkeypa
     assert non_stream_context == stream_context
     assert "Document Clusters" in non_stream_context
     assert "shared_participants" in non_stream_context
+    assert "milestone=yes" in non_stream_context
+    assert "reason=high_confidence" in non_stream_context or "reason=high_confidence, keyword" in non_stream_context
+    assert "signal_strength=strong" in non_stream_context
+
+
+def test_format_chat_context_includes_timeline_gap_section_only_when_present():
+    from app.services.chat_retrieval import format_chat_context
+
+    with_gaps = format_chat_context(
+        {
+            "documents": [
+                {
+                    "title": "timeline-doc.txt",
+                    "summary": "summary",
+                    "timeline_events": [
+                        {
+                            "title": "Kickoff",
+                            "date": "2025-01-01",
+                            "description": "kickoff",
+                            "is_milestone": True,
+                            "milestone_reason": "keyword",
+                            "signal_strength": "strong",
+                        }
+                    ],
+                }
+            ],
+            "timeline_gaps": [{"start_date": "2025-01-01", "end_date": "2025-03-15", "gap_duration_days": 73}],
+        }
+    )
+    without_gaps = format_chat_context({"documents": [{"title": "timeline-doc.txt", "summary": "summary", "timeline_events": []}]})
+
+    assert "Timeline Gaps" in with_gaps
+    assert "73 days" in with_gaps
+    assert "Timeline Gaps" not in without_gaps
 
 
 def test_answer_mode_detection_keywords():
