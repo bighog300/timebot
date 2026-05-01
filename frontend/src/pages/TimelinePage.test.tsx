@@ -138,6 +138,29 @@ describe('TimelinePage', () => {
     expect(navigateMock).toHaveBeenCalledWith(expect.stringMatching(/^\/documents\/.+/));
   });
 
+  it('renders milestone badge when event is flagged as milestone', async () => {
+    vi.mocked(api.getTimeline).mockResolvedValue(
+      makeTimelineResponse([
+        { title: 'Launch Complete', date: '2025-03-01', confidence: 0.91, is_milestone: true, milestone_reason: 'high_confidence, keyword', document_id: 'doc-1', document_title: 'Roadmap.pdf', source_quote: 'launched', start_date: null, end_date: null },
+      ]),
+    );
+    renderPage();
+    expect(await screen.findByText('Milestone')).toBeTruthy();
+    expect(screen.getByTestId('timeline-milestone')).toBeTruthy();
+  });
+
+  it('renders non-milestone events without milestone badge', async () => {
+    vi.mocked(api.getTimeline).mockResolvedValue(
+      makeTimelineResponse([
+        { title: 'General Update', date: '2025-03-02', confidence: 0.4, is_milestone: false, document_id: 'doc-2', document_title: 'Notes.pdf', source_quote: 'update', start_date: null, end_date: null },
+      ]),
+    );
+    renderPage();
+    expect(await screen.findByText('General Update')).toBeTruthy();
+    expect(screen.queryByText('Milestone')).toBeNull();
+    expect(screen.getByTestId('timeline-range-bar')).toBeTruthy();
+  });
+
   it('updates zoom state and width scaling and only shows pan hint when scrollable', async () => {
     vi.mocked(api.getTimeline).mockResolvedValue(
       makeTimelineResponse([{ title: 'Long Program', start_date: '2025-01-01', end_date: '2025-10-01', confidence: 0.95, document_id: 'd1', document_title: 'doc', source_quote: 'Long range', date: null }]),

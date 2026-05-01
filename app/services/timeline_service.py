@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 import logging
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 
 try:
     from sqlalchemy.orm import Session
@@ -21,6 +21,9 @@ except ModuleNotFoundError:  # pragma: no cover
         is_archived=_ModelFieldFallback(); ai_category_id=_ModelFieldFallback(); user_category_id=_ModelFieldFallback(); source=_ModelFieldFallback(); file_type=_ModelFieldFallback(); upload_date=_ModelFieldFallback(); id=_ModelFieldFallback()
 
 class TimelineService:
+    _MILESTONE_CONFIDENCE_THRESHOLD = 0.8
+    _MILESTONE_KEYWORDS = ("signed", "approved", "completed", "launched", "deadline")
+
     def build_timeline(self, db: Session, *, group_by: str = "day", category_ids: Optional[List[str]] = None, sources: Optional[List[str]] = None, file_types: Optional[List[str]] = None, document_id: Optional[str] = None, start_date: Optional[str] = None, end_date: Optional[str] = None, category: Optional[str] = None, min_confidence: float = 0.0, limit: int = 500) -> Dict[str, Any]:
         query = db.query(Document).filter(Document.is_archived.is_(False))
         if category_ids:
@@ -49,10 +52,49 @@ class TimelineService:
             if sd and d and d < sd: continue
             if ed and d and d > ed: continue
             filtered.append(ev)
+        self._annotate_milestones(filtered)
         filtered.sort(key=lambda e: e.get("start_date") or e.get("date") or "", reverse=False)
         buckets = [{"period": "all", "count": len(filtered), "events": filtered}]
         logging.getLogger(__name__).info("timeline_service_result docs=%s events_returned=%s", len(docs), len(filtered))
         return {"group_by": group_by, "total_documents": len(docs), "total_events": len(filtered), "events": filtered, "buckets": buckets}
+
+    def _annotate_milestones(self, events: List[Dict[str, Any]]) -> None:
+        if not events:
+            return
+
+        normalized_title_docs: Dict[str, Set[str]] = {}
+        for event in events:
+            normalized_title = self._normalize_event_title(event.get("title"))
+            if not normalized_title:
+                continue
+            doc_id = str(event.get("document_id") or "")
+            normalized_title_docs.setdefault(normalized_title, set()).add(doc_id)
+
+        for event in events:
+            reasons: List[str] = []
+            title = str(event.get("title") or "")
+            normalized_title = self._normalize_event_title(title)
+            confidence = float(event.get("confidence") or 0.0)
+            if confidence >= self._MILESTONE_CONFIDENCE_THRESHOLD:
+                reasons.append("high_confidence")
+
+            lowered = f"{title} {event.get('description') or ''}".lower()
+            if any(keyword in lowered for keyword in self._MILESTONE_KEYWORDS):
+                reasons.append("keyword")
+
+            if normalized_title and len(normalized_title_docs.get(normalized_title, set())) > 1:
+                reasons.append("repeated_across_documents")
+
+            if event.get("cluster_id") or event.get("document_cluster_id"):
+                reasons.append("document_cluster")
+
+            event["is_milestone"] = bool(reasons)
+            event["milestone_reason"] = ", ".join(reasons[:2]) if reasons else None
+
+    def _normalize_event_title(self, value: Any) -> str:
+        if not isinstance(value, str):
+            return ""
+        return re.sub(r"\s+", " ", re.sub(r"[^\w\s]|_", " ", value).strip().lower()).strip()
 
     def _events_for_document(self, doc: Document) -> List[Dict[str, Any]]:
         entities = doc.entities or {}
@@ -81,6 +123,9 @@ class TimelineService:
                 'document_title': doc.filename,
                 'category': event.get('category'),
                 'source': event.get('source', 'extracted'),
+                'is_milestone': bool(event.get('is_milestone', False)),
+                'milestone_reason': event.get('milestone_reason'),
+                'cluster_id': event.get('cluster_id') or getattr(doc, 'cluster_id', None),
             })
         return normalized
 

@@ -94,3 +94,30 @@ def test_normalization_collapses_case_and_punctuation_duplicates():
     analysis = {"summary": "s", "key_points": [], "tags": [], "entities": {}, "action_items": [], "timeline_events": [{"title": "contract signed!!!", "date": "2026-05-01"}]}
     document_intelligence_service._upsert_from_analysis(FakeDB([doc]), doc, analysis)
     assert doc.entities["timeline_events"] == []
+
+
+def test_milestone_detected_for_keyword_event():
+    doc = _doc()
+    doc.entities = {"timeline_events": [{"title": "Contract Signed", "date": "2026-07-01", "confidence": 0.4}]}
+    res = timeline_service.build_timeline(FakeDB([doc]))
+    assert res["events"][0]["is_milestone"] is True
+    assert "keyword" in (res["events"][0]["milestone_reason"] or "")
+
+
+def test_milestone_detected_for_repeated_events_across_documents():
+    doc_a = _doc()
+    doc_a.entities = {"timeline_events": [{"title": "Launch Plan", "date": "2026-06-01", "confidence": 0.2}]}
+    doc_b = _doc()
+    doc_b.entities = {"timeline_events": [{"title": "launch plan!", "date": "2026-06-03", "confidence": 0.2}]}
+    res = timeline_service.build_timeline(FakeDB([doc_a, doc_b]))
+    assert res["total_events"] == 2
+    assert all(event["is_milestone"] for event in res["events"])
+    assert all("repeated_across_documents" in (event.get("milestone_reason") or "") for event in res["events"])
+
+
+def test_non_milestone_event_remains_unflagged():
+    doc = _doc()
+    doc.entities = {"timeline_events": [{"title": "Status update", "date": "2026-09-01", "confidence": 0.3}]}
+    res = timeline_service.build_timeline(FakeDB([doc]))
+    assert res["events"][0]["is_milestone"] is False
+    assert res["events"][0]["milestone_reason"] is None
