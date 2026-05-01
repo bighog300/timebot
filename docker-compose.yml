@@ -98,7 +98,7 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: doc-celery-worker
-    command: celery -A app.workers.celery_app worker --loglevel=info -Q documents,maintenance
+    command: celery -A app.workers.celery_app worker --loglevel=info -Q ingestion,ai_analysis,maintenance
     env_file:
       - .env
     environment:
