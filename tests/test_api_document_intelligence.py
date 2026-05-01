@@ -1,7 +1,9 @@
 import uuid
+import logging
 
 from app.models.category import Category
 from app.models.intelligence import DocumentActionItem, DocumentIntelligence, DocumentReviewItem
+from app.services.document_intelligence import document_intelligence_service
 
 
 def test_get_document_intelligence_returns_payload(client, db, sample_document):
@@ -282,6 +284,22 @@ def test_review_item_bulk_resolve_and_bulk_dismiss(client, db, sample_document):
     assert invalid_transition.status_code == 200
     assert invalid_transition.json()["updated_count"] == 0
     assert invalid_transition.json()["skipped_count"] == 1
+
+
+def test_document_intelligence_persistence_logs_duration(db, sample_document, caplog):
+    analysis = {
+        "summary": "safe summary",
+        "key_points": ["k1"],
+        "tags": ["t1"],
+        "entities": {"people": ["A"]},
+        "timeline_events": [{"title": "Kickoff", "date": "2026-01-01"}],
+        "action_items": [],
+    }
+    with caplog.at_level(logging.INFO):
+        document_intelligence_service.create_from_analysis(db, sample_document, analysis)
+    timing = [r for r in caplog.records if r.msg == "document_intelligence_persistence_timing"]
+    assert timing and getattr(timing[-1], "duration_ms", None) is not None
+    assert "safe summary" not in caplog.text
 
 
 def test_action_item_bulk_complete_and_bulk_dismiss(client, db, sample_document):

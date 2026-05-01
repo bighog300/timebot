@@ -109,6 +109,7 @@ def _build_chat_payload(db: Session, user: User, payload: MessageRequest, sessio
     bot_settings = _get_or_create_chatbot_settings(db)
     if not openai_client_service.enabled:
         raise HTTPException(status_code=503, detail="Chat AI is unavailable: OPENAI_API_KEY is not configured.")
+    retrieval_start = time.perf_counter()
     context = retrieve_chat_context(
         db=db,
         query=payload.message,
@@ -118,6 +119,19 @@ def _build_chat_payload(db: Session, user: User, payload: MessageRequest, sessio
         include_full_text=payload.include_full_text and bot_settings.allow_full_text_retrieval,
         max_documents=bot_settings.max_documents,
         session_id=session_id,
+    )
+    retrieval_duration_ms = (time.perf_counter() - retrieval_start) * 1000
+    logger.info(
+        "chat_retrieval_timing",
+        extra={
+            "event": "chat_retrieval_timing",
+            "user_id": str(user.id),
+            "session_id": str(session_id) if session_id else None,
+            "duration_ms": round(retrieval_duration_ms, 2),
+            "document_count": len(context.get("documents", [])),
+            "source_ref_count": len(context.get("source_refs", [])),
+            "success": True,
+        },
     )
     if not context["documents"]:
         return bot_settings, context, None
@@ -193,6 +207,7 @@ def post_message(session_id: UUID, payload: MessageRequest, db: Session = Depend
     if not prompt:
         assistant_content = "Not enough information was found in accessible Timebot documents to answer this confidently."
     else:
+        model_call_start = time.perf_counter()
         try:
             response = openai_client_service.client.chat.completions.create(
                 model=bot_settings.model,
@@ -201,8 +216,28 @@ def post_message(session_id: UUID, payload: MessageRequest, db: Session = Depend
                 messages=_build_model_messages(db, bot_settings, prompt, prior_messages),
             )
         except APIError as exc:
+            logger.info(
+                "chat_model_call_timing",
+                extra={
+                    "event": "chat_model_call_timing",
+                    "user_id": str(user.id),
+                    "session_id": str(s.id),
+                    "duration_ms": round((time.perf_counter() - model_call_start) * 1000, 2),
+                    "success": False,
+                },
+            )
             _log_chat_request(session_id=s.id, user_id=user.id, endpoint_type="non_streaming", retrieval_count=len(context.get("source_refs", [])), history_count=len(prior_messages), success=False, latency_ms=(time.perf_counter()-start)*1000)
             raise HTTPException(status_code=503, detail=f"Chat AI request failed: {exc}") from exc
+        logger.info(
+            "chat_model_call_timing",
+            extra={
+                "event": "chat_model_call_timing",
+                "user_id": str(user.id),
+                "session_id": str(s.id),
+                "duration_ms": round((time.perf_counter() - model_call_start) * 1000, 2),
+                "success": True,
+            },
+        )
         assistant_content = (response.choices[0].message.content or "").strip() or "Not enough information was found in accessible Timebot documents."
         assistant_content = _append_sources(assistant_content, context["source_refs"])
     success = True
@@ -234,6 +269,7 @@ def stream_message(session_id: UUID, payload: MessageRequest, db: Session = Depe
             yield _event("chunk", {"delta": assistant_text})
         else:
             assistant_parts: list[str] = []
+            model_call_start = time.perf_counter()
             try:
                 stream = openai_client_service.client.chat.completions.create(
                     model=bot_settings.model,
@@ -243,6 +279,16 @@ def stream_message(session_id: UUID, payload: MessageRequest, db: Session = Depe
                     stream=True,
                 )
             except APIError as exc:
+                logger.info(
+                    "chat_model_call_timing",
+                    extra={
+                        "event": "chat_model_call_timing",
+                        "user_id": str(user.id),
+                        "session_id": str(s.id),
+                        "duration_ms": round((time.perf_counter() - model_call_start) * 1000, 2),
+                        "success": False,
+                    },
+                )
                 _log_chat_request(session_id=s.id, user_id=user.id, endpoint_type="streaming", retrieval_count=len(context.get("source_refs", [])), history_count=len(prior_messages), success=False, latency_ms=(time.perf_counter()-start)*1000)
                 raise HTTPException(status_code=503, detail=f"Chat AI request failed: {exc}") from exc
 
@@ -253,6 +299,16 @@ def stream_message(session_id: UUID, payload: MessageRequest, db: Session = Depe
                     assistant_parts.append(delta)
                     yield _event("chunk", {"delta": delta})
             assistant_text = "".join(assistant_parts).strip() or "Not enough information was found in accessible Timebot documents."
+            logger.info(
+                "chat_model_call_timing",
+                extra={
+                    "event": "chat_model_call_timing",
+                    "user_id": str(user.id),
+                    "session_id": str(s.id),
+                    "duration_ms": round((time.perf_counter() - model_call_start) * 1000, 2),
+                    "success": True,
+                },
+            )
 
         assistant_text = _append_sources(assistant_text, context["source_refs"])
         assistant_message = ChatMessage(session_id=s.id, role="assistant", content=assistant_text, source_refs=context["source_refs"])

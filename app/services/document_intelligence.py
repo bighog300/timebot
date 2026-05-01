@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 import logging
 import re
+import time
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -53,6 +54,7 @@ class DocumentIntelligenceService:
 
     def _upsert_from_analysis(self, db: Session, document: Document, analysis: dict) -> DocumentIntelligence:
         logger = logging.getLogger(__name__)
+        persist_start = time.perf_counter()
         confidence_score = ai_analyzer.compute_confidence(analysis)
         confidence_label = "high" if confidence_score >= 0.8 else "medium" if confidence_score >= 0.5 else "low"
 
@@ -105,10 +107,37 @@ class DocumentIntelligenceService:
 
         db.add(document)
         db.add(intelligence)
-        db.commit()
+        try:
+            db.commit()
+        except Exception:
+            logger.info(
+                "document_intelligence_persistence_timing",
+                extra={
+                    "event": "document_intelligence_persistence_timing",
+                    "user_id": str(document.user_id),
+                    "document_id": str(document.id),
+                    "duration_ms": round((time.perf_counter() - persist_start) * 1000, 2),
+                    "timeline_event_count": len(timeline_events) if isinstance(timeline_events, list) else 0,
+                    "action_item_count": len(analysis.get("action_items", []) or []),
+                    "success": False,
+                },
+            )
+            raise
         db.refresh(intelligence)
         persisted = (intelligence.entities or {}).get("timeline_events", []) if isinstance(intelligence.entities, dict) else []
         logger.info("timeline_post_persist document_id=%s persisted_count=%s", document.id, len(persisted) if isinstance(persisted, list) else 0)
+        logger.info(
+            "document_intelligence_persistence_timing",
+            extra={
+                "event": "document_intelligence_persistence_timing",
+                "user_id": str(document.user_id),
+                "document_id": str(document.id),
+                "duration_ms": round((time.perf_counter() - persist_start) * 1000, 2),
+                "timeline_event_count": len(timeline_events) if isinstance(timeline_events, list) else 0,
+                "action_item_count": len(analysis.get("action_items", []) or []),
+                "success": True,
+            },
+        )
         return intelligence
 
     def _refresh_gmail_thread_summary(self, db: Session, document: Document) -> None:
