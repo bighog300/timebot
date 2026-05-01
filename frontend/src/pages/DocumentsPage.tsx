@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui/States';
 import { ProcessingStatusIndicator } from '@/components/documents/ProcessingStatusIndicator';
+import { PageHeader, ResponsivePage } from '@/components/layout/ResponsiveLayout';
 import { useUIStore } from '@/store/uiStore';
 
 export function DocumentsPage() {
@@ -153,8 +154,10 @@ export function DocumentsPage() {
   };
 
   return (
-    <div className="space-y-4">
-      <h1 className="text-xl font-semibold">Documents</h1>
+    <ResponsivePage>
+      <PageHeader>
+        <h1 className="text-xl font-semibold">Documents</h1>
+      </PageHeader>
       <div
         className={`rounded-lg border-2 p-4 transition-colors sm:p-6 ${isDragging ? 'border-blue-400 bg-blue-950/30' : 'border-dashed border-slate-600 bg-slate-900/40'}`}
         onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
@@ -332,6 +335,6 @@ export function DocumentsPage() {
           )}
         </div>
       </Card>
-    </div>
+    </ResponsivePage>
   );
 }
