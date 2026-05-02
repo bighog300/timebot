@@ -4,6 +4,8 @@ import hashlib
 from celery.exceptions import MaxRetriesExceededError
 
 from app.config import settings
+from app.services.cost_protection import enforce_daily_cap, hard_daily_caps
+from app.services.usage import record_usage_once
 from app.services.error_sanitizer import sanitize_processing_error
 from app.workers.celery_app import celery_app
 
@@ -36,6 +38,8 @@ def process_document_task(self, document_id: str):
             return {"status": "error", "message": "Document not found"}
 
         logger.info("Process task starting task_id=%s document_id=%s queue_entry_id=%s", self.request.id, document_id, queue_entry.id)
+        caps = hard_daily_caps()
+        enforce_daily_cap(db, user_id=document.user_id, metric="processing_jobs_daily", cap=caps["processing_jobs_daily"])
         _update_queue_entry(
             db,
             queue_entry,
@@ -46,6 +50,17 @@ def process_document_task(self, document_id: str):
         )
         _notify(document_id, "processing", progress=5)
 
+        idempotency_key = f"process:{document_id}"
+        counted = record_usage_once(
+            db,
+            user_id=document.user_id,
+            metric="processing_jobs_daily",
+            idempotency_key=idempotency_key,
+            quantity=1,
+            metadata={"task_id": self.request.id},
+        )
+        if counted:
+            db.commit()
         document_processor.process_document(db, document, run_relationship_detection=False)
 
         if document.processing_status == "completed":
@@ -69,6 +84,17 @@ def process_document_task(self, document_id: str):
 
     except Exception as exc:
         logger.error("Task failed for document %s: %s", document_id, exc)
+        if queue_entry.attempts > 0:
+            caps = hard_daily_caps()
+            enforce_daily_cap(db, user_id=document.user_id, metric="failed_processing_retries_daily", cap=caps["failed_processing_retries_daily"])
+            if record_usage_once(
+                db,
+                user_id=document.user_id,
+                metric="failed_processing_retries_daily",
+                idempotency_key=f"retry:{document_id}:{self.request.retries}",
+                quantity=1,
+            ):
+                db.commit()
         try:
             _update_queue_entry(
                 db,

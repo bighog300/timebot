@@ -18,6 +18,8 @@ from app.schemas.document import (
 )
 from app.services.document_clusters import document_cluster_service
 from app.services.limit_enforcement import enforce_feature, enforce_limit
+from app.services.cost_protection import enforce_daily_cap, enforce_rate_limit, hard_daily_caps
+from app.services.usage import record_usage
 from app.schemas.review_workflow import (
     CategoryOverrideRequest,
     DocumentRelationshipListItemResponse,
@@ -156,6 +158,9 @@ def reprocess_document(document_id: UUID, db: Session = Depends(get_db), current
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
 
+    caps = hard_daily_caps()
+    enforce_rate_limit(db, user_id=current_user.id, metric="processing_requests_rate", max_calls=20)
+    enforce_daily_cap(db, user_id=current_user.id, metric="processing_jobs_daily", cap=caps["processing_jobs_daily"])
     enforce_limit(db, current_user.id, "processing_jobs_per_month", quantity=1)
     logger.info("Reprocess requested document_id=%s actor_id=%s", document_id, current_user.id)
     document.processing_status = "queued"
@@ -172,6 +177,9 @@ def reprocess_document(document_id: UUID, db: Session = Depends(get_db), current
 
     from app.workers.tasks import reprocess_document_task
     task_result = reprocess_document_task.apply_async(args=[str(document_id)])
+    record_usage(db, user_id=current_user.id, metric="processing_requests_rate", quantity=1)
+    record_usage(db, user_id=current_user.id, metric="processing_jobs_daily", quantity=1, metadata={"source": "api_reprocess"})
+    db.commit()
     logger.info("Reprocess queued document_id=%s actor_id=%s task_id=%s queue=ingestion", document_id, current_user.id, task_result.id)
     return {"message": "Reprocessing queued", "document_id": str(document_id), "task_id": task_result.id}
 

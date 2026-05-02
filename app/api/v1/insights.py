@@ -6,14 +6,20 @@ from app.schemas.intelligence import InsightsResponse, StructuredInsightsRespons
 from app.models.user import User
 from app.services.insights_service import insights_service
 from app.services.limit_enforcement import enforce_feature
+from app.services.cost_protection import enforce_rate_limit
+from app.services.usage import record_usage
 
 router = APIRouter(prefix="/insights", tags=["insights"], dependencies=[Depends(get_current_user)])
 
 
 @router.get('/overview', response_model=InsightsResponse)
 def insights_overview(lookback_days: int = Query(30, ge=1, le=365), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    enforce_rate_limit(db, user_id=current_user.id, metric="expensive_reads_rate", max_calls=30)
     enforce_feature(db, current_user.id, "insights_enabled")
-    return insights_service.build_dashboard(db=db, lookback_days=lookback_days)
+    result = insights_service.build_dashboard(db=db, lookback_days=lookback_days)
+    record_usage(db, user_id=current_user.id, metric="expensive_reads_rate", quantity=1)
+    db.commit()
+    return result
 
 
 @router.get('/trends')
