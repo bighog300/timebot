@@ -12,12 +12,21 @@ class TextExtractor:
             ft = file_type.lower().lstrip(".")
             if ft == "pdf":
                 return self._extract_pdf(file_path)
-            elif ft in ("docx", "doc"):
+            elif ft == "docx":
                 return self._extract_docx(file_path)
-            elif ft in ("xlsx", "xls"):
+            elif ft == "doc":
+                logger.warning("Legacy Office format unsupported for text extraction: %s", ft)
+                return None, None, None
+            elif ft == "xlsx":
                 return self._extract_xlsx(file_path)
-            elif ft in ("pptx", "ppt"):
+            elif ft == "xls":
+                logger.warning("Legacy Office format unsupported for text extraction: %s", ft)
+                return None, None, None
+            elif ft == "pptx":
                 return self._extract_pptx(file_path)
+            elif ft == "ppt":
+                logger.warning("Legacy Office format unsupported for text extraction: %s", ft)
+                return None, None, None
             elif ft == "txt":
                 return self._extract_txt(file_path)
             elif ft in ("jpg", "jpeg", "png", "gif", "tiff", "bmp"):
@@ -44,7 +53,12 @@ class TextExtractor:
 
             text = "\n".join(parts)
             if not text.strip() and page_count > 0:
+                logger.info("PDF OCR attempted file=%s", file_path)
                 text = self._pdf_ocr(file_path)
+                if text.strip():
+                    logger.info("PDF OCR succeeded file=%s", file_path)
+                else:
+                    logger.warning("PDF OCR failed file=%s", file_path)
 
             return text, page_count, len(text.split()) if text else 0
         except Exception as e:
@@ -67,7 +81,14 @@ class TextExtractor:
             from docx import Document
 
             doc = Document(file_path)
-            text = "\n".join(p.text for p in doc.paragraphs if p.text.strip())
+            parts = [p.text for p in doc.paragraphs if p.text.strip()]
+            for table in doc.tables:
+                for row in table.rows:
+                    for cell in row.cells:
+                        cell_text = (cell.text or "").strip()
+                        if cell_text:
+                            parts.append(cell_text)
+            text = "\n".join(parts)
             return text, None, len(text.split())
         except Exception as e:
             logger.error("DOCX extraction error: %s", e)
@@ -77,7 +98,7 @@ class TextExtractor:
         try:
             import openpyxl
 
-            wb = openpyxl.load_workbook(file_path, data_only=True)
+            wb = openpyxl.load_workbook(file_path, data_only=True, read_only=True)
             rows = []
             for sheet in wb.worksheets:
                 for row in sheet.iter_rows(values_only=True):
@@ -120,9 +141,13 @@ class TextExtractor:
             from PIL import Image
 
             text = pytesseract.image_to_string(Image.open(file_path))
+            if text.strip():
+                logger.info("Image OCR succeeded file=%s", file_path)
+            else:
+                logger.warning("Image OCR failed file=%s", file_path)
             return text, 1, len(text.split())
         except Exception as e:
-            logger.error("Image OCR error: %s", e)
+            logger.error("Image OCR attempted and failed file=%s error=%s", file_path, e)
             return None, None, None
 
 

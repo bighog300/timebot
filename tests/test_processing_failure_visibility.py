@@ -170,3 +170,21 @@ def test_whitespace_extracted_text_fails_without_ai_call(db, sample_document, tm
     assert sample_document.extracted_metadata["extracted_text_length"] == 0
     run_ai.assert_not_called()
     save_text.assert_not_called()
+
+
+def test_legacy_office_extraction_failure_has_clear_unsupported_message(db, sample_document, tmp_path):
+    processor = DocumentProcessor()
+    src = tmp_path / "legacy.doc"
+    src.write_bytes(b"legacy")
+    sample_document.original_path = str(src)
+    sample_document.file_type = "doc"
+    db.add(sample_document)
+    db.commit()
+
+    with patch("app.services.document_processor.text_extractor.extract", return_value=(None, None, None)):
+        processor.process_document(db, sample_document)
+
+    db.refresh(sample_document)
+    assert sample_document.processing_status == "failed"
+    assert sample_document.extracted_metadata["extraction_status"] == "failed"
+    assert "Legacy Office formats (.doc, .xls, .ppt) are unsupported." in sample_document.extracted_metadata["extraction_error"]
