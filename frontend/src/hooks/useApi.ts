@@ -481,14 +481,24 @@ export function useDocumentAuditHistory(documentId: string) {
   });
 }
 
-export function useInsightsOverview() {
+export function useInsightsAccess() {
   const authReady = useAuthReady();
-  return useQuery({ queryKey: keys.insightsOverview, queryFn: api.getInsightsOverview, enabled: authReady });
+  const subscription = useSubscription();
+  const plans = usePlans();
+  const currentPlanSlug = subscription.data?.plan.slug;
+  const currentPlan = (plans.data ?? []).find((plan) => plan.slug === currentPlanSlug) ?? (plans.data ?? []).find((plan) => plan.is_current);
+  const insightsEnabled = Boolean(currentPlan?.features?.insights_enabled);
+  return { authReady, insightsEnabled, isLoading: subscription.isLoading || plans.isLoading };
+}
+
+export function useInsightsOverview() {
+  const { authReady, insightsEnabled } = useInsightsAccess();
+  return useQuery({ queryKey: keys.insightsOverview, queryFn: api.getInsightsOverview, enabled: authReady && insightsEnabled });
 }
 
 export function useStructuredInsights() {
-  const authReady = useAuthReady();
-  return useQuery({ queryKey: keys.insightsStructured, queryFn: api.getStructuredInsights, enabled: authReady });
+  const { authReady, insightsEnabled } = useInsightsAccess();
+  return useQuery({ queryKey: keys.insightsStructured, queryFn: api.getStructuredInsights, enabled: authReady && insightsEnabled });
 }
 
 export function useConnections() {

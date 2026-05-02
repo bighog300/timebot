@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/services/api';
+import { useInsightsAccess } from '@/hooks/useApi';
 import { getUserFacingErrorMessage } from '@/lib/errors';
 import type { StructuredInsight, TimelineEvent } from '@/types/api';
 
@@ -71,7 +72,8 @@ const ZOOM_OPTIONS: Array<{ mode: TimelineZoom; label: string }> = [
 export function TimelinePage() {
   const navigate = useNavigate();
   const { data, isLoading, isError, error } = useQuery({ queryKey: ['timeline'], queryFn: api.getTimeline });
-  const insightsQuery = useQuery({ queryKey: ['insights-structured'], queryFn: api.getStructuredInsights });
+  const { authReady, insightsEnabled } = useInsightsAccess();
+  const insightsQuery = useQuery({ queryKey: ['insights-structured'], queryFn: api.getStructuredInsights, enabled: authReady && insightsEnabled });
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const [containerWidth, setContainerWidth] = useState<number>(0);
   const [zoomMode, setZoomMode] = useState<TimelineZoom>('fit');
