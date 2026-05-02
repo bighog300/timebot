@@ -1,4 +1,5 @@
 import logging
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from uuid import UUID
@@ -85,7 +86,8 @@ class DocumentProcessor:
             db.add(document)
             db.commit()
 
-    def process_document(self, db: Session, document: Document):
+    def process_document(self, db: Session, document: Document, run_relationship_detection: bool = True):
+        total_start = time.perf_counter()
         document.processing_status = "processing"
         db.add(document)
         db.commit()
@@ -94,6 +96,7 @@ class DocumentProcessor:
             file_path = Path(document.original_path)
             text = ""
 
+            extraction_start = time.perf_counter()
             if file_path.exists():
                 extracted_text, page_count, word_count = text_extractor.extract(file_path, document.file_type)
                 text = (extracted_text or "").strip()
@@ -139,6 +142,13 @@ class DocumentProcessor:
                     )
                     raise ValueError("Cannot reprocess: original uploaded file is missing from storage")
 
+            extraction_duration_ms = int((time.perf_counter() - extraction_start) * 1000)
+            logger.info(
+                "Document extraction completed doc_id=%s extraction_duration_ms=%s",
+                document.id,
+                extraction_duration_ms,
+            )
+
             if not text:
                 raise ValueError(_EMPTY_TEXT_ERROR_MESSAGE)
 
@@ -149,7 +159,7 @@ class DocumentProcessor:
 
             # Step 3: AI analysis
             if settings.ENABLE_AUTO_CATEGORIZATION:
-                self._run_ai_analysis(db, document, text)
+                self._run_ai_analysis(db, document, text, run_relationship_detection=run_relationship_detection)
 
             document.processing_status = "completed"
             document.processed_date = datetime.now(timezone.utc)
@@ -162,8 +172,14 @@ class DocumentProcessor:
         db.add(document)
         db.commit()
         db.refresh(document)
+        total_processing_duration_ms = int((time.perf_counter() - total_start) * 1000)
+        logger.info(
+            "Document processing finished doc_id=%s total_processing_duration_ms=%s",
+            document.id,
+            total_processing_duration_ms,
+        )
 
-    def _run_ai_analysis(self, db: Session, document: Document, text: str):
+    def _run_ai_analysis(self, db: Session, document: Document, text: str, run_relationship_detection: bool = True):
         logger.info("AI analysis started doc_id=%s text_length=%s model=%s", document.id, len(text), settings.OPENAI_MODEL)
         from app.models.category import Category
         from app.services.ai_analyzer import AIAnalysisError, ai_analyzer
@@ -171,6 +187,7 @@ class DocumentProcessor:
         from app.services.relationship_detection import relationship_detection_service
 
         categories = db.query(Category).all()
+        ai_start = time.perf_counter()
         try:
             analysis = ai_analyzer.analyze_document(
                 text=text,
@@ -203,25 +220,31 @@ class DocumentProcessor:
                 len(document.summary or ""),
                 len((getattr(intelligence, "summary", "") or "")),
             )
-            try:
-                logger.info("Starting relationship detection for document %s", document.id)
-                relationship_result = relationship_detection_service.detect_for_document(
-                    db=db,
-                    document_id=document.id,
-                )
-                logger.info(
-                    "Relationship detection completed for document %s: scanned=%s created=%s updated=%s",
-                    document.id,
-                    relationship_result.get("scanned", 0),
-                    relationship_result.get("created", 0),
-                    relationship_result.get("updated", 0),
-                )
-            except Exception as exc:
-                logger.exception("Relationship detection failed for document %s", document.id)
-                self._append_processing_warning(
-                    document,
-                    f"Relationship generation failed: {exc}",
-                )
+            ai_analysis_duration_ms = int((time.perf_counter() - ai_start) * 1000)
+            logger.info("AI analysis completed doc_id=%s ai_analysis_duration_ms=%s", document.id, ai_analysis_duration_ms)
+            if run_relationship_detection:
+                relationship_start = time.perf_counter()
+                try:
+                    logger.info("Starting relationship detection for document %s", document.id)
+                    relationship_result = relationship_detection_service.detect_for_document(
+                        db=db,
+                        document_id=document.id,
+                    )
+                    relationship_detection_duration_ms = int((time.perf_counter() - relationship_start) * 1000)
+                    logger.info(
+                        "Relationship detection completed for document %s: scanned=%s created=%s updated=%s relationship_detection_duration_ms=%s",
+                        document.id,
+                        relationship_result.get("scanned", 0),
+                        relationship_result.get("created", 0),
+                        relationship_result.get("updated", 0),
+                        relationship_detection_duration_ms,
+                    )
+                except Exception as exc:
+                    logger.exception("Relationship detection failed for document %s", document.id)
+                    self._append_processing_warning(
+                        document,
+                        f"Relationship generation failed: {exc}",
+                    )
         except AIAnalysisError as exc:
             self._append_processing_warning(document, str(exc))
             logger.warning("AI analysis failed doc_id=%s error=%s", document.id, exc)

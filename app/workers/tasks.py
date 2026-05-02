@@ -43,7 +43,7 @@ def process_document_task(self, document_id: str):
         )
         _notify(document_id, "processing", progress=5)
 
-        document_processor.process_document(db, document)
+        document_processor.process_document(db, document, run_relationship_detection=False)
 
         if document.processing_status == "completed":
             logger.info("Process task completed task_id=%s document_id=%s summary_length=%s", self.request.id, document_id, len(document.summary or ""))
