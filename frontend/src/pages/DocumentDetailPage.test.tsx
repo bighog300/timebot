@@ -350,3 +350,24 @@ describe('shouldContinuePolling', () => {
     expect(shouldContinuePolling({ processing_status: 'failed', enrichment_pending: false, enrichment_status: 'degraded' })).toBe(false);
   });
 });
+
+describe('delete cache invalidation', () => {
+  it('deleting a document invalidates timeline/gantt and insight caches', async () => {
+    const invalidateSpy = vi.spyOn(QueryClient.prototype, 'invalidateQueries');
+    vi.mocked(api.deleteDocument).mockResolvedValue(undefined as never);
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+
+    renderPage();
+    await screen.findByText('Contract.pdf');
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+
+    await vi.waitFor(() => {
+      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['timeline'] });
+      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['insights-structured'] });
+      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['document-clusters'] });
+    });
+
+    confirmSpy.mockRestore();
+    invalidateSpy.mockRestore();
+  });
+});

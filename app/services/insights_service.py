@@ -112,7 +112,12 @@ class InsightsService:
 
     def build_structured_insights(self, db: Session, *, user_id: Any) -> Dict[str, Any]:
         now = datetime.now(timezone.utc).isoformat()
-        docs = db.query(Document).filter(Document.user_id == user_id, Document.is_archived.is_(False)).all()
+        query = db.query(Document).filter(Document.user_id == user_id, Document.is_archived.is_(False))
+        if hasattr(Document, "deleted_at"):
+            query = query.filter(Document.deleted_at.is_(None))
+        if hasattr(Document, "status"):
+            query = query.filter(Document.status != "deleted")
+        docs = query.all()
         if not docs:
             return {"generated_at": now, "count": 0, "insights": []}
 
