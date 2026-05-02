@@ -213,7 +213,12 @@ export function DocumentsPage() {
                   <Link className="min-w-0 truncate break-words font-medium text-blue-300 hover:underline" to={`/documents/${doc.id}`}>
                     {doc.filename}
                   </Link>
-                  <ProcessingStatusIndicator status={doc.processing_status} processingError={doc.processing_error} />
+                  <ProcessingStatusIndicator
+                    status={doc.processing_stage || doc.processing_status}
+                    processingError={doc.processing_error}
+                    progress={doc.processing_progress}
+                    message={doc.processing_message}
+                  />
                   <div className="min-w-0">
                     {doc.processing_status === 'failed' && doc.processing_error && (
                       <div className="mb-1 rounded border border-red-700 bg-red-950/40 px-2 py-1 text-xs text-red-200">{doc.processing_error}</div>
@@ -234,7 +239,12 @@ export function DocumentsPage() {
                     <Link className="min-w-0 break-words font-medium text-blue-300 hover:underline" to={`/documents/${doc.id}`}>
                       {doc.filename}
                     </Link>
-                    <ProcessingStatusIndicator status={doc.processing_status} processingError={doc.processing_error} />
+                    <ProcessingStatusIndicator
+                      status={doc.processing_stage || doc.processing_status}
+                      processingError={doc.processing_error}
+                      progress={doc.processing_progress}
+                      message={doc.processing_message}
+                    />
                   </div>
                   {doc.processing_status === 'failed' && doc.processing_error && (
                     <div className="rounded border border-red-700 bg-red-950/40 px-3 py-2 text-xs text-red-200">{doc.processing_error}</div>
