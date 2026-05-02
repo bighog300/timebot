@@ -13,6 +13,7 @@ from app.models.processing_event import DocumentProcessingEvent
 from app.models.usage_event import UsageEvent
 from app.models.chat import ChatbotSettings, ChatMessage, ChatSession, GeneratedReport
 from app.models.prompt_template import PromptTemplate
+from app.models.billing import Plan, Subscription
 from app.models.relationships import (
     Connection,
     DocumentRelationship,
@@ -34,6 +35,8 @@ __all__ = [
     "ChatMessage",
     "GeneratedReport",
     "PromptTemplate",
+    "Plan",
+    "Subscription",
     "Category",
     "Connection",
     "Document",

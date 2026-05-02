@@ -11,6 +11,7 @@ def _ensure_role(user: User):
         user.role = "viewer"
     return user
 from app.services.auth import auth_service
+from app.services.subscriptions import ensure_default_free_subscription
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -30,6 +31,7 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)):
     db.add(user)
     db.commit()
     db.refresh(user)
+    ensure_default_free_subscription(db, user.id)
     token = auth_service.create_access_token(user)
     return AuthResponse(access_token=token, user=_ensure_role(user))
 

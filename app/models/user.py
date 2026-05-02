@@ -26,6 +26,7 @@ class User(Base):
 
     documents = relationship("Document", back_populates="owner")
     connections = relationship("Connection", back_populates="owner")
+    subscriptions = relationship("Subscription", back_populates="user", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<User(email='{self.email}', active={self.is_active})>"
