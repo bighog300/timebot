@@ -125,12 +125,22 @@ def reprocess_document_task(document_id: str):
 
 @celery_app.task(name="app.workers.tasks.detect_relationships_task")
 def detect_relationships_task(document_id: str):
+    import time
     from app.db.base import SessionLocal
     from app.services.relationship_detection import relationship_detection_service
 
     db = SessionLocal()
     try:
+        started = time.perf_counter()
         result = relationship_detection_service.detect_for_document(db=db, document_id=document_id)
+        duration_ms = int((time.perf_counter() - started) * 1000)
+        logger.info(
+            "Relationship task completed document_id=%s candidate_count=%s relationship_count=%s relationship_detection_duration_ms=%s",
+            document_id,
+            result.get("scanned", 0),
+            result.get("created", 0),
+            duration_ms,
+        )
         _finalize_enrichment_if_ready(db, document_id, task_name="relationships", task_status="complete")
         return result
     except Exception as exc:

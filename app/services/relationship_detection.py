@@ -6,6 +6,8 @@ from difflib import SequenceMatcher
 from itertools import combinations
 import logging
 import re
+import hashlib
+import json
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
@@ -47,6 +49,7 @@ except ModuleNotFoundError:  # pragma: no cover - local test fallback when deps 
 from app.services.embedding_service import embedding_service
 from app.services.prompt_templates import get_active_prompt_content
 from app.services.relationship_review import relationship_review_service
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -79,12 +82,13 @@ class RelationshipDetectionService:
         clean_reason = reason.strip() if isinstance(reason, str) and reason.strip() else "relationship detected"
         return {"confidence": clean_confidence, "signals": clean_signals, "reason": clean_reason}
 
-    def detect_for_document(self, db: Session, document_id: UUID, limit: int = 50) -> Dict[str, int]:
+    def detect_for_document(self, db: Session, document_id: UUID, limit: int | None = None) -> Dict[str, int]:
         logger.info("Relationship detection started doc_id=%s", document_id)
         doc = db.query(Document).filter(Document.id == document_id).first()
         if not doc:
             logger.warning("Relationship detection skipped; source document missing doc_id=%s", document_id)
             return {"created": 0, "updated": 0, "scanned": 0}
+        effective_limit = int(limit if limit is not None else getattr(settings, "RELATIONSHIP_CANDIDATE_LIMIT", 50))
 
         candidates = (
             db.query(Document)
@@ -95,19 +99,82 @@ class RelationshipDetectionService:
                 Document.user_id == doc.user_id,
             )
             .order_by(Document.upload_date.desc())
-            .limit(limit)
+            .limit(effective_limit)
             .all()
         )
+        candidate_count = len(candidates)
+        relationship_input_hash = self._relationship_input_hash(doc, candidates)
+        metadata = doc.extracted_metadata if isinstance(doc.extracted_metadata, dict) else {}
+        relationship_metadata = metadata.get("relationship_detection", {}) if isinstance(metadata.get("relationship_detection", {}), dict) else {}
+        if relationship_metadata.get("input_hash") == relationship_input_hash:
+            logger.info(
+                "Relationship detection skipped unchanged_input doc_id=%s candidate_count=%s configured_limit=%s",
+                document_id,
+                candidate_count,
+                effective_limit,
+            )
+            relationship_metadata.update(
+                {
+                    "last_skipped_at": datetime.now().isoformat(),
+                    "last_skip_reason": "unchanged_input",
+                    "candidate_count": candidate_count,
+                    "candidate_limit": effective_limit,
+                }
+            )
+            metadata["relationship_detection"] = relationship_metadata
+            doc.extracted_metadata = metadata
+            db.add(doc)
+            db.commit()
+            return {"created": 0, "updated": 0, "scanned": candidate_count, "skipped": 1}
 
-        logger.info("Relationship detection compare-docs count=%d source_doc_id=%s", len(candidates), document_id)
+        logger.info(
+            "Relationship detection compare-docs count=%d source_doc_id=%s configured_limit=%s provider=%s model=%s",
+            candidate_count,
+            document_id,
+            effective_limit,
+            "embedding" if embedding_service.enabled else "none",
+            getattr(settings, "OPENAI_EMBEDDING_MODEL", "n/a") if embedding_service.enabled else "n/a",
+        )
         logger.info("Relationship detection source-intelligence entity_keys=%s", sorted((doc.entities or {}).keys()))
         matches = [self._score_pair(doc, other, db=db, log_prefix="detect_for_document") for other in candidates]
         detected = [m for m in matches if m is not None]
         logger.info("Relationship candidates pre-threshold count=%d doc_id=%s", len(matches), document_id)
         logger.info("Relationship candidates found=%d doc_id=%s", len(detected), document_id)
         persisted = self._persist_candidates(db, detected)
-        persisted["scanned"] = len(candidates)
+        metadata["relationship_detection"] = {
+            "input_hash": relationship_input_hash,
+            "last_run_at": datetime.now().isoformat(),
+            "candidate_count": candidate_count,
+            "candidate_limit": effective_limit,
+        }
+        doc.extracted_metadata = metadata
+        db.add(doc)
+        db.commit()
+        logger.info("Relationship detection relationship_count_created=%s doc_id=%s", persisted.get("created", 0), document_id)
+        persisted["scanned"] = candidate_count
         return persisted
+
+    def _relationship_input_hash(self, doc: Document, candidates: list[Document]) -> str:
+        blob = {
+            "source": {
+                "id": str(getattr(doc, "id", "")),
+                "summary": getattr(doc, "summary", "") or "",
+                "raw_text": getattr(doc, "raw_text", "") or "",
+                "filename": getattr(doc, "filename", "") or "",
+                "entities": getattr(doc, "entities", {}) or {},
+                "ai_tags": list(getattr(doc, "ai_tags", []) or []),
+                "user_tags": list(getattr(doc, "user_tags", []) or []),
+            },
+            "candidates": [
+                {
+                    "id": str(getattr(item, "id", "")),
+                    "updated_at": getattr(item, "updated_at", None).isoformat() if getattr(item, "updated_at", None) else "",
+                }
+                for item in candidates
+            ],
+        }
+        serialized = json.dumps(blob, sort_keys=True, default=str).encode("utf-8")
+        return hashlib.sha256(serialized).hexdigest()
 
     def backfill_relationships(self, db: Session, limit: Optional[int] = None) -> Dict[str, int]:
         query = db.query(Document).filter(Document.is_archived.is_(False), Document.processing_status == "completed").order_by(Document.upload_date.desc())

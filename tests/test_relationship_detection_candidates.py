@@ -105,3 +105,55 @@ def test_ai_relationship_explanation_metadata_is_normalized(db, test_user):
     assert isinstance(explanation.get("signals"), list)
     assert "ai_detected" in explanation.get("signals", [])
     assert isinstance(explanation.get("reason"), str)
+
+
+def test_candidate_count_is_bounded_by_configured_limit(db, test_user, monkeypatch):
+    monkeypatch.setattr("app.services.relationship_detection.settings.RELATIONSHIP_CANDIDATE_LIMIT", 2)
+    source = _mk(db, test_user.id, "source.pdf", summary="alpha roadmap")
+    for idx in range(5):
+        _mk(db, test_user.id, f"cand-{idx}.pdf", summary=f"alpha roadmap update {idx}")
+
+    result = relationship_detection_service.detect_for_document(db, source.id)
+    assert result["scanned"] == 2
+
+
+def test_invalid_candidates_are_excluded(db, test_user):
+    source = _mk(db, test_user.id, "source-valid.pdf", summary="project update")
+    _mk(db, test_user.id, "valid.pdf", summary="project update details")
+    archived = _mk(db, test_user.id, "archived.pdf", summary="project update")
+    archived.is_archived = True
+    archived.processing_status = "completed"
+    db.add(archived)
+    pending = _mk(db, test_user.id, "pending.pdf", summary="project update")
+    pending.processing_status = "processing"
+    db.add(pending)
+    db.commit()
+
+    result = relationship_detection_service.detect_for_document(db, source.id)
+    assert result["scanned"] == 1
+
+
+def test_unchanged_relationship_input_skips_rerun(db, test_user):
+    source = _mk(db, test_user.id, "skip-source.pdf", summary="alpha project launch")
+    _mk(db, test_user.id, "skip-candidate.pdf", summary="alpha project launch update")
+
+    first = relationship_detection_service.detect_for_document(db, source.id)
+    second = relationship_detection_service.detect_for_document(db, source.id)
+    assert first["scanned"] == 1
+    assert second["scanned"] == 1
+    assert second["created"] == 0
+    assert second.get("skipped") == 1
+
+
+def test_changed_relationship_input_reruns_detection(db, test_user):
+    source = _mk(db, test_user.id, "rerun-source.pdf", summary="beta launch roadmap")
+    _mk(db, test_user.id, "rerun-candidate.pdf", summary="beta launch roadmap update")
+
+    relationship_detection_service.detect_for_document(db, source.id)
+    reloaded = db.query(Document).filter(Document.id == source.id).first()
+    reloaded.summary = "beta launch roadmap update with revised timeline"
+    db.add(reloaded)
+    db.commit()
+
+    second = relationship_detection_service.detect_for_document(db, source.id)
+    assert second.get("skipped") is None
