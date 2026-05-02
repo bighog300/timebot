@@ -28,6 +28,11 @@ vi.mock('@/hooks/useApi', () => ({
   useApproveDocumentCategory: vi.fn(),
   useOverrideDocumentCategory: vi.fn(),
   useStructuredInsights: vi.fn(),
+  keys: {
+    timeline: ['timeline'] as const,
+    insightsStructured: ['insights-structured'] as const,
+    documentClusters: ['document-clusters'] as const,
+  },
 }));
 
 import { useUIStore } from '@/store/uiStore';
@@ -45,6 +50,7 @@ import {
   useOverrideDocumentCategory,
   usePatchDocumentIntelligence,
   useStructuredInsights,
+  keys,
 } from '@/hooks/useApi';
 
 const baseRelationships = [
@@ -362,9 +368,9 @@ describe('delete cache invalidation', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
 
     await vi.waitFor(() => {
-      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['timeline'] });
-      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['insights-structured'] });
-      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['document-clusters'] });
+      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: keys.timeline });
+      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: keys.insightsStructured });
+      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: keys.documentClusters });
     });
 
     confirmSpy.mockRestore();
