@@ -32,6 +32,8 @@ async def upload_document(
         record_usage(db, user_id=current_user.id, metric="uploads_daily", quantity=1)
         db.commit()
         return document
+    except HTTPException:
+        raise
     except ValueError as e:
         logger.exception("Upload failed")
         raise HTTPException(status_code=400, detail=str(e))

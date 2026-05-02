@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+import logging
 from uuid import UUID
 
 from fastapi import HTTPException, status
@@ -9,6 +10,8 @@ from sqlalchemy.orm import Session
 from app.models.document import Document
 from app.services.subscriptions import ensure_default_free_subscription, get_user_subscription
 from app.services.usage import get_usage_total
+
+logger = logging.getLogger(__name__)
 
 
 def _current_month_window() -> tuple[datetime, datetime]:
@@ -56,6 +59,7 @@ def enforce_limit(db: Session, user_id: UUID, metric: str, quantity: int = 1) ->
     used = max(0, used - int(credits or 0))
 
     if used + quantity > int(limit):
+        logger.info("Quota denied user_id=%s metric=%s used=%s quantity=%s limit=%s", user_id, metric, used, quantity, limit)
         raise HTTPException(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
             detail={

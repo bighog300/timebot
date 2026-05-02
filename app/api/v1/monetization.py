@@ -1,4 +1,5 @@
 from datetime import timedelta
+import logging
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel
@@ -13,6 +14,7 @@ from app.services.billing import BillingService
 from app.services.subscriptions import ensure_default_free_subscription, get_user_subscription, seed_default_plans
 from app.services.usage import get_usage_total
 
+logger = logging.getLogger(__name__)
 
 def usage_payload(db: Session, user: User) -> dict:
     subscription = ensure_default_free_subscription(db, user.id)
@@ -115,9 +117,11 @@ async def billing_webhook(
     try:
         event = billing_service.construct_event(payload=payload, signature=stripe_signature)
     except ValueError as exc:
+        logger.warning("Billing webhook signature validation failed detail=%s", str(exc))
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     processed = billing_service.handle_webhook(db, event)
     if not processed:
+        logger.warning("Billing webhook not processed event_type=%s", event.get("type"))
         raise HTTPException(status_code=400, detail="Unsupported or invalid webhook event")
     return {"ok": True}
