@@ -33,7 +33,11 @@ def _plan_limit(db: Session, user_id: UUID, metric: str):
     ensure_default_free_subscription(db, user_id)
     subscription = get_user_subscription(db, user_id)
     limits = (subscription.plan.limits_json if subscription and subscription.plan else {}) or {}
-    return limits.get(metric)
+    plan_limit = limits.get(metric)
+    overrides = (subscription.limit_overrides_json if subscription else {}) or {}
+    if metric in overrides:
+        return overrides[metric]
+    return plan_limit
 
 
 def enforce_limit(db: Session, user_id: UUID, metric: str, quantity: int = 1) -> None:
@@ -43,10 +47,13 @@ def enforce_limit(db: Session, user_id: UUID, metric: str, quantity: int = 1) ->
 
     period_start, period_end = _current_period_window(db, user_id)
     used = get_usage_total(db, user_id, metric, period_start, period_end)
+    subscription = get_user_subscription(db, user_id)
+    credits = ((subscription.usage_credits_json if subscription else {}) or {}).get(metric, 0)
 
     if metric == "storage_bytes":
         current_storage = db.query(Document.file_size).filter(Document.user_id == user_id).all()
         used = sum((row[0] or 0) for row in current_storage)
+    used = max(0, used - int(credits or 0))
 
     if used + quantity > int(limit):
         raise HTTPException(
