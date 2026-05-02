@@ -138,8 +138,8 @@ async def get_search_facets(query: Optional[str] = None, db: Session = Depends(g
         base_query = base_query.filter(Document.search_vector.op("@@")(func.plainto_tsquery("english", query)))
 
     category_facets = (
-        db.query(Category.id, Category.name, func.count(Document.id).label("count"))
-        .join(Document, or_(Document.ai_category_id == Category.id, Document.user_category_id == Category.id))
+        base_query.with_entities(Category.id, Category.name, func.count(Document.id).label("count"))
+        .join(Category, or_(Document.ai_category_id == Category.id, Document.user_category_id == Category.id))
         .group_by(Category.id, Category.name)
         .all()
     )
@@ -255,10 +255,10 @@ async def get_timeline(
 
 
 @router.get("/insights", response_model=InsightsResponse)
-async def get_insights(lookback_days: int = Query(30, ge=1, le=365), db: Session = Depends(get_db)):
-    return insights_service.build_dashboard(db=db, lookback_days=lookback_days)
+async def get_insights(lookback_days: int = Query(30, ge=1, le=365), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    return insights_service.build_dashboard(db=db, lookback_days=lookback_days, user_id=current_user.id)
 
 
 @router.get("/category-intelligence", response_model=CategoryIntelligenceResponse)
-async def get_category_intelligence(db: Session = Depends(get_db)):
-    return category_intelligence_service.build_intelligence(db)
+async def get_category_intelligence(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    return category_intelligence_service.build_intelligence(db, user_id=current_user.id)

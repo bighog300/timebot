@@ -11,9 +11,12 @@ from app.models.document import Document
 
 
 class CategoryIntelligenceService:
-    def build_intelligence(self, db: Session) -> Dict[str, Any]:
+    def build_intelligence(self, db: Session, user_id: Any | None = None) -> Dict[str, Any]:
         categories = db.query(Category).all()
-        docs = db.query(Document).filter(Document.is_archived.is_(False)).all()
+        docs_q = db.query(Document).filter(Document.is_archived.is_(False))
+        if user_id is not None:
+            docs_q = docs_q.filter(Document.user_id == user_id)
+        docs = docs_q.all()
 
         analytics = self._category_analytics(categories, docs)
         return {
