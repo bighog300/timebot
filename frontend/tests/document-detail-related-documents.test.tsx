@@ -65,7 +65,7 @@ describe('DocumentDetailPage related documents panel', () => {
   it('shows empty state', async () => {
     mockUseDocumentRelationships.mockReturnValue({ isLoading: false, isError: false, isSuccess: true, data: [] });
     renderPage();
-    expect(await screen.findByText('No related documents yet.')).toBeInTheDocument();
+    expect(await screen.findByText('No related documents found.')).toBeInTheDocument();
   });
 
   it('groups thread, attachments, and related documents', async () => {
