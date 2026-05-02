@@ -17,6 +17,7 @@ from app.schemas.document import (
     DocumentUpdate,
 )
 from app.services.document_clusters import document_cluster_service
+from app.services.limit_enforcement import enforce_feature, enforce_limit
 from app.schemas.review_workflow import (
     CategoryOverrideRequest,
     DocumentRelationshipListItemResponse,
@@ -155,6 +156,7 @@ def reprocess_document(document_id: UUID, db: Session = Depends(get_db), current
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
 
+    enforce_limit(db, current_user.id, "processing_jobs_per_month", quantity=1)
     logger.info("Reprocess requested document_id=%s actor_id=%s", document_id, current_user.id)
     document.processing_status = "queued"
     document.processing_error = None
@@ -222,6 +224,7 @@ def regenerate_document_intelligence(document_id: UUID, db: Session = Depends(ge
             status_code=503,
             detail="AI enrichment unavailable: configure OPENAI_API_KEY and retry regeneration.",
         )
+    enforce_feature(db, current_user.id, "insights_enabled")
     try:
         return document_intelligence_service.regenerate(db, document)
     except ValueError as exc:

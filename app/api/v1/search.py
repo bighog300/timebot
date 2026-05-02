@@ -15,6 +15,7 @@ from app.models.user import User
 from app.services.category_intelligence import category_intelligence_service
 from app.services.insights_service import insights_service
 from app.services.relationship_detection import relationship_detection_service
+from app.services.limit_enforcement import enforce_feature, enforce_limit
 from app.services.search_service import search_service
 from app.services.timeline_service import timeline_service
 
@@ -210,6 +211,8 @@ async def find_similar_documents(document_id: UUID, limit: int = Query(5, ge=1, 
 
 @router.post("/relationships/detect/{document_id}")
 async def detect_relationships(document_id: UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    enforce_feature(db, current_user.id, "relationship_detection_enabled")
+    enforce_limit(db, current_user.id, "processing_jobs_per_month", quantity=1)
     _require_doc_access_or_admin(db=db, document_id=document_id, current_user=current_user)
     return relationship_detection_service.detect_for_document(db=db, document_id=document_id)
 
@@ -222,6 +225,8 @@ async def backfill_relationships(
 ):
     if (current_user.role or "viewer").lower() != "admin":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+    enforce_feature(db, current_user.id, "relationship_detection_enabled")
+    enforce_limit(db, current_user.id, "processing_jobs_per_month", quantity=1)
     return relationship_detection_service.backfill_relationships(db=db, limit=limit)
 
 
@@ -256,9 +261,11 @@ async def get_timeline(
 
 @router.get("/insights", response_model=InsightsResponse)
 async def get_insights(lookback_days: int = Query(30, ge=1, le=365), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    enforce_feature(db, current_user.id, "insights_enabled")
     return insights_service.build_dashboard(db=db, lookback_days=lookback_days, user_id=current_user.id)
 
 
 @router.get("/category-intelligence", response_model=CategoryIntelligenceResponse)
 async def get_category_intelligence(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    enforce_feature(db, current_user.id, "category_intelligence_enabled")
     return category_intelligence_service.build_intelligence(db, user_id=current_user.id)

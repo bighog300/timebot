@@ -11,6 +11,7 @@ from app.config import settings
 from app.models.document import Document
 from app.models.user import User
 from app.services.error_sanitizer import sanitize_processing_error
+from app.services.limit_enforcement import enforce_limit
 from app.services.storage import storage
 from app.services.artifact_lookup import latest_artifact
 from app.services.text_extractor import text_extractor
@@ -46,6 +47,8 @@ class DocumentProcessor:
                 f"File too large ({file_size / 1024 / 1024:.1f} MB). Max: {settings.MAX_UPLOAD_SIZE_MB} MB"
             )
 
+        enforce_limit(db, user.id, "storage_bytes", quantity=max(int(file_size), 0))
+
         file_type = Path(file.filename).suffix.lstrip(".").lower()
         mime_type = storage.get_mime_type(file_path)
 
@@ -74,7 +77,7 @@ class DocumentProcessor:
         record_usage(
             db,
             user_id=user.id,
-            metric="document_upload",
+            metric="documents_per_month",
             metadata={"document_id": str(document.id), "filename": document.filename, "source": source},
         )
         record_usage(
@@ -219,6 +222,8 @@ class DocumentProcessor:
                     metric="document_processing_completed",
                     metadata={"document_id": str(document.id)},
                 )
+            if document.user_id is not None:
+                record_usage(db, user_id=document.user_id, metric="processing_jobs_per_month", quantity=1, metadata={"document_id": str(document.id)})
             if run_relationship_detection:
                 if document.enrichment_status not in {"degraded", "pending"}:
                     self._set_enrichment_status(document, "complete")
@@ -307,6 +312,8 @@ class DocumentProcessor:
                     },
                 )
             logger.info("AI analysis completed doc_id=%s ai_analysis_duration_ms=%s", document.id, ai_analysis_duration_ms)
+            if document.user_id is not None:
+                record_usage(db, user_id=document.user_id, metric="processing_jobs_per_month", quantity=1, metadata={"document_id": str(document.id)})
             if run_relationship_detection:
                 processing_event_service.update_progress(db, document, stage="enriching", message="Enriching with relationship detection.")
                 relationship_start = time.perf_counter()
