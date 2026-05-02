@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class PromptTemplateBase(BaseModel):
@@ -10,6 +10,13 @@ class PromptTemplateBase(BaseModel):
     content: str = Field(min_length=1)
     version: int = Field(ge=1, default=1)
     is_active: bool = False
+
+    @field_validator("content")
+    @classmethod
+    def content_must_not_be_whitespace_only(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("String should have at least 1 non-whitespace character")
+        return value
 
 
 class PromptTemplateCreate(PromptTemplateBase):
@@ -21,6 +28,13 @@ class PromptTemplateUpdate(BaseModel):
     content: str | None = Field(default=None, min_length=1)
     version: int | None = Field(default=None, ge=1)
     is_active: bool | None = None
+
+    @field_validator("content")
+    @classmethod
+    def content_must_not_be_whitespace_only(cls, value: str | None) -> str | None:
+        if value is not None and not value.strip():
+            raise ValueError("String should have at least 1 non-whitespace character")
+        return value
 
 
 class PromptTemplateResponse(PromptTemplateBase):
