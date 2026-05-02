@@ -9,6 +9,7 @@ from app.models.intelligence import (
     ReviewAuditEvent,
 )
 from app.models.admin_audit import AdminAuditEvent
+from app.models.processing_event import DocumentProcessingEvent
 from app.models.chat import ChatbotSettings, ChatMessage, ChatSession, GeneratedReport
 from app.models.prompt_template import PromptTemplate
 from app.models.relationships import (
@@ -25,6 +26,7 @@ from app.models.relationships import (
 __all__ = [
     "User",
     "AdminAuditEvent",
+    "DocumentProcessingEvent",
     "ChatbotSettings",
     "ChatSession",
     "ChatMessage",

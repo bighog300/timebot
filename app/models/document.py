@@ -162,3 +162,37 @@ class Document(Base):
     @property
     def all_tags(self):
         return list(set((self.ai_tags or []) + (self.user_tags or [])))
+
+    @property
+    def processing_stage(self) -> str:
+        metadata = self.extracted_metadata if isinstance(self.extracted_metadata, dict) else {}
+        stage = metadata.get("processing_stage")
+        if isinstance(stage, str) and stage:
+            return stage
+        if self.processing_status == "queued":
+            return "queued"
+        if self.processing_status == "processing":
+            return "extracting"
+        if self.processing_status == "completed":
+            return "completed"
+        if self.processing_status == "failed":
+            return "failed"
+        return "uploading"
+
+    @property
+    def processing_progress(self) -> int:
+        metadata = self.extracted_metadata if isinstance(self.extracted_metadata, dict) else {}
+        progress = metadata.get("processing_progress")
+        if isinstance(progress, int):
+            return max(0, min(progress, 100))
+        defaults = {
+            "uploading": 0,
+            "queued": 5,
+            "extracting": 15,
+            "analyzing": 45,
+            "enriching": 70,
+            "embedding": 85,
+            "completed": 100,
+            "failed": 0,
+        }
+        return defaults.get(self.processing_stage, 0)
