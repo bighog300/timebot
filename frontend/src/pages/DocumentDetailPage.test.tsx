@@ -77,11 +77,13 @@ describe('DocumentDetailPage relationship filtering', () => {
   const pushToast = vi.fn();
   const confirmMutate = vi.fn();
   const dismissMutate = vi.fn();
+  const approveMutate = vi.fn();
 
   beforeEach(() => {
     pushToast.mockReset();
     confirmMutate.mockReset();
     dismissMutate.mockReset();
+    approveMutate.mockReset();
     vi.mocked(useUIStore).mockImplementation(((selector: (state: { pushToast: (msg: string) => void }) => unknown) => selector({ pushToast })) as never);
     vi.mocked(api.getDocument).mockResolvedValue({ id: 'doc-1', filename: 'Contract.pdf', processing_status: 'processed', processing_error: null, is_favorite: false, is_archived: false, summary: '', ai_category: null } as never);
     vi.mocked(api.findSimilar).mockResolvedValue({ results: [], query: '', total: 0 } as never);
@@ -90,7 +92,7 @@ describe('DocumentDetailPage relationship filtering', () => {
     vi.mocked(useDocumentActionItems).mockReturnValue({ isLoading: false, isError: false, isSuccess: true, data: [] } as never);
     vi.mocked(useDocumentAuditHistory).mockReturnValue({ isLoading: false, isError: false, isSuccess: true, data: [] } as never);
     vi.mocked(usePatchDocumentIntelligence).mockReturnValue({ mutate: vi.fn() } as never);
-    vi.mocked(useApproveDocumentCategory).mockReturnValue({ mutate: vi.fn() } as never);
+    vi.mocked(useApproveDocumentCategory).mockReturnValue({ mutate: approveMutate } as never);
     vi.mocked(useOverrideDocumentCategory).mockReturnValue({ mutate: vi.fn() } as never);
     vi.mocked(useDocumentRelationships).mockReturnValue({ isLoading: false, isError: false, isSuccess: true, data: baseRelationships } as never);
     vi.mocked(useDocumentClusters).mockReturnValue({ isLoading: false, isError: false, isSuccess: true, data: [{ cluster_id: 'cluster-1', document_ids: ['doc-1', 'r3'], document_titles: ['Contract.pdf', 'Related Doc'], relationship_count: 1, dominant_signals: ['ai_detected'] }] } as never);
@@ -298,6 +300,21 @@ it('shows true empty relationship state when enrichment is complete', async () =
   vi.mocked(useDocumentRelationships).mockReturnValue({ isLoading: false, isError: false, isSuccess: true, data: [] } as never);
   renderPage();
   expect(await screen.findByText('No related documents found.')).toBeInTheDocument();
+});
+
+describe('DocumentDetailPage category approval UX', () => {
+  it('disables Approve category when no suggested category exists', async () => {
+    vi.mocked(useDocumentIntelligence).mockReturnValue({
+      isLoading: false,
+      isError: false,
+      isSuccess: true,
+      data: { summary: 'sum', key_points: [], suggested_tags: [], confidence: 'medium', entities: {}, suggested_category_id: null },
+    } as never);
+    renderPage();
+    const approveButton = await screen.findByRole('button', { name: 'Approve category' });
+    expect(approveButton).toBeDisabled();
+  });
+
 });
 
 
