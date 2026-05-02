@@ -119,3 +119,18 @@ def test_timeline_and_relationship_fallbacks_without_active_prompt(monkeypatch, 
     _mk(db, test_user.id, "two.pdf", summary="Contains follow up details")
     result = relationship_detection_service.detect_for_document(db, a.id)
     assert result["created"] >= 1
+
+def test_invalid_admin_prompt_sets_fallback_warning_metadata(monkeypatch, db, sample_document):
+    analyzer = AIAnalyzer()
+    monkeypatch.setattr("app.services.ai_analyzer.settings.OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr("app.services.ai_analyzer.settings.OPENAI_MODEL", "gpt-4o-mini")
+    monkeypatch.setattr("app.services.ai_analyzer.settings.AI_MAX_TOKENS", 300)
+    db.add(PromptTemplate(type="timeline_extraction", name="bad", content="dates only", version=9, is_active=True))
+    db.commit()
+
+    payload = '{"summary":"ok","key_points":[],"entities":{},"tags":[],"action_items":["Respond by Friday"]}'
+    monkeypatch.setattr("app.services.ai_analyzer.openai_client_service.generate_completion", lambda _payload: SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=payload))]))
+
+    analysis = analyzer.analyze_document("sample text", filename="sample.txt", file_type="txt", db=db)
+    assert analysis["prompt_source"] == "default"
+    assert analysis["admin_prompt_invalid_fallback"] is True

@@ -106,6 +106,8 @@ class AIAnalyzer:
             analysis["ai_provider"] = provider_name
             analysis["ai_model"] = settings.OPENAI_MODEL
             analysis["ai_duration_ms"] = duration_ms
+            analysis["prompt_source"] = prompt_source
+            analysis["admin_prompt_invalid_fallback"] = bool(self.last_prompt_invalid)
             return analysis
 
         except APIError as e:
@@ -140,6 +142,7 @@ class AIAnalyzer:
         categories: str = "none yet",
     ) -> str:
         self.last_prompt_source = "default"
+        self.last_prompt_invalid = False
         default_prompt = self._get_default_prompt(
             prompt_type, filename, file_type, text, char_limit, categories
         )
@@ -155,6 +158,7 @@ class AIAnalyzer:
         if self._is_valid_analysis_prompt(rendered):
             self.last_prompt_source = "admin"
             return rendered
+        self.last_prompt_invalid = True
         logger.warning(
             "ai_prompt_template_invalid prompt_type=%s prompt_source=admin prompt_length=%s fallback_source=default",
             prompt_type,
@@ -293,9 +297,10 @@ class AIAnalyzer:
                     date_approx = True
             if not (date_value or start_value or end_value):
                 continue
+            derived_title = self._derive_timeline_title(title=title, description=description, date_value=date_value, start_value=start_value, end_value=end_value)
             output.append(
                 {
-                    "title": (title or "Untitled event").strip(),
+                    "title": derived_title,
                     "description": description,
                     "date": date_value,
                     "start_date": start_value,
@@ -309,6 +314,25 @@ class AIAnalyzer:
                 }
             )
         return output
+
+
+    def _derive_timeline_title(self, *, title: Any, description: Any, date_value: Optional[str], start_value: Optional[str], end_value: Optional[str]) -> str:
+        candidate = str(title or "").strip()
+        if candidate and candidate.lower() != "untitled event":
+            return candidate
+        desc = re.sub(r"\s+", " ", str(description or "").strip())
+        if desc:
+            words = desc.split()
+            snippet = " ".join(words[:8]).strip(" ,.;:-")
+            if snippet:
+                return snippet[:96]
+        if date_value:
+            return f"Event on {date_value}"
+        if start_value and end_value:
+            return f"Event from {start_value} to {end_value}"
+        if start_value:
+            return f"Event starting {start_value}"
+        return "Document event"
 
     def _normalize_date(self, value: Any) -> tuple[Optional[str], bool]:
         if isinstance(value, date):
