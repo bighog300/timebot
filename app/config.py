@@ -5,6 +5,7 @@ class Settings(BaseSettings):
     APP_NAME: str = "Document Intelligence Platform"
     VERSION: str = "1.0.0"
     DEBUG: bool = False
+    APP_ENV: str = "development"
     API_HOST: str = "0.0.0.0"
     API_PORT: int = 8000
     ALLOWED_ORIGINS: str = "http://localhost:5174,http://127.0.0.1:5174"
