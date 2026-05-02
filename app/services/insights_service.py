@@ -34,17 +34,22 @@ class InsightsService:
     _RISK_TERMS = ("deadline", "overdue", "urgent", "risk", "issue", "blocked")
 
     def build_dashboard(self, db: Session, lookback_days: int = 30, user_id: Any | None = None) -> Dict[str, Any]:
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         since = now - timedelta(days=lookback_days)
 
         query = db.query(Document).filter(Document.is_archived.is_(False))
         if user_id is not None:
             query = query.filter(Document.user_id == user_id)
         docs = query.all()
-        recent_docs = [d for d in docs if d.upload_date and d.upload_date >= since]
+        recent_docs = [
+            d
+            for d in docs
+            if (normalized_upload := self._normalize_dt(getattr(d, "upload_date", None))) is not None
+            and normalized_upload >= since
+        ]
 
         return {
-            "generated_at": now.replace(tzinfo=timezone.utc).isoformat(),
+            "generated_at": now.isoformat(),
             "lookback_days": lookback_days,
             "volume_trends": self._volume_trends(recent_docs),
             "category_distribution": self._category_distribution(db, docs),
@@ -107,7 +112,11 @@ class InsightsService:
         return dict(Counter(r[0] for r in rels))
 
     def _recent_activity(self, docs: List[Document]) -> List[Dict[str, Any]]:
-        sorted_docs = sorted(docs, key=lambda d: d.upload_date, reverse=True)[:20]
+        sorted_docs = sorted(
+            docs,
+            key=lambda d: self._normalize_dt(getattr(d, "upload_date", None)) or datetime.min.replace(tzinfo=timezone.utc),
+            reverse=True,
+        )[:20]
         return [
             {
                 "document_id": str(doc.id),
@@ -222,6 +231,16 @@ class InsightsService:
 
     def _build_insight(self, insight_type: str, title: str, description: str, severity: str, related_document_ids: list[str], related_event_ids: list[str] | None = None, evidence: list[str] | None = None) -> dict[str, Any]:
         return {"id": str(uuid.uuid4()), "type": insight_type, "title": title, "description": description, "severity": severity, "related_document_ids": related_document_ids, "related_event_ids": related_event_ids or [], "evidence": [e for e in (evidence or []) if e], "created_at": datetime.now(timezone.utc).isoformat()}
+
+
+    def _normalize_dt(self, value: Any) -> datetime | None:
+        if value is None:
+            return None
+        if not isinstance(value, datetime):
+            return None
+        if value.tzinfo is None or value.utcoffset() is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc)
 
     def _timeline_events_for_doc(self, doc: Document) -> list[dict[str, Any]]:
         entities = doc.entities if isinstance(doc.entities, dict) else {}

@@ -183,6 +183,19 @@ def test_insights_response_shape():
     assert "recent_activity" in insights
 
 
+
+
+def test_insights_response_shape_handles_mixed_naive_and_aware_upload_dates():
+    docs = [_doc("aware.pdf", days=1), _doc("naive.pdf", days=2)]
+    docs[1].upload_date = docs[1].upload_date.replace(tzinfo=None)
+
+    db = FakeDB(docs=docs, rels=[], categories=[])
+    insights = insights_service.build_dashboard(db=db, lookback_days=30)
+
+    assert "volume_trends" in insights
+    assert "relationship_summary" in insights
+    assert "recent_activity" in insights
+    assert len(insights["recent_activity"]) == 2
 def test_hybrid_search_degrades_when_semantic_unavailable(monkeypatch):
     fake_doc = _doc("invoice.pdf")
 
