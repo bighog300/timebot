@@ -1,7 +1,7 @@
 """add processing events table
 
 Revision ID: 20260502_0018
-Revises: 20260501_0017_user_plan_usage_counters
+Revises: 20260501_0017
 Create Date: 2026-05-02
 """
 
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 revision = '20260502_0018'
-down_revision = '20260501_0017_user_plan_usage_counters'
+down_revision = '20260501_0017'
 branch_labels = None
 depends_on = None
 
