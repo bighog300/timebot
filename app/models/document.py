@@ -156,6 +156,24 @@ class Document(Base):
         metadata = self.extracted_metadata if isinstance(self.extracted_metadata, dict) else {}
         return bool(metadata.get("json_parse_retry_used"))
 
+
+    @property
+    def action_item_texts(self) -> list[str]:
+        items = self.action_items if isinstance(self.action_items, list) else []
+        texts: list[str] = []
+        for item in items:
+            if isinstance(item, str):
+                text = item.strip()
+                if text:
+                    texts.append(text)
+                continue
+            if isinstance(item, dict):
+                value = item.get("content") or item.get("title") or item.get("task") or item.get("action")
+                if isinstance(value, str):
+                    text = value.strip()
+                    if text:
+                        texts.append(text)
+        return texts
     def __repr__(self):
         return f"<Document(filename='{self.filename}', status='{self.processing_status}')>"
 

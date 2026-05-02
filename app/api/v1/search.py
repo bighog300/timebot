@@ -92,6 +92,7 @@ async def hybrid_search_documents(
 
     return search_service.hybrid_search_documents(
         db=db,
+        user_id=current_user.id,
         query=query,
         filters=filters,
         skip=skip,
@@ -220,9 +221,11 @@ async def get_timeline(
     min_confidence: float = Query(0.0, ge=0.0, le=1.0),
     limit: int = Query(500, ge=1, le=5000),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     return timeline_service.build_timeline(
         db=db,
+        user_id=current_user.id,
         category_ids=categories,
         sources=sources,
         file_types=file_types,
