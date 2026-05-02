@@ -2,7 +2,7 @@ from datetime import date
 from typing import List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
@@ -19,6 +19,15 @@ from app.services.search_service import search_service
 from app.services.timeline_service import timeline_service
 
 router = APIRouter(prefix="/search", tags=["search"], dependencies=[Depends(get_current_user)])
+
+
+def _require_doc_access_or_admin(db: Session, document_id: UUID, current_user: User) -> Document:
+    doc = db.query(Document).filter(Document.id == document_id).first()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+    if current_user.role != "admin" and doc.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return doc
 
 
 @router.post("/", response_model=SearchResponse)
@@ -200,12 +209,19 @@ async def find_similar_documents(document_id: UUID, limit: int = Query(5, ge=1, 
 
 
 @router.post("/relationships/detect/{document_id}")
-async def detect_relationships(document_id: UUID, db: Session = Depends(get_db)):
+async def detect_relationships(document_id: UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    _require_doc_access_or_admin(db=db, document_id=document_id, current_user=current_user)
     return relationship_detection_service.detect_for_document(db=db, document_id=document_id)
 
 
 @router.post("/relationships/backfill")
-async def backfill_relationships(limit: Optional[int] = Query(None, ge=1, le=2000), db: Session = Depends(get_db)):
+async def backfill_relationships(
+    limit: Optional[int] = Query(None, ge=1, le=2000),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if (current_user.role or "viewer").lower() != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
     return relationship_detection_service.backfill_relationships(db=db, limit=limit)
 
 

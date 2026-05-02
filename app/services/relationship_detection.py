@@ -136,7 +136,14 @@ class RelationshipDetectionService:
             getattr(settings, "OPENAI_EMBEDDING_MODEL", "n/a") if embedding_service.enabled else "n/a",
         )
         logger.info("Relationship detection source-intelligence entity_keys=%s", sorted((doc.entities or {}).keys()))
-        matches = [self._score_pair(doc, other, db=db, log_prefix="detect_for_document") for other in candidates]
+        semantic_cache: dict[str, list[dict[str, Any]]] = {}
+        semantic_lookup_count = 0
+        matches = []
+        for other in candidates:
+            pair = self._score_pair(doc, other, db=db, log_prefix="detect_for_document", semantic_cache=semantic_cache)
+            semantic_lookup_count = len(semantic_cache)
+            matches.append(pair)
+        logger.info("relationship_detection semantic_lookup_count=%s doc_id=%s", semantic_lookup_count, document_id)
         detected = [m for m in matches if m is not None]
         logger.info("Relationship candidates pre-threshold count=%d doc_id=%s", len(matches), document_id)
         logger.info("Relationship candidates found=%d doc_id=%s", len(detected), document_id)
@@ -181,19 +188,21 @@ class RelationshipDetectionService:
         docs = query.limit(limit).all() if limit else query.all()
 
         candidates: List[RelationshipCandidate] = []
+        semantic_cache: dict[str, list[dict[str, Any]]] = {}
         for left, right in combinations(docs, 2):
             if left.user_id != right.user_id:
                 logger.debug("Relationship skipped permission/user mismatch left=%s right=%s", left.id, right.id)
                 continue
-            result = self._score_pair(left, right, db=db, log_prefix="backfill")
+            result = self._score_pair(left, right, db=db, log_prefix="backfill", semantic_cache=semantic_cache)
             if result:
                 candidates.append(result)
+        logger.info("relationship_backfill semantic_lookup_count=%s", len(semantic_cache))
 
         persisted = self._persist_candidates(db, candidates)
         persisted["scanned"] = len(docs)
         return persisted
 
-    def _score_pair(self, left: Document, right: Document, db: Session | None = None, log_prefix: str = "") -> Optional[RelationshipCandidate]:
+    def _score_pair(self, left: Document, right: Document, db: Session | None = None, log_prefix: str = "", semantic_cache: dict[str, list[dict[str, Any]]] | None = None) -> Optional[RelationshipCandidate]:
         if left.id == right.id:
             logger.debug("Relationship skipped same doc left=%s right=%s", left.id, right.id)
             return None
@@ -225,7 +234,7 @@ class RelationshipDetectionService:
             delta = abs((left.upload_date - right.upload_date).days)
             date_adjacent = 1.0 if delta <= 2 else (0.6 if delta <= 7 else 0.0)
 
-        semantic = self._semantic_similarity(str(left.id), str(right.id))
+        semantic = self._semantic_similarity(str(left.id), str(right.id), semantic_cache=semantic_cache)
 
         weighted = {
             "title_similarity": title_similarity * 0.25,
@@ -278,12 +287,14 @@ class RelationshipDetectionService:
         )
 
     def _build_ai_explanation(self, *, weighted: Dict[str, float], relationship_type: str, confidence: float) -> Dict[str, Any]:
-        signals: list[str] = ["ai_detected"]
+        signals: list[str] = ["heuristic_detected"]
+        if weighted.get("semantic_similarity", 0.0) > 0.0:
+            signals.append("embedding_similarity")
         if weighted.get("keyword_overlap", 0.0) > 0.03:
             signals.append("shared_terms")
         if weighted.get("timeline_overlap", 0.0) > 0.0 or weighted.get("date_adjacency", 0.0) > 0.0:
             signals.append("timeline_proximity")
-        explanation = f"AI detected a {relationship_type.replace('_', ' ')} relationship from combined similarity signals."
+        explanation = f"Heuristic scoring detected a {relationship_type.replace('_', ' ')} relationship from combined similarity signals."
         return self._build_explanation(confidence=confidence, signals=signals, reason=explanation)
 
     def _timeline_overlap(self, left: Document, right: Document) -> float:
@@ -324,17 +335,44 @@ class RelationshipDetectionService:
         phrases = [line.strip().lower() for line in (prompt_text or "").splitlines() if line.strip()]
         return 1.0 if any(p in blob for p in phrases) else 0.0
 
+    def _flatten_entity_values(self, value: Any) -> list[str]:
+        values: list[str] = []
+        if value is None:
+            return values
+        if isinstance(value, dict):
+            for nested in value.values():
+                values.extend(self._flatten_entity_values(nested))
+            return values
+        if isinstance(value, list):
+            for item in value:
+                values.extend(self._flatten_entity_values(item))
+            return values
+        if isinstance(value, str):
+            normalized = " ".join(value.strip().lower().split())
+            if normalized:
+                values.append(normalized)
+            return values
+        normalized = " ".join(str(value).strip().lower().split())
+        if normalized:
+            values.append(normalized)
+        return values
+
     def _entity_overlap(self, left_entities: Dict, right_entities: Dict) -> float:
-        left_values = {str(v).lower() for values in left_entities.values() for v in (values or [])}
-        right_values = {str(v).lower() for values in right_entities.values() for v in (values or [])}
+        left_values = {v for values in left_entities.values() for v in self._flatten_entity_values(values)}
+        right_values = {v for values in right_entities.values() for v in self._flatten_entity_values(values)}
         if not left_values and not right_values:
             return 0.0
         return len(left_values & right_values) / max(len(left_values | right_values), 1)
 
-    def _semantic_similarity(self, left_doc_id: str, right_doc_id: str) -> float:
+    def _semantic_similarity(self, left_doc_id: str, right_doc_id: str, semantic_cache: dict[str, list[dict[str, Any]]] | None = None) -> float:
         if not embedding_service.enabled:
             return 0.0
-        similar = embedding_service.find_similar_documents(document_id=left_doc_id, limit=30)
+        if semantic_cache is not None and left_doc_id in semantic_cache:
+            similar = semantic_cache[left_doc_id]
+        else:
+            similar = embedding_service.find_similar_documents(document_id=left_doc_id, limit=30)
+            if semantic_cache is not None:
+                semantic_cache[left_doc_id] = similar
         for item in similar:
             if item["document_id"] == right_doc_id:
                 return float(item["score"])
