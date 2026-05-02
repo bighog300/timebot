@@ -7,6 +7,11 @@ from app.services.ai.base import AIClient
 
 
 class GeminiProvider(AIClient):
+    def _apply_timeout(self, payload: dict[str, Any]) -> dict[str, Any]:
+        request_options = dict(payload.get("request_options") or {})
+        request_options.setdefault("timeout", settings.AI_PROVIDER_TIMEOUT_SECONDS)
+        return {**payload, "request_options": request_options}
+
     @property
     def enabled(self) -> bool:
         return bool(settings.GEMINI_API_KEY)
@@ -25,8 +30,9 @@ class GeminiProvider(AIClient):
 
     def generate_completion(self, payload: dict[str, Any]) -> Any:
         model = self._get_client()
-        return model.generate_content(**payload)
+        return model.generate_content(**self._apply_timeout(payload))
 
     def stream_completion(self, payload: dict[str, Any]) -> Iterable[Any]:
         model = self._get_client()
-        return model.generate_content(**payload, stream=True)
+        timeout_payload = self._apply_timeout(payload)
+        return model.generate_content(**timeout_payload, stream=True)

@@ -21,7 +21,10 @@ class OpenAIProvider(AIClient):
         if not self.enabled:
             raise ValueError("OPENAI_API_KEY not configured")
         if self._client is None:
-            self._client = OpenAI(api_key=settings.OPENAI_API_KEY)
+            self._client = OpenAI(
+                api_key=settings.OPENAI_API_KEY,
+                timeout=settings.AI_PROVIDER_TIMEOUT_SECONDS,
+            )
         return self._client
 
     def generate_completion(self, payload: dict[str, Any]) -> Any:
