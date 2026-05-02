@@ -69,10 +69,14 @@ async def lifespan(app: FastAPI):
     )
 
     from app.services.admin_seed import seed_initial_admin
+    from app.services.prompt_templates import seed_default_prompt_templates
 
     db = SessionLocal()
     try:
         seed_initial_admin(db)
+        if settings.SEED_DEFAULT_PROMPTS:
+            seeded = seed_default_prompt_templates(db)
+            logger.info("default_prompt_templates_seeded count=%s", seeded)
     finally:
         db.close()
 

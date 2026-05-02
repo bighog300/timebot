@@ -236,6 +236,7 @@ MIT
 ## Admin panel (Plan B)
 
 - Seeded initial admin behavior: if `INITIAL_ADMIN_EMAIL` + `INITIAL_ADMIN_PASSWORD` are configured, startup seed ensures that account exists and is promoted to `admin` (idempotent).
+- Seeded default prompt templates (`chat`, `retrieval`, `report`, `timeline_extraction`, `relationship_detection`) are created at startup when `SEED_DEFAULT_PROMPTS=true` (idempotent; existing templates are never overwritten).
 - Access `/admin` after login with an account whose role is `admin`.
 - Current capabilities:
   - User list with pagination.

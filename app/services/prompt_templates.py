@@ -1,10 +1,16 @@
 from __future__ import annotations
 
+import logging
+
+from sqlalchemy.exc import OperationalError, ProgrammingError
 from sqlalchemy.orm import Session
 
 from app.models.prompt_template import PromptTemplate
+from app.services.default_prompt_templates import DEFAULT_PROMPT_TEMPLATES
 
 PROMPT_TYPES = {"chat", "retrieval", "report", "timeline_extraction", "relationship_detection"}
+
+logger = logging.getLogger(__name__)
 
 
 def get_active_prompt_content(db: Session, prompt_type: str, default_content: str) -> str:
@@ -31,3 +37,32 @@ def activate_prompt_template(db: Session, template: PromptTemplate) -> PromptTem
     template.is_active = True
     db.add(template)
     return template
+
+
+
+def seed_default_prompt_templates(db: Session) -> int:
+    created = 0
+    try:
+        for default in DEFAULT_PROMPT_TEMPLATES:
+            exists = (
+                db.query(PromptTemplate.id)
+                .filter(PromptTemplate.type == default.type)
+                .first()
+            )
+            if exists:
+                continue
+            db.add(PromptTemplate(
+                type=default.type,
+                name=default.name,
+                content=default.content,
+                version=default.version,
+                is_active=default.is_active,
+            ))
+            created += 1
+        if created:
+            db.commit()
+    except (ProgrammingError, OperationalError):
+        db.rollback()
+        logger.warning("Skipping default prompt template seed because migrations are not applied")
+        return 0
+    return created
