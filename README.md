@@ -102,7 +102,7 @@ ALLOWED_ORIGINS=http://localhost:5174,http://127.0.0.1:5174,http://192.168.1.50:
 | `OPENAI_API_KEY` | Yes for AI features | OpenAI API key for analysis + embeddings |
 | `OPENAI_MODEL` | Optional | Chat model id (default `gpt-4o-mini`) |
 | `OPENAI_EMBEDDING_MODEL` | Optional | Embedding model id (default `text-embedding-3-small`) |
-| `AUTH_SECRET_KEY` | Yes outside local dev | JWT signing secret |
+| `AUTH_SECRET_KEY` | Yes for `APP_ENV` in `production`, `prod`, or `staging` | JWT signing secret (placeholders rejected in production-like envs) |
 | `AUTH_ALGORITHM` | Optional | JWT algorithm (default `HS256`) |
 | `AUTH_ACCESS_TOKEN_EXPIRE_MINUTES` | Optional | Access token TTL |
 | `ALLOWED_ORIGINS` | Yes | CSV of frontend origins for CORS |
@@ -203,6 +203,7 @@ tests/              Backend tests
 ## Deployment notes
 
 - Run migrations (`alembic upgrade head`) during each deploy before serving traffic.
+- App startup enforces production-like auth secret hardening when `APP_ENV` is `production`, `prod`, or `staging`: `AUTH_SECRET_KEY` must be set and cannot be a known placeholder (`dev-insecure-change-me`, `change-me`, `replace-me`, `your-secret-key`, `secret`, `default`).
 - Use production-only `AUTH_SECRET_KEY` and strict `ALLOWED_ORIGINS` values.
 - Configure HTTPS, secret manager integration, and real deployment automation (current deploy workflow is a placeholder).
 - Review known deferred items in `docs/RELEASE_READINESS.md` before production launch.

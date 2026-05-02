@@ -33,17 +33,31 @@ from app.api.v1 import (
 logger = logging.getLogger(__name__)
 
 _INSECURE_DEFAULT_AUTH_SECRET = "dev-insecure-change-me"
+_PRODUCTION_LIKE_ENVS = {"production", "prod", "staging"}
+_KNOWN_INSECURE_AUTH_SECRETS = {
+    "",
+    _INSECURE_DEFAULT_AUTH_SECRET,
+    "changeme",
+    "change-me",
+    "replace-me",
+    "your-secret-key",
+    "secret",
+    "default",
+}
 
 
 def _is_production_environment() -> bool:
-    return (settings.APP_ENV or "").strip().lower() == "production"
+    return (settings.APP_ENV or "").strip().lower() in _PRODUCTION_LIKE_ENVS
 
 
 def _validate_auth_secret_for_environment() -> None:
     secret = (settings.AUTH_SECRET_KEY or "").strip()
-    if _is_production_environment() and (not secret or secret == _INSECURE_DEFAULT_AUTH_SECRET):
-        raise RuntimeError("AUTH_SECRET_KEY must be set to a non-default value in production")
-    if secret == _INSECURE_DEFAULT_AUTH_SECRET:
+    normalized = secret.lower()
+    if _is_production_environment() and normalized in _KNOWN_INSECURE_AUTH_SECRETS:
+        raise RuntimeError(
+            "AUTH_SECRET_KEY is required and must not use a development placeholder when APP_ENV is prod/production/staging"
+        )
+    if normalized == _INSECURE_DEFAULT_AUTH_SECRET:
         logger.warning("AUTH_SECRET_KEY is using the insecure development default. Set a unique secret for shared/prod environments.")
 
 
