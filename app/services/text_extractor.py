@@ -6,6 +6,10 @@ logger = logging.getLogger(__name__)
 
 
 class TextExtractor:
+    @staticmethod
+    def _safe_exc_name(exc: Exception) -> str:
+        return exc.__class__.__name__
+
     def extract(self, file_path: Path, file_type: str) -> Tuple[Optional[str], Optional[int], Optional[int]]:
         """Return (text, page_count, word_count)."""
         try:
@@ -73,7 +77,7 @@ class TextExtractor:
             images = convert_from_path(str(file_path), dpi=200, first_page=1, last_page=5)
             return "\n".join(pytesseract.image_to_string(img) for img in images)
         except Exception as e:
-            logger.warning("PDF OCR fallback failed: %s", e)
+            logger.warning("PDF OCR fallback failed file=%s error_type=%s", file_path, self._safe_exc_name(e))
             return ""
 
     def _extract_docx(self, file_path: Path) -> Tuple[Optional[str], None, Optional[int]]:
@@ -81,13 +85,24 @@ class TextExtractor:
             from docx import Document
 
             doc = Document(file_path)
-            parts = [p.text for p in doc.paragraphs if p.text.strip()]
-            for table in doc.tables:
-                for row in table.rows:
-                    for cell in row.cells:
-                        cell_text = (cell.text or "").strip()
-                        if cell_text:
-                            parts.append(cell_text)
+            parts = []
+            body = doc.element.body
+            for child in body.iterchildren():
+                if child.tag.endswith("}p"):
+                    for p in doc.paragraphs:
+                        if p._element is child:
+                            if p.text.strip():
+                                parts.append(p.text)
+                            break
+                elif child.tag.endswith("}tbl"):
+                    for table in doc.tables:
+                        if table._element is child:
+                            for row in table.rows:
+                                for cell in row.cells:
+                                    cell_text = (cell.text or "").strip()
+                                    if cell_text:
+                                        parts.append(cell_text)
+                            break
             text = "\n".join(parts)
             return text, None, len(text.split())
         except Exception as e:
@@ -147,7 +162,7 @@ class TextExtractor:
                 logger.warning("Image OCR failed file=%s", file_path)
             return text, 1, len(text.split())
         except Exception as e:
-            logger.error("Image OCR attempted and failed file=%s error=%s", file_path, e)
+            logger.error("Image OCR attempted and failed file=%s error_type=%s", file_path, self._safe_exc_name(e))
             return None, None, None
 
 

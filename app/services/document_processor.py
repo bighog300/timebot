@@ -12,6 +12,7 @@ from app.models.document import Document
 from app.models.user import User
 from app.services.error_sanitizer import sanitize_processing_error
 from app.services.storage import storage
+from app.services.artifact_lookup import latest_artifact
 from app.services.text_extractor import text_extractor
 from app.services.thumbnail_generator import thumbnail_generator
 
@@ -269,9 +270,9 @@ class DocumentProcessor:
         except Exception:
             if file_path.exists():
                 raise
-        candidates = sorted(storage.text_path.rglob(f"{document_id}.txt"), key=lambda p: p.as_posix())
-        if candidates:
-            latest = max(candidates, key=lambda p: p.stat().st_mtime)
+        candidates = list(storage.text_path.rglob(f"{document_id}.txt"))
+        latest = latest_artifact(candidates)
+        if latest:
             return latest.read_text(encoding="utf-8")
         return ""
 
