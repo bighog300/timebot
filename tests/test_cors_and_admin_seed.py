@@ -69,3 +69,55 @@ def test_seed_initial_admin_is_idempotent_and_promotes_admin(db, monkeypatch):
     users = db.query(User).filter(User.email == 'admin@example.com').all()
     assert len(users) == 1
     assert users[0].role == 'admin'
+
+
+def test_seed_initial_admin_does_not_overwrite_existing_password_by_default(db, monkeypatch):
+    monkeypatch.setattr('app.services.admin_seed.settings.INITIAL_ADMIN_EMAIL', 'admin2@example.com')
+    monkeypatch.setattr('app.services.admin_seed.settings.INITIAL_ADMIN_PASSWORD', 'password12345')
+    monkeypatch.setattr('app.services.admin_seed.settings.RESET_INITIAL_ADMIN_PASSWORD', False)
+
+    assert seed_initial_admin(db) is True
+    user = db.query(User).filter(User.email == 'admin2@example.com').first()
+    original_hash = user.password_hash
+
+    monkeypatch.setattr('app.services.admin_seed.settings.INITIAL_ADMIN_PASSWORD', 'new-password-123')
+    assert seed_initial_admin(db) is True
+
+    user = db.query(User).filter(User.email == 'admin2@example.com').first()
+    assert user.password_hash == original_hash
+
+
+def test_seed_initial_admin_can_reset_password_in_non_production_when_flag_enabled(db, monkeypatch):
+    monkeypatch.setattr('app.services.admin_seed.settings.INITIAL_ADMIN_EMAIL', 'admin3@example.com')
+    monkeypatch.setattr('app.services.admin_seed.settings.INITIAL_ADMIN_PASSWORD', 'password12345')
+    monkeypatch.setattr('app.services.admin_seed.settings.RESET_INITIAL_ADMIN_PASSWORD', False)
+    monkeypatch.setattr('app.services.admin_seed.settings.APP_ENV', 'development')
+
+    assert seed_initial_admin(db) is True
+    user = db.query(User).filter(User.email == 'admin3@example.com').first()
+    original_hash = user.password_hash
+
+    monkeypatch.setattr('app.services.admin_seed.settings.INITIAL_ADMIN_PASSWORD', 'new-password-123')
+    monkeypatch.setattr('app.services.admin_seed.settings.RESET_INITIAL_ADMIN_PASSWORD', True)
+
+    assert seed_initial_admin(db) is True
+    user = db.query(User).filter(User.email == 'admin3@example.com').first()
+    assert user.password_hash != original_hash
+
+
+def test_seed_initial_admin_does_not_reset_password_in_production(db, monkeypatch):
+    monkeypatch.setattr('app.services.admin_seed.settings.INITIAL_ADMIN_EMAIL', 'admin4@example.com')
+    monkeypatch.setattr('app.services.admin_seed.settings.INITIAL_ADMIN_PASSWORD', 'password12345')
+    monkeypatch.setattr('app.services.admin_seed.settings.RESET_INITIAL_ADMIN_PASSWORD', False)
+
+    assert seed_initial_admin(db) is True
+    user = db.query(User).filter(User.email == 'admin4@example.com').first()
+    original_hash = user.password_hash
+
+    monkeypatch.setattr('app.services.admin_seed.settings.INITIAL_ADMIN_PASSWORD', 'new-password-123')
+    monkeypatch.setattr('app.services.admin_seed.settings.RESET_INITIAL_ADMIN_PASSWORD', True)
+    monkeypatch.setattr('app.services.admin_seed.settings.APP_ENV', 'production')
+
+    assert seed_initial_admin(db) is True
+    user = db.query(User).filter(User.email == 'admin4@example.com').first()
+    assert user.password_hash == original_hash

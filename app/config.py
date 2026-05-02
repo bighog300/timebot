@@ -75,6 +75,7 @@ class Settings(BaseSettings):
     INITIAL_ADMIN_EMAIL: str = ""
     INITIAL_ADMIN_PASSWORD: str = ""
     INITIAL_ADMIN_NAME: str = "Timebot Admin"
+    RESET_INITIAL_ADMIN_PASSWORD: bool = False
     STRIPE_SECRET_KEY: str = ""
     STRIPE_WEBHOOK_SECRET: str = ""
     SEED_DEFAULT_PROMPTS: bool = True
