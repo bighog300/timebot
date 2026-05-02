@@ -1,4 +1,5 @@
 import logging
+import hashlib
 
 from celery.exceptions import MaxRetriesExceededError
 
@@ -198,6 +199,22 @@ def embed_document_task(document_id: str):
             return
 
         text_to_embed = f"{document.filename} {document.summary or ''} {document.raw_text or ''}"
+        text_hash = hashlib.sha256(text_to_embed.encode("utf-8")).hexdigest()
+        metadata_blob = document.extracted_metadata if isinstance(document.extracted_metadata, dict) else {}
+        if metadata_blob.get("embedding_text_hash") == text_hash:
+            logger.info("Embedding skipped document_id=%s reason=text_hash_unchanged", document_id)
+            updated_metadata = dict(metadata_blob)
+            updated_metadata["embedding_skipped"] = True
+            document.extracted_metadata = updated_metadata
+            db.add(document)
+            db.commit()
+            _set_document_enrichment_status(
+                db,
+                document_id,
+                "complete",
+                task_name="embeddings",
+            )
+            return {"status": "skipped", "reason": "text_hash_unchanged"}
         metadata = {
             "filename": document.filename,
             "category": document.ai_category.name if document.ai_category else None,
@@ -210,6 +227,12 @@ def embed_document_task(document_id: str):
             text=text_to_embed,
             metadata=metadata,
         )
+        updated_metadata = dict(metadata_blob)
+        updated_metadata["embedding_text_hash"] = text_hash
+        updated_metadata["embedding_skipped"] = False
+        document.extracted_metadata = updated_metadata
+        db.add(document)
+        db.commit()
         _finalize_enrichment_if_ready(db, document_id, task_name="embeddings", task_status="complete")
     except Exception as exc:
         _finalize_enrichment_if_ready(

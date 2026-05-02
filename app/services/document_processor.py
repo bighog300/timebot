@@ -350,6 +350,10 @@ class DocumentProcessor:
         updated = dict(metadata)
         updated["json_parse_retry_used"] = bool(analysis.get("json_parse_retry_used"))
         updated["ai_analysis_degraded"] = bool(analysis.get("ai_analysis_degraded"))
+        updated["ai_call_count"] = int(analysis.get("ai_call_count") or 0)
+        updated["ai_provider"] = analysis.get("ai_provider")
+        updated["ai_model"] = analysis.get("ai_model")
+        updated["ai_analysis_duration_ms"] = analysis.get("ai_duration_ms")
         setattr(document, "extracted_metadata", updated)
 
 

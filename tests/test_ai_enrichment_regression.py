@@ -170,6 +170,22 @@ def test_ai_fallback_markers_are_persisted(monkeypatch):
     assert document.json_parse_retry_used is True
 
 
+def test_ai_call_count_is_persisted(monkeypatch):
+    processor = DocumentProcessor()
+    document = _build_document()
+
+    monkeypatch.setattr("app.services.ai_analyzer.ai_analyzer.analyze_document", lambda **_kwargs: {
+        "summary": "ok", "key_points": [], "entities": {}, "action_items": [], "tags": [],
+        "ai_call_count": 2, "ai_provider": "openai", "ai_model": "gpt-test", "ai_duration_ms": 123.4,
+    })
+    monkeypatch.setattr("app.services.ai_analyzer.ai_analyzer.compute_confidence", lambda _analysis: 0.9)
+    monkeypatch.setattr("app.services.document_intelligence.document_intelligence_service.create_from_analysis", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr("app.services.relationship_detection.relationship_detection_service.detect_for_document", lambda **_kwargs: {"scanned": 0, "created": 0, "updated": 0})
+
+    processor._run_ai_analysis(_FakeDB(), document, "document text")
+    assert document.extracted_metadata["ai_call_count"] == 2
+
+
 def test_relationship_failure_persists_warning_without_raise(monkeypatch):
     processor = DocumentProcessor()
     document = _build_document()
