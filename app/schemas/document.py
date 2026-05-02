@@ -40,6 +40,11 @@ class DocumentResponse(BaseModel):
     upload_date: datetime
     processing_status: str
     processing_error: Optional[str] = None
+    enrichment_status: str = "complete"
+    enrichment_pending: bool = False
+    intelligence_warnings: List[str] = []
+    ai_analysis_degraded: bool = False
+    json_parse_retry_used: bool = False
     summary: Optional[str] = None
     key_points: Optional[List[str]] = None
     entities: Optional[Dict[str, Any]] = None

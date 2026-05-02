@@ -93,6 +93,7 @@ class DocumentProcessor:
     def process_document(self, db: Session, document: Document, run_relationship_detection: bool = True):
         total_start = time.perf_counter()
         document.processing_status = "processing"
+        self._set_enrichment_status(document, "pending")
         db.add(document)
         db.commit()
 
@@ -174,6 +175,11 @@ class DocumentProcessor:
 
             document.processing_status = "completed"
             document.processed_date = datetime.now(timezone.utc)
+            if run_relationship_detection:
+                if document.enrichment_status not in {"degraded", "pending"}:
+                    self._set_enrichment_status(document, "complete")
+            else:
+                self._set_enrichment_status(document, "pending")
 
         except Exception as e:
             logger.error("Document processing error for %s: %s", document.id, e)
@@ -220,6 +226,7 @@ class DocumentProcessor:
                 else "approved"
             )
             logger.info("Persisting intelligence doc_id=%s", document.id)
+            self._persist_ai_analysis_markers(document, analysis)
             intelligence = document_intelligence_service.create_from_analysis(db, document, analysis)
             if hasattr(db, "refresh"):
                 db.refresh(document)
@@ -256,6 +263,7 @@ class DocumentProcessor:
                         document,
                         f"Relationship generation failed: {exc}",
                     )
+                    self._set_enrichment_status(document, "degraded")
         except AIAnalysisError as exc:
             self._append_processing_warning(document, str(exc))
             logger.warning("AI analysis failed doc_id=%s error=%s", document.id, exc)
@@ -280,6 +288,14 @@ class DocumentProcessor:
         safe_message = sanitize_processing_error(message)
         if not safe_message:
             return
+        metadata_value = getattr(document, "extracted_metadata", None)
+        metadata = metadata_value if isinstance(metadata_value, dict) else {}
+        updated = dict(metadata)
+        warnings = updated.get("intelligence_warnings") if isinstance(updated.get("intelligence_warnings"), list) else []
+        if safe_message not in warnings:
+            warnings.append(safe_message)
+        updated["intelligence_warnings"] = warnings
+        setattr(document, "extracted_metadata", updated)
         if not document.processing_error:
             document.processing_error = safe_message
             return
@@ -288,7 +304,8 @@ class DocumentProcessor:
         document.processing_error = f"{document.processing_error} | {safe_message}"
 
     def _record_extraction_metadata(self, document: Document, *, text: str, status: str, error: str | None = None) -> None:
-        metadata = document.extracted_metadata if isinstance(document.extracted_metadata, dict) else {}
+        metadata_value = getattr(document, "extracted_metadata", None)
+        metadata = metadata_value if isinstance(metadata_value, dict) else {}
         updated_metadata = dict(metadata)
         updated_metadata["extracted_text_length"] = len(text or "")
         updated_metadata["extraction_status"] = status
@@ -298,6 +315,22 @@ class DocumentProcessor:
         else:
             updated_metadata.pop("extraction_error", None)
         document.extracted_metadata = updated_metadata
+
+    def _set_enrichment_status(self, document: Document, status: str) -> None:
+        metadata_value = getattr(document, "extracted_metadata", None)
+        metadata = metadata_value if isinstance(metadata_value, dict) else {}
+        updated = dict(metadata)
+        updated["enrichment_status"] = status
+        updated["enrichment_pending"] = status == "pending"
+        setattr(document, "extracted_metadata", updated)
+
+    def _persist_ai_analysis_markers(self, document: Document, analysis: dict) -> None:
+        metadata_value = getattr(document, "extracted_metadata", None)
+        metadata = metadata_value if isinstance(metadata_value, dict) else {}
+        updated = dict(metadata)
+        updated["json_parse_retry_used"] = bool(analysis.get("json_parse_retry_used"))
+        updated["ai_analysis_degraded"] = bool(analysis.get("ai_analysis_degraded"))
+        setattr(document, "extracted_metadata", updated)
 
 
 document_processor = DocumentProcessor()

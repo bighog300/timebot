@@ -234,6 +234,12 @@ export function DocumentDetailPage() {
     <div className="space-y-4">
       <h1 className="text-xl font-semibold">{doc.filename}</h1>
       <ProcessingStatusIndicator status={doc.processing_status} processingError={doc.processing_error} showErrorBanner />
+      {doc.processing_status === "completed" && doc.enrichment_pending && (
+        <Card>Analysis complete. Final enrichment is still running.</Card>
+      )}
+      {doc.ai_analysis_degraded && (
+        <Card>Analysis completed with partial AI output.</Card>
+      )}
       <div className="flex flex-wrap gap-2">
         <Button onClick={() => updateMutation.mutate({ is_favorite: !doc.is_favorite })}>{doc.is_favorite ? 'Unfavorite' : 'Favorite'}</Button>
         <Button onClick={() => updateMutation.mutate({ is_archived: !doc.is_archived })}>{doc.is_archived ? 'Unarchive' : 'Archive'}</Button>

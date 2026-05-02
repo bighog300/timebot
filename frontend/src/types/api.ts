@@ -14,6 +14,11 @@ export interface Document {
   upload_date: string;
   processing_status: string;
   processing_error?: string | null;
+  enrichment_status?: "pending" | "complete" | "degraded";
+  enrichment_pending?: boolean;
+  intelligence_warnings?: string[];
+  ai_analysis_degraded?: boolean;
+  json_parse_retry_used?: boolean;
   summary?: string | null;
   key_points?: string[] | null;
   entities?: Record<string, unknown> | null;

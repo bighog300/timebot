@@ -46,6 +46,7 @@ def process_document_task(self, document_id: str):
         document_processor.process_document(db, document, run_relationship_detection=False)
 
         if document.processing_status == "completed":
+            _set_document_enrichment_status(db, document_id, "pending")
             logger.info("Process task completed task_id=%s document_id=%s summary_length=%s", self.request.id, document_id, len(document.summary or ""))
             _update_queue_entry(db, queue_entry, status="completed", completed_at=True)
             embed_document_task.delay(document_id)
@@ -126,7 +127,12 @@ def detect_relationships_task(document_id: str):
 
     db = SessionLocal()
     try:
-        return relationship_detection_service.detect_for_document(db=db, document_id=document_id)
+        result = relationship_detection_service.detect_for_document(db=db, document_id=document_id)
+        _finalize_enrichment_if_ready(db, document_id)
+        return result
+    except Exception as exc:
+        _set_document_enrichment_status(db, document_id, "degraded", warning=f"Relationship generation failed: {exc}")
+        raise
     finally:
         db.close()
 
@@ -196,6 +202,10 @@ def embed_document_task(document_id: str):
             text=text_to_embed,
             metadata=metadata,
         )
+        _finalize_enrichment_if_ready(db, document_id)
+    except Exception as exc:
+        _set_document_enrichment_status(db, document_id, "degraded", warning=f"Embedding generation failed: {exc}")
+        raise
     finally:
         db.close()
 
@@ -286,3 +296,30 @@ def _update_queue_entry(
 
     db.add(queue_entry)
     db.commit()
+
+
+def _set_document_enrichment_status(db, document_id: str, status: str, warning: str | None = None):
+    from app.models.document import Document
+    from app.services.error_sanitizer import sanitize_processing_error
+    doc = db.query(Document).filter(Document.id == document_id).first()
+    if not doc:
+        return
+    metadata = doc.extracted_metadata if isinstance(doc.extracted_metadata, dict) else {}
+    updated = dict(metadata)
+    updated["enrichment_status"] = status
+    updated["enrichment_pending"] = status == "pending"
+    if warning:
+        safe = sanitize_processing_error(warning)
+        warnings = updated.get("intelligence_warnings") if isinstance(updated.get("intelligence_warnings"), list) else []
+        if safe and safe not in warnings:
+            warnings.append(safe)
+            updated["intelligence_warnings"] = warnings
+    doc.extracted_metadata = updated
+    if hasattr(db, "add"):
+        db.add(doc)
+    if hasattr(db, "commit"):
+        db.commit()
+
+
+def _finalize_enrichment_if_ready(db, document_id: str):
+    _set_document_enrichment_status(db, document_id, "complete")

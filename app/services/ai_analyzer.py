@@ -73,7 +73,7 @@ class AIAnalyzer:
                 ],
             })
             content = openai_client_service.extract_response_text(response)
-            analysis, parse_retry_used = self._parse_and_normalize(content, filename=filename)
+            analysis, parse_retry_used, degraded_output = self._parse_and_normalize(content, filename=filename)
             if parse_retry_used:
                 ai_calls += 1
             duration_ms = round((time.perf_counter() - analyze_start) * 1000, 2)
@@ -88,6 +88,8 @@ class AIAnalyzer:
             summary = (analysis.get("summary") or "").strip()
             if not summary:
                 raise AIAnalysisError("AI enrichment failed: summary missing from model response.")
+            analysis["json_parse_retry_used"] = parse_retry_used
+            analysis["ai_analysis_degraded"] = degraded_output
             return analysis
 
         except APIError as e:
@@ -174,11 +176,11 @@ class AIAnalyzer:
             result = result.replace(token, value)
         return result
 
-    def _parse_and_normalize(self, content: str, *, filename: str) -> tuple[Dict[str, Any], bool]:
+    def _parse_and_normalize(self, content: str, *, filename: str) -> tuple[Dict[str, Any], bool, bool]:
         try:
             analysis = self._normalize_analysis(self._parse_json(content))
             logger.info("ai_summary_parse_success filename=%s parse_success=true", filename)
-            return analysis, False
+            return analysis, False, False
         except AIAnalysisError:
             logger.warning("ai_summary_parse_failure filename=%s parse_success=false", filename)
             retry_content = self._retry_json_only(content)
@@ -186,12 +188,12 @@ class AIAnalyzer:
                 try:
                     analysis = self._normalize_analysis(self._parse_json(retry_content))
                     logger.info("ai_summary_parse_success filename=%s parse_success=true retry=true", filename)
-                    return analysis, True
+                    return analysis, True, False
                 except AIAnalysisError:
                     logger.warning("ai_summary_parse_failure filename=%s parse_success=false retry=true", filename)
 
             fallback_summary = (content or "").strip()[:500]
-            return self._normalize_analysis({"summary": fallback_summary, "timeline_events": [], "relationships": []}), True
+            return self._normalize_analysis({"summary": fallback_summary, "timeline_events": [], "relationships": []}), True, True
 
     def _retry_json_only(self, content: str) -> Optional[str]:
         response = openai_client_service.generate_completion({

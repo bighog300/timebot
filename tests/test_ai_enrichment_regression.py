@@ -150,3 +150,40 @@ def test_process_document_fails_when_ai_analysis_errors(db, sample_document, tmp
     db.refresh(sample_document)
     assert sample_document.processing_status == "failed"
     assert sample_document.processing_error == "Processing failed due to an internal error."
+
+
+def test_ai_fallback_markers_are_persisted(monkeypatch):
+    processor = DocumentProcessor()
+    document = _build_document()
+
+    monkeypatch.setattr("app.services.ai_analyzer.ai_analyzer.analyze_document", lambda **_kwargs: {
+        "summary": "fallback summary", "key_points": [], "entities": {}, "action_items": [], "tags": [],
+        "json_parse_retry_used": True, "ai_analysis_degraded": True,
+    })
+    monkeypatch.setattr("app.services.ai_analyzer.ai_analyzer.compute_confidence", lambda _analysis: 0.9)
+    monkeypatch.setattr("app.services.document_intelligence.document_intelligence_service.create_from_analysis", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr("app.services.relationship_detection.relationship_detection_service.detect_for_document", lambda **_kwargs: {"scanned": 0, "created": 0, "updated": 0})
+
+    processor._run_ai_analysis(_FakeDB(), document, "document text")
+
+    assert document.ai_analysis_degraded is True
+    assert document.json_parse_retry_used is True
+
+
+def test_relationship_failure_persists_warning_without_raise(monkeypatch):
+    processor = DocumentProcessor()
+    document = _build_document()
+
+    monkeypatch.setattr("app.services.ai_analyzer.ai_analyzer.analyze_document", lambda **_kwargs: {"summary": "ok", "key_points": [], "entities": {}, "action_items": [], "tags": []})
+    monkeypatch.setattr("app.services.ai_analyzer.ai_analyzer.compute_confidence", lambda _analysis: 0.9)
+    monkeypatch.setattr("app.services.document_intelligence.document_intelligence_service.create_from_analysis", lambda *_args, **_kwargs: None)
+
+    def _boom(**_kwargs):
+        raise RuntimeError("relationships down")
+
+    monkeypatch.setattr("app.services.relationship_detection.relationship_detection_service.detect_for_document", _boom)
+
+    processor._run_ai_analysis(_FakeDB(), document, "document text")
+
+    assert document.enrichment_status == "degraded"
+    assert any("Relationship generation failed" in warning for warning in document.intelligence_warnings)

@@ -119,3 +119,19 @@ def test_process_task_registered():
     registered = celery_app.tasks.keys()
     assert "app.workers.tasks.process_document_task" in registered
     assert "app.workers.tasks.reprocess_document_task" in registered
+
+
+def test_reprocess_sets_enrichment_pending(client, sample_document, db, monkeypatch):
+    sample_document.extracted_metadata = {"enrichment_status": "complete", "enrichment_pending": False}
+    db.add(sample_document)
+    db.commit()
+
+    class _TaskResult:
+        id = "task-rp"
+
+    monkeypatch.setattr("app.workers.tasks.reprocess_document_task.apply_async", lambda *_, **__: _TaskResult())
+    resp = client.post(f"/api/v1/documents/{sample_document.id}/reprocess")
+    assert resp.status_code == 200
+    db.refresh(sample_document)
+    assert sample_document.enrichment_status == "pending"
+    assert sample_document.enrichment_pending is True

@@ -125,6 +125,37 @@ class Document(Base):
         ),
     )
 
+
+    @property
+    def enrichment_status(self) -> str:
+        metadata = self.extracted_metadata if isinstance(self.extracted_metadata, dict) else {}
+        status = metadata.get("enrichment_status")
+        if isinstance(status, str) and status in {"pending", "complete", "degraded"}:
+            return status
+        return "pending" if metadata.get("enrichment_pending") else "complete"
+
+    @property
+    def enrichment_pending(self) -> bool:
+        return self.enrichment_status == "pending"
+
+    @property
+    def intelligence_warnings(self) -> list[str]:
+        metadata = self.extracted_metadata if isinstance(self.extracted_metadata, dict) else {}
+        warnings = metadata.get("intelligence_warnings")
+        if isinstance(warnings, list):
+            return [str(item) for item in warnings if str(item).strip()]
+        return []
+
+    @property
+    def ai_analysis_degraded(self) -> bool:
+        metadata = self.extracted_metadata if isinstance(self.extracted_metadata, dict) else {}
+        return bool(metadata.get("ai_analysis_degraded"))
+
+    @property
+    def json_parse_retry_used(self) -> bool:
+        metadata = self.extracted_metadata if isinstance(self.extracted_metadata, dict) else {}
+        return bool(metadata.get("json_parse_retry_used"))
+
     def __repr__(self):
         return f"<Document(filename='{self.filename}', status='{self.processing_status}')>"
 
