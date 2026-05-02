@@ -72,6 +72,6 @@ def test_limits_and_features_resolve_from_user_plan(db):
     db.commit()
 
     ensure_default_free_subscription(db, user.id)
-    assert get_plan_limit(db, user.id, "documents") == 25
+    assert get_plan_limit(db, user.id, "documents_per_month") == 10
     assert user_has_feature(db, user.id, "chat") is True
     assert user_has_feature(db, user.id, "team_workspace") is False

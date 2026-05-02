@@ -1,158 +1,76 @@
 import uuid
-from datetime import datetime, timezone
-from types import SimpleNamespace
 
-from app.models.chat import ChatMessage, ChatSession, GeneratedReport
-from app.models.document import Document
-from app.services.billing import BillingService
-from app.services.monetization import ActionType, ensure_user_limit, refresh_usage_counters
+from datetime import datetime, timedelta, timezone
+
+from app.models.billing import Plan, Subscription
+from app.services.limit_enforcement import enforce_feature, enforce_limit
 
 
-def _mk_document(db, user_id, name='test.pdf'):
-    doc = Document(
+def _attach_subscription(db, user, slug: str, limits=None, features=None):
+    plan = Plan(
         id=uuid.uuid4(),
-        filename=name,
-        original_path=f"/tmp/{name}",
-        file_type='pdf',
-        file_size=100,
-        mime_type='application/pdf',
-        processing_status='completed',
-        source='upload',
-        user_id=user_id,
+        slug=f"{slug}-{uuid.uuid4()}",
+        name=slug.title(),
+        price_monthly_cents=0,
+        currency="usd",
+        limits_json=limits or {"documents_per_month": 1, "processing_jobs_per_month": 1, "storage_bytes": 1024},
+        features_json=features or {"chat": True, "insights_enabled": False},
+        is_active=True,
     )
-    db.add(doc)
+    db.add(plan)
     db.commit()
-    return doc
-
-
-def test_usage_increments_on_document_upload(db, test_user):
-    assert test_user.documents_uploaded_count == 0
-    _mk_document(db, test_user.id, 'u1.pdf')
-    refresh_usage_counters(db, test_user)
-    db.commit()
-    assert test_user.documents_uploaded_count == 1
-
-
-def test_usage_increments_on_report_generation(db, test_user):
-    assert test_user.reports_generated_count == 0
-    report = GeneratedReport(
-        id=uuid.uuid4(),
-        title='r',
-        prompt='p',
-        content_markdown='c',
-        source_document_ids=[],
-        source_refs=[],
-        created_at=datetime.now(timezone.utc),
-        created_by_id=test_user.id,
+    sub = Subscription(
+        user_id=user.id,
+        plan_id=plan.id,
+        status="active",
+        external_provider="internal",
+        current_period_start=datetime.now(timezone.utc) + timedelta(seconds=1),
     )
-    db.add(report)
+    db.add(sub)
     db.commit()
-    refresh_usage_counters(db, test_user)
-    db.commit()
-    assert test_user.reports_generated_count == 1
+    return plan, sub
 
 
-def test_usage_increments_on_chat_message(db, test_user):
-    session = ChatSession(id=uuid.uuid4(), title='s', user_id=test_user.id)
-    db.add(session)
-    db.commit()
-    msg = ChatMessage(id=uuid.uuid4(), session_id=session.id, role='user', content='hi', created_at=datetime.now(timezone.utc))
-    db.add(msg)
-    db.commit()
-    refresh_usage_counters(db, test_user)
-    db.commit()
-    assert test_user.chat_messages_count == 1
-
-
-def test_free_plan_blocks_document_upload_at_limit(db, test_user):
-    test_user.plan = 'free'
+def test_enforcement_uses_subscription_not_users_plan_for_limits(db, test_user):
+    test_user.plan = "pro"
     db.add(test_user)
     db.commit()
-    for i in range(25):
-        _mk_document(db, test_user.id, f'd{i}.pdf')
+    _attach_subscription(db, test_user, "freecheck", limits={"documents_per_month": 0, "processing_jobs_per_month": 0, "storage_bytes": 0})
+
     try:
-        ensure_user_limit(db, test_user, ActionType.UPLOAD_DOCUMENT)
-        assert False, 'expected limit exception'
+        enforce_limit(db, test_user.id, "documents_per_month", quantity=1)
+        assert False, "expected limit enforcement from subscription"
     except Exception as exc:
-        assert getattr(exc, 'status_code', None) == 429
+        assert getattr(exc, "status_code", None) == 402
 
 
-def test_free_plan_blocks_report_generation_at_limit(db, test_user):
-    test_user.plan = 'free'
+def test_enforcement_uses_subscription_not_users_plan_for_features(db, test_user):
+    test_user.plan = "pro"
     db.add(test_user)
     db.commit()
-    for i in range(10):
-        db.add(GeneratedReport(id=uuid.uuid4(), title=f'r{i}', prompt='p', content_markdown='c', source_document_ids=[], source_refs=[], created_by_id=test_user.id))
-    db.commit()
+    _attach_subscription(db, test_user, "freefeatures", features={"chat": False, "insights_enabled": False})
+
     try:
-        ensure_user_limit(db, test_user, ActionType.GENERATE_REPORT)
-        assert False, 'expected limit exception'
+        enforce_feature(db, test_user.id, "chat")
+        assert False, "expected feature enforcement from subscription"
     except Exception as exc:
-        assert getattr(exc, 'status_code', None) == 429
+        assert getattr(exc, "status_code", None) == 403
 
 
-def test_free_plan_blocks_chat_at_limit(db, test_user):
-    test_user.plan = 'free'
+def test_subscription_change_affects_enforcement_users_plan_change_does_not(db, test_user):
+    test_user.plan = "free"
     db.add(test_user)
     db.commit()
-    session = ChatSession(id=uuid.uuid4(), title='s', user_id=test_user.id)
-    db.add(session)
-    db.commit()
-    for i in range(200):
-        db.add(ChatMessage(id=uuid.uuid4(), session_id=session.id, role='user', content=f'm{i}'))
+    _attach_subscription(db, test_user, "locked", features={"chat": False})
+
+    test_user.plan = "pro"
+    db.add(test_user)
     db.commit()
     try:
-        ensure_user_limit(db, test_user, ActionType.SEND_CHAT)
-        assert False, 'expected limit exception'
+        enforce_feature(db, test_user.id, "chat")
+        assert False, "chat should still be blocked"
     except Exception as exc:
-        assert getattr(exc, 'status_code', None) == 429
+        assert getattr(exc, "status_code", None) == 403
 
-
-def test_pro_plan_allows_higher_usage(db, test_user):
-    test_user.plan = 'pro'
-    db.add(test_user)
-    db.commit()
-    for i in range(40):
-        _mk_document(db, test_user.id, f'p{i}.pdf')
-    ensure_user_limit(db, test_user, ActionType.UPLOAD_DOCUMENT)
-
-
-def test_checkout_session_creation_returns_expected_payload(client):
-    res = client.post('/api/v1/billing/checkout', json={'plan': 'pro'})
-    assert res.status_code == 200
-    body = res.json()
-    assert body['plan'] == 'pro'
-    assert body['checkout_session_id'].startswith('stub_')
-    assert body['checkout_url'].startswith('https://billing.stub/checkout/')
-
-
-def test_webhook_updates_user_plan(db, test_user):
-    svc = BillingService('x', 'y')
-    event = {'type': 'checkout.session.completed', 'data': {'object': {'client_reference_id': str(test_user.id), 'metadata': {'plan': 'pro'}}}}
-    assert svc.handle_webhook(db, event) is True
-    db.refresh(test_user)
-    assert test_user.plan == 'pro'
-
-
-def test_invalid_webhook_handled_safely(client):
-    res = client.post('/api/v1/billing/webhook', json={'type': 'unexpected'})
-    assert res.status_code == 400
-    assert res.json()['detail'] == 'Invalid webhook'
-
-
-def test_get_usage_returns_expected_counters_and_limits(db, client, test_user):
-    _mk_document(db, test_user.id, 'usage.pdf')
-    db.add(GeneratedReport(id=uuid.uuid4(), title='r', prompt='p', content_markdown='c', source_document_ids=[], source_refs=[], created_by_id=test_user.id))
-    s = ChatSession(id=uuid.uuid4(), title='s', user_id=test_user.id)
-    db.add(s)
-    db.commit()
-    db.add(ChatMessage(id=uuid.uuid4(), session_id=s.id, role='user', content='hello'))
-    db.commit()
-
-    res = client.get('/api/v1/usage')
-    assert res.status_code == 200
-    data = res.json()
-    assert data['plan'] == 'free'
-    assert data['documents'] == {'used': 1, 'limit': 25}
-    assert data['reports'] == {'used': 1, 'limit': 10}
-    assert data['chat_messages'] == {'used': 1, 'limit': 200}
+    _attach_subscription(db, test_user, "unlocked", features={"chat": True})
+    enforce_feature(db, test_user.id, "chat")

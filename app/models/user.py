@@ -17,6 +17,8 @@ class User(Base):
     display_name = Column(String(255), nullable=False)
     is_active = Column(Boolean, nullable=False, default=True)
     role = Column(String(20), nullable=False, default="viewer")
+    # DEPRECATED: legacy monetization field; enforcement must use Subscription/Plan.
+    # TODO: remove users.plan in a future migration after all legacy billing paths are retired.
     plan = Column(String(20), nullable=False, default="free")
     documents_uploaded_count = Column(Integer, nullable=False, default=0)
     reports_generated_count = Column(Integer, nullable=False, default=0)

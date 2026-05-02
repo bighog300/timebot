@@ -7,9 +7,26 @@ from app.config import settings
 from app.models.billing import Plan
 from app.models.user import User
 from app.services.billing import BillingService
-from app.services.monetization import usage_payload
-from app.services.subscriptions import ensure_default_free_subscription, get_user_subscription, seed_default_plans
+from app.services.usage import get_usage_total
+from datetime import timedelta
+from app.models.document import Document
 
+
+
+def usage_payload(db: Session, user: User) -> dict:
+    subscription = ensure_default_free_subscription(db, user.id)
+    plan = subscription.plan
+    limits = (plan.limits_json if plan else {}) or {}
+    start = subscription.current_period_start
+    end = subscription.current_period_end or (start + timedelta(days=32)).replace(day=1)
+    docs_used = db.query(Document).filter(Document.user_id == user.id).count()
+    jobs_used = get_usage_total(db, user.id, "processing_jobs_per_month", start, end)
+    return {
+        "plan": plan.slug if plan else "free",
+        "documents": {"used": docs_used, "limit": limits.get("documents_per_month")},
+        "processing_jobs": {"used": jobs_used, "limit": limits.get("processing_jobs_per_month")},
+        "storage_bytes": {"used": sum((d.file_size or 0) for d in db.query(Document).filter(Document.user_id == user.id).all()), "limit": limits.get("storage_bytes")},
+    }
 router = APIRouter(tags=["monetization"])
 billing_service = BillingService(settings.STRIPE_SECRET_KEY, settings.STRIPE_WEBHOOK_SECRET)
 

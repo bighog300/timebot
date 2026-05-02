@@ -4,6 +4,9 @@ from dataclasses import dataclass
 
 from sqlalchemy.orm import Session
 
+from datetime import datetime, timezone
+
+from app.models.billing import Plan, Subscription
 from app.models.user import User
 
 
@@ -31,7 +34,22 @@ class BillingService:
         user = db.query(User).filter(User.id == user_id).first()
         if not user:
             return False
-        user.plan = plan
-        db.add(user)
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            return False
+        target_plan = db.query(Plan).filter(Plan.slug == plan, Plan.is_active.is_(True)).first()
+        if not target_plan:
+            return False
+        now = datetime.now(timezone.utc)
+        sub = Subscription(
+            user_id=user.id,
+            plan_id=target_plan.id,
+            status="active",
+            current_period_start=now,
+            current_period_end=None,
+            cancel_at_period_end=False,
+            external_provider="stripe",
+        )
+        db.add(sub)
         db.commit()
         return True
