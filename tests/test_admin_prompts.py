@@ -27,6 +27,26 @@ def test_non_admin_cannot_create_or_update_prompts(client, test_user, db):
     assert update.status_code == 403
 
 
+def test_admin_cannot_create_prompt_template_with_whitespace_only_content(client, test_user, db):
+    test_user.role = "admin"
+    db.commit()
+
+    r = client.post("/api/v1/admin/prompts", json={"type": "chat", "name": "v1", "content": "   \n\t  ", "version": 1, "is_active": False})
+    assert r.status_code == 422
+    assert "non-whitespace character" in str(r.json())
+
+
+def test_admin_cannot_update_prompt_template_with_whitespace_only_content(client, test_user, db):
+    test_user.role = "admin"
+    seeded = PromptTemplate(type="chat", name="seed", content="seed", version=1, is_active=False)
+    db.add(seeded)
+    db.commit()
+
+    r = client.put(f"/api/v1/admin/prompts/{seeded.id}", json={"content": "\n \t "})
+    assert r.status_code == 422
+    assert "non-whitespace character" in str(r.json())
+
+
 def test_active_prompt_loaded_by_type_and_fallback(db):
     assert get_active_prompt_content(db, "report", "default report") == "default report"
     template = PromptTemplate(type="report", name="custom", content="custom report", version=2, is_active=True)
