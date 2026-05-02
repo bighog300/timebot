@@ -266,3 +266,13 @@ describe('DocumentDetailPage relationship filtering', () => {
     expect(await screen.findByText('No insights found for this document.')).toBeTruthy();
   });
 });
+
+
+it('shows enrichment pending and degraded banners', async () => {
+  vi.mocked(api.getDocument).mockResolvedValue({ id: 'doc-1', filename: 'Contract.pdf', processing_status: 'completed', enrichment_pending: true, ai_analysis_degraded: true, processing_error: null, is_favorite: false, is_archived: false, summary: '', ai_category: null, file_type:'pdf', file_size:1, source:'upload', upload_date:new Date().toISOString(), ai_tags:[], user_tags:[] } as never);
+  vi.mocked(api.findSimilar).mockResolvedValue({ query: '', total: 0, results: [] } as never);
+  vi.mocked(api.getDocumentIntelligence).mockResolvedValue(null as never);
+  renderPage();
+  expect(await screen.findByText('Analysis complete. Final enrichment is still running.')).toBeInTheDocument();
+  expect(await screen.findByText('Analysis completed with partial AI output.')).toBeInTheDocument();
+});

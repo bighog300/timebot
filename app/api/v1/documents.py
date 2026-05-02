@@ -158,6 +158,12 @@ def reprocess_document(document_id: UUID, db: Session = Depends(get_db), current
     logger.info("Reprocess requested document_id=%s actor_id=%s", document_id, current_user.id)
     document.processing_status = "queued"
     document.processing_error = None
+    metadata = document.extracted_metadata if isinstance(document.extracted_metadata, dict) else {}
+    updated = dict(metadata)
+    updated["enrichment_status"] = "pending"
+    updated["enrichment_pending"] = True
+    updated["intelligence_stale"] = True
+    document.extracted_metadata = updated
     db.add(document)
     db.commit()
 
