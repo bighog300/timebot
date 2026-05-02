@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 
 from app.api.deps import get_current_user, get_db
 from app.main import app
+from app.models.billing import Plan
 
 
 class FakeQuery:
@@ -18,13 +19,18 @@ class FakeQuery:
     def first(self):
         return self._first
 
+    def order_by(self, *_args, **_kwargs):
+        return self
+
 
 class FakeDB:
     def __init__(self, first_result=None):
         self.first_result = first_result
         self.added = []
 
-    def query(self, _model):
+    def query(self, model):
+        if model is Plan:
+            return FakeQuery(SimpleNamespace(id=uuid4(), slug="free", is_active=True))
         return FakeQuery(self.first_result)
 
     def add(self, item):

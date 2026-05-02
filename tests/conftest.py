@@ -167,3 +167,26 @@ def sample_document(db, test_user):
     db.commit()
     db.refresh(doc)
     return doc
+
+
+@pytest.fixture(scope="function")
+def grant_pro_subscription(db):
+    from app.models.billing import Plan, Subscription
+    from app.services.subscriptions import seed_default_plans
+
+    seed_default_plans(db)
+    pro_plan = db.query(Plan).filter(Plan.slug == "pro").first()
+
+    def _grant(user_id):
+        db.query(Subscription).filter(Subscription.user_id == user_id).delete()
+        db.add(
+            Subscription(
+                user_id=user_id,
+                plan_id=pro_plan.id,
+                status="active",
+                external_provider="test",
+            )
+        )
+        db.commit()
+
+    return _grant

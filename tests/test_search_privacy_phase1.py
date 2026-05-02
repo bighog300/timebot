@@ -43,7 +43,8 @@ def _mk_doc(db, user_id, name: str, ai_category_id=None, entities=None):
     return doc
 
 
-def test_facets_timeline_and_insight_endpoints_are_user_scoped(client, db, test_user):
+def test_facets_timeline_and_insight_endpoints_are_user_scoped(client, db, test_user, grant_pro_subscription):
+    grant_pro_subscription(test_user.id)
     other = _mk_user(db, "other-privacy@example.com")
     owner_cat = Category(name="Owner Category", slug="owner-category")
     other_cat = Category(name="Other Category", slug="other-category")
@@ -77,7 +78,8 @@ def test_facets_timeline_and_insight_endpoints_are_user_scoped(client, db, test_
     assert total_docs <= 1
 
 
-def test_relationship_detect_forbidden_for_other_users_document(client, db, test_user):
+def test_relationship_detect_forbidden_for_other_users_document(client, db, test_user, grant_pro_subscription):
+    grant_pro_subscription(test_user.id)
     other = _mk_user(db, "other-detect@example.com")
     other_doc = _mk_doc(db, other.id, "hidden.pdf")
     resp = client.post(f"/api/v1/search/relationships/detect/{other_doc.id}")

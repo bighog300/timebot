@@ -45,13 +45,23 @@ def test_celery_flow_defers_inline_relationship_detection(db, sample_document, m
         def first(self):
             return self._document
 
+        def scalar(self):
+            return 0
+
+        def all(self):
+            return []
+
     class _FakeSession:
         def query(self, model):
-            if model.__name__ == "Document":
+            if getattr(model, "__name__", "") == "Document":
                 return _FakeQuery(sample_document)
             return _FakeQuery(None)
 
         def close(self):
+            return None
+        def add(self, *_args, **_kwargs):
+            return None
+        def commit(self):
             return None
 
     monkeypatch.setattr("app.db.base.SessionLocal", lambda: _FakeSession())
