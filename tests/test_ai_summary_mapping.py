@@ -26,3 +26,22 @@ def test_normalize_analysis_accepts_timeline_aliases_and_dates():
     assert normalized["timeline_events"][0]["title"] == "Renewal deadline"
     assert normalized["timeline_events"][0]["date"] == "2026-04-30"
     assert normalized["timeline_events"][1]["start_date"] == "2026-04-01"
+
+def test_timeline_event_title_is_derived_from_description_when_missing():
+    payload = {
+        "timeline_events": [
+            {"date": "2026-04-30", "description": "Contract renewal deadline for customer response", "confidence": 0.9}
+        ]
+    }
+    normalized = ai_analyzer._normalize_analysis(payload)
+    assert normalized["timeline_events"][0]["title"].lower().startswith("contract renewal deadline")
+
+
+def test_timeline_event_untitled_is_replaced_when_description_exists():
+    payload = {
+        "timeline_events": [
+            {"title": "Untitled event", "date": "2026-04-30", "description": "Court filing deadline"}
+        ]
+    }
+    normalized = ai_analyzer._normalize_analysis(payload)
+    assert normalized["timeline_events"][0]["title"] != "Untitled event"

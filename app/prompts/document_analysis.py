@@ -75,9 +75,25 @@ Content (up to {char_limit} characters):
 Return ONLY valid JSON:
 {
   "summary": string,
+  "key_points": array,
+  "entities": object,
   "timeline_events": array,
-  "relationships": array
+  "relationships": array,
+  "action_items": array,
+  "tags": array,
+  "confidence": number,
+  "warnings": array,
+  "metadata": object
 }
+
+Quality rules:
+- summary must be 3-6 sentences with parties, dates/timeframes, purpose, current outcome/status, and notable obligations/deadlines.
+- If a fact is missing or unclear, omit it (do not hallucinate).
+- timeline_events: each event needs a specific title, a description, confidence (0-1), and either date or start_date/end_date.
+- Do not use generic titles like "Untitled event" if description/date provides enough context.
+- action_items: extract explicit obligations, requested responses, and court/medical/admin tasks with deadlines when present.
+- Return action_items as [] only when no explicit action is present in the text.
+- For OCR/scanned text, infer structure conservatively from explicit cues only.
 
 Do not include explanation text."""
 

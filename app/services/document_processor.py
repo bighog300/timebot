@@ -362,6 +362,13 @@ class DocumentProcessor:
         updated["ai_provider"] = analysis.get("ai_provider")
         updated["ai_model"] = analysis.get("ai_model")
         updated["ai_analysis_duration_ms"] = analysis.get("ai_duration_ms")
+        updated["prompt_source"] = analysis.get("prompt_source")
+        if analysis.get("admin_prompt_invalid_fallback"):
+            warnings = updated.get("intelligence_warnings") if isinstance(updated.get("intelligence_warnings"), list) else []
+            msg = "Admin timeline_extraction prompt invalid; default AI prompt used."
+            if msg not in warnings:
+                warnings.append(msg)
+            updated["intelligence_warnings"] = warnings
         setattr(document, "extracted_metadata", updated)
 
 

@@ -67,3 +67,9 @@ def test_no_admin_template_uses_default_prompt(db):
     default = build_default_summary_prompt(filename="sample.txt", file_type="txt", char_limit=100, text="x")
     prompt = analyzer.get_prompt_template("timeline_extraction", db=db, filename="sample.txt", file_type="txt", text="x", char_limit=100)
     assert prompt == default
+
+def test_default_prompt_requests_richer_summary_and_action_items():
+    prompt = build_default_summary_prompt(filename="sample.txt", file_type="txt", char_limit=100, text="x")
+    assert "summary must be 3-6 sentences" in prompt
+    assert "action_items" in prompt
+    assert "Do not use generic titles like \"Untitled event\"" in prompt

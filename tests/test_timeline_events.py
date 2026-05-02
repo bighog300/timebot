@@ -184,3 +184,10 @@ def test_timeline_missing_confidence_remains_safe():
     res = timeline_service.build_timeline(FakeDB([doc]))
     assert res["events"][0]["confidence"] is None
     assert res["events"][0]["signal_strength"] is None
+
+def test_action_items_persist_to_document_from_analysis():
+    doc = _doc()
+    analysis = {'summary':'s','key_points':[],'tags':[],'entities':{},'action_items':['Submit signed form by 2026-05-10'],'timeline_events':[]}
+    db=FakeDB()
+    document_intelligence_service._upsert_from_analysis(db, doc, analysis)
+    assert doc.action_items == ['Submit signed form by 2026-05-10']
