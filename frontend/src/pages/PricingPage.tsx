@@ -1,15 +1,26 @@
 import { Card } from '@/components/ui/Card';
-import { usePlans, useSubscription } from '@/hooks/useApi';
+import { useCreateCheckoutSession, useCreateCustomerPortalSession, usePlans, useSubscription } from '@/hooks/useApi';
+import { useUIStore } from '@/store/uiStore';
 
 export function PricingPage() {
+  const { pushToast } = useUIStore();
   const plans = usePlans();
   const subscription = useSubscription();
+  const checkout = useCreateCheckoutSession();
+  const portal = useCreateCustomerPortalSession();
 
   return (
     <div className="space-y-4">
       <h1 className="text-xl font-semibold">Plans & Pricing</h1>
-      <p className="text-sm text-slate-300">Billing checkout is coming soon. You can review plan limits and features now.</p>
       <div className="text-sm">Current plan: <span className="font-semibold uppercase">{subscription.data?.plan.slug ?? 'free'}</span></div>
+      <button className="rounded bg-slate-700 px-3 py-2 text-sm" onClick={async () => {
+        try {
+          const result = await portal.mutateAsync();
+          window.location.href = result.portal_url;
+        } catch {
+          pushToast('Unable to open billing portal', 'error');
+        }
+      }}>Manage billing</button>
       <div className="grid gap-3 md:grid-cols-3">
         {(plans.data || []).map((plan) => (
           <Card key={plan.slug}>
@@ -21,8 +32,15 @@ export function PricingPage() {
             <ul className="mt-3 space-y-1 text-xs text-slate-300">
               {Object.entries(plan.limits).slice(0, 4).map(([k, v]) => <li key={k}>{k}: {v ?? 'Unlimited'}</li>)}
             </ul>
-            <button className="mt-3 rounded bg-indigo-700 px-3 py-2 text-sm">
-              {plan.is_current ? 'Current plan' : 'Upgrade (Billing coming soon)'}
+            <button disabled={plan.is_current || checkout.isPending} className="mt-3 rounded bg-indigo-700 px-3 py-2 text-sm disabled:opacity-50" onClick={async () => {
+              try {
+                const result = await checkout.mutateAsync(plan.slug);
+                window.location.href = result.checkout_url;
+              } catch {
+                pushToast('Unable to start checkout', 'error');
+              }
+            }}>
+              {plan.is_current ? 'Current plan' : 'Choose plan'}
             </button>
           </Card>
         ))}

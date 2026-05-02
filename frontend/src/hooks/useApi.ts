@@ -606,3 +606,4 @@ export function useUsage() { const authReady = useAuthReady(); return useQuery({
 export function useSubscription() { const authReady = useAuthReady(); return useQuery({ queryKey: keys.subscription, queryFn: api.getSubscription, enabled: authReady }); }
 export function usePlans() { const authReady = useAuthReady(); return useQuery({ queryKey: keys.plans, queryFn: api.listPlans, enabled: authReady }); }
 export function useCreateCheckoutSession() { return useMutation({ mutationFn: (plan: string) => api.createCheckoutSession(plan) }); }
+export function useCreateCustomerPortalSession() { return useMutation({ mutationFn: () => api.createCustomerPortalSession() }); }
