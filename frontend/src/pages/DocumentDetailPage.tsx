@@ -254,6 +254,9 @@ export function DocumentDetailPage() {
   if (documentQuery.isError || !documentQuery.data) return <ErrorState message="Document not found" />;
 
   const doc = documentQuery.data;
+  const hasSuggestedCategory = Boolean(
+    intelligenceQuery.data?.suggested_category_id || doc.ai_category_id,
+  );
   return (
     <div className="space-y-4">
       <h1 className="text-xl font-semibold">{doc.filename}</h1>
@@ -331,7 +334,20 @@ export function DocumentDetailPage() {
               >
                 Save intelligence edits
               </Button>
-              <Button className="bg-emerald-700 hover:bg-emerald-600" onClick={() => approveCategory.mutate()}>Approve category</Button>
+              <Button
+                className="bg-emerald-700 hover:bg-emerald-600"
+                disabled={!hasSuggestedCategory}
+                onClick={() =>
+                  approveCategory.mutate(undefined, {
+                    onError: (error) => {
+                      const message = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+                      pushToast(message ? `Failed to approve category: ${message}` : 'Failed to approve category');
+                    },
+                  })
+                }
+              >
+                Approve category
+              </Button>
               <select className="rounded border border-slate-700 bg-slate-950 px-2 py-2 text-sm" value={categoryOverrideId} onChange={(e) => setCategoryOverrideId(e.target.value)}>
                 <option value="">Select category override</option>
                 {(categoriesQuery.data ?? []).map((cat) => (

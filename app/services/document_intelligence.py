@@ -426,11 +426,18 @@ class DocumentIntelligenceService:
         intelligence: DocumentIntelligence,
         actor_id: UUID | None = None,
     ) -> Document:
-        if not intelligence.suggested_category_id:
-            raise ValueError("No suggested category to approve")
+        suggested_category_id = intelligence.suggested_category_id
+        if not suggested_category_id and document.ai_category_id:
+            suggested_category_id = document.ai_category_id
+            intelligence.suggested_category_id = document.ai_category_id
+
+        if not suggested_category_id:
+            raise ValueError(
+                "No suggested category to approve. Regenerate intelligence or set a suggested category first."
+            )
 
         before = {"user_category_id": str(document.user_category_id) if document.user_category_id else None, "category_status": intelligence.category_status}
-        document.user_category_id = intelligence.suggested_category_id
+        document.user_category_id = suggested_category_id
         intelligence.category_status = "approved"
         review_queue_service.resolve_document_items(db, document.id, "uncategorized")
         db.add(document)

@@ -91,6 +91,83 @@ def test_category_approve_assigns_user_category_and_resolves_uncategorized(clien
     assert review.status == "resolved"
 
 
+def test_category_approve_uses_document_ai_category_when_intelligence_suggestion_missing(client, db, sample_document):
+    category = Category(name="Legal", slug="legal")
+    db.add(category)
+    db.commit()
+    db.refresh(category)
+
+    sample_document.ai_category_id = category.id
+    db.add(sample_document)
+    intelligence = DocumentIntelligence(
+        document_id=sample_document.id,
+        suggested_category_id=None,
+        confidence="high",
+        category_status="suggested",
+    )
+    db.add(intelligence)
+    db.commit()
+
+    response = client.post(f"/api/v1/documents/{sample_document.id}/category/approve")
+    assert response.status_code == 200
+
+    db.refresh(sample_document)
+    db.refresh(intelligence)
+    assert sample_document.user_category_id == category.id
+    assert intelligence.suggested_category_id == category.id
+    assert intelligence.category_status == "approved"
+
+
+def test_category_approve_returns_400_when_no_suggestion_available(client, db, sample_document):
+    intelligence = DocumentIntelligence(
+        document_id=sample_document.id,
+        suggested_category_id=None,
+        confidence="high",
+        category_status="suggested",
+    )
+    db.add(intelligence)
+    db.commit()
+
+    response = client.post(f"/api/v1/documents/{sample_document.id}/category/approve")
+    assert response.status_code == 400
+    assert response.json()["detail"] == "No suggested category to approve. Regenerate intelligence or set a suggested category first."
+
+
+def test_category_approve_returns_not_found_for_other_users_document(client, db, test_user):
+    from app.models.document import Document
+    from app.models.user import User
+    from app.services.auth import auth_service
+
+    other_user = User(
+        id=uuid.uuid4(),
+        email="other@example.com",
+        password_hash=auth_service.hash_password("password123"),
+        display_name="Other User",
+        is_active=True,
+        role="editor",
+    )
+    db.add(other_user)
+    db.commit()
+
+    other_doc = Document(
+        id=uuid.uuid4(),
+        filename="other.pdf",
+        original_path="/tmp/other.pdf",
+        file_type="pdf",
+        file_size=128,
+        mime_type="application/pdf",
+        processing_status="completed",
+        source="upload",
+        user_id=other_user.id,
+    )
+    db.add(other_doc)
+    db.commit()
+
+    response = client.post(f"/api/v1/documents/{other_doc.id}/category/approve")
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Document not found"
+
+
 def test_category_override_assigns_selected_category(client, db, sample_document):
     suggested = Category(name="Suggested", slug="suggested")
     chosen = Category(name="Chosen", slug="chosen")
