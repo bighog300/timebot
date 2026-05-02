@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import logging
 from datetime import datetime, timezone
 from typing import Any
 
@@ -9,6 +10,8 @@ from sqlalchemy.orm import Session
 from app.models.billing import Plan, Subscription
 from app.models.user import User
 from app.services.subscriptions import ensure_default_free_subscription
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -81,11 +84,20 @@ class BillingService:
         event_type = event.get("type")
         obj = (event.get("data") or {}).get("object") or {}
         if event_type == "checkout.session.completed":
-            return self._upsert_from_checkout(db, obj)
+            processed = self._upsert_from_checkout(db, obj)
+            if not processed:
+                logger.warning("Billing webhook ignored checkout event due to missing linkage event_type=%s", event_type)
+            return processed
         if event_type in {"customer.subscription.created", "customer.subscription.updated", "customer.subscription.deleted"}:
-            return self._upsert_from_subscription(db, obj)
+            processed = self._upsert_from_subscription(db, obj)
+            if not processed:
+                logger.warning("Billing webhook ignored subscription event due to missing linkage event_type=%s", event_type)
+            return processed
         if event_type in {"invoice.paid", "invoice.payment_failed"}:
-            return self._upsert_from_invoice(db, obj, event_type)
+            processed = self._upsert_from_invoice(db, obj, event_type)
+            if not processed:
+                logger.warning("Billing webhook ignored invoice event due to missing linkage event_type=%s", event_type)
+            return processed
         return False
 
     def _find_plan_by_price(self, db: Session, price_id: str | None) -> Plan | None:
@@ -121,6 +133,8 @@ class BillingService:
         target_plan = db.query(Plan).filter(Plan.slug == plan_slug, Plan.is_active.is_(True)).first()
         if not target_plan:
             return False
+        previous_status = sub.status
+        previous_plan_id = sub.plan_id
         sub.plan_id = target_plan.id
         sub.external_provider = "stripe"
         sub.external_customer_id = customer_id
@@ -128,6 +142,7 @@ class BillingService:
         sub.status = "active"
         db.add(sub)
         db.commit()
+        logger.info("Billing subscription updated source=checkout user_id=%s old_plan_id=%s new_plan_id=%s old_status=%s new_status=%s", sub.user_id, previous_plan_id, sub.plan_id, previous_status, sub.status)
         return True
 
     def _upsert_from_subscription(self, db: Session, stripe_sub: dict) -> bool:
@@ -140,6 +155,8 @@ class BillingService:
         sub = self._find_subscription(db, customer_id=customer_id)
         if not sub:
             return False
+        previous_status = sub.status
+        previous_plan_id = sub.plan_id
         if plan:
             sub.plan_id = plan.id
         sub.external_provider = "stripe"
@@ -155,13 +172,16 @@ class BillingService:
         sub.cancel_at_period_end = bool(stripe_sub.get("cancel_at_period_end", False))
         db.add(sub)
         db.commit()
+        logger.info("Billing subscription updated source=stripe_subscription user_id=%s old_plan_id=%s new_plan_id=%s old_status=%s new_status=%s cancel_at_period_end=%s", sub.user_id, previous_plan_id, sub.plan_id, previous_status, sub.status, sub.cancel_at_period_end)
         return True
 
     def _upsert_from_invoice(self, db: Session, invoice: dict, event_type: str) -> bool:
         sub = self._find_subscription(db, customer_id=invoice.get("customer"))
         if not sub:
             return False
+        previous_status = sub.status
         sub.status = "active" if event_type == "invoice.paid" else "past_due"
         db.add(sub)
         db.commit()
+        logger.info("Billing subscription updated source=invoice user_id=%s old_status=%s new_status=%s", sub.user_id, previous_status, sub.status)
         return True
