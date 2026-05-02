@@ -39,6 +39,19 @@ def test_validate_auth_secret_accepts_strong_non_placeholder_in_production_like(
     _validate_auth_secret_for_environment()
 
 
+def test_validate_auth_secret_treats_staging_alias_case_insensitively(monkeypatch):
+    monkeypatch.setattr("app.main.settings.APP_ENV", " StAgInG ")
+    monkeypatch.setattr("app.main.settings.AUTH_SECRET_KEY", " default ")
+    with pytest.raises(RuntimeError, match="AUTH_SECRET_KEY"):
+        _validate_auth_secret_for_environment()
+
+
+def test_validate_auth_secret_allows_placeholder_in_non_production_alias(monkeypatch):
+    monkeypatch.setattr("app.main.settings.APP_ENV", "qa")
+    monkeypatch.setattr("app.main.settings.AUTH_SECRET_KEY", "secret")
+    _validate_auth_secret_for_environment()
+
+
 def test_sanitize_headers_redacts_authorization_token():
     sanitized = _sanitize_headers_for_log({"Authorization": "Bearer secret-token", "X-Test": "ok"})
     assert sanitized["Authorization"] == "[redacted]"
