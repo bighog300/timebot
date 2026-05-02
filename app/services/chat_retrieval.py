@@ -15,6 +15,7 @@ from app.models.document import Document
 from app.models.relationships import DocumentRelationship
 from app.services.document_clusters import document_cluster_service
 from app.services.insights_service import insights_service
+from app.services.artifact_lookup import latest_artifact
 
 logger = logging.getLogger(__name__)
 _CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
@@ -130,11 +131,9 @@ def retrieve_chat_context(
         for candidate in text_path.glob("**/*.txt"):
             by_doc.setdefault(candidate.stem, []).append(candidate)
         for doc_id, doc_candidates in by_doc.items():
-            latest = max(
-                sorted(doc_candidates, key=lambda p: p.as_posix()),
-                key=lambda p: p.stat().st_mtime,
-            )
-            full_text_by_doc[doc_id] = latest
+            latest = latest_artifact(doc_candidates)
+            if latest is not None:
+                full_text_by_doc[doc_id] = latest
 
     ranked: list[tuple[int, Document, dict[str, Any]]] = []
     for doc in candidates:
