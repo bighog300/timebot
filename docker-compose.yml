@@ -98,7 +98,7 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: doc-celery-worker
-    command: celery -A app.workers.celery_app worker --loglevel=info -Q ingestion,ai_analysis,maintenance
+    command: celery -A app.workers.celery_app worker --loglevel=info --concurrency=${CELERY_WORKER_CONCURRENCY:-4} -Q ingestion,ai_analysis,maintenance
     env_file:
       - .env
     environment:
@@ -107,6 +107,7 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - CELERY_WORKER_CONCURRENCY=${CELERY_WORKER_CONCURRENCY:-4}
       - UPLOAD_PATH=/app/data/uploads
       - PROCESSED_PATH=/app/data/processed
       - STORAGE_PATH=/app/data
