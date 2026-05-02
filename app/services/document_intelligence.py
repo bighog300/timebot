@@ -29,7 +29,8 @@ class DocumentIntelligenceService:
         intelligence = self._upsert_from_analysis(db, document, analysis)
         self._refresh_gmail_thread_summary(db, document)
         self._refresh_review_items(db, document, intelligence)
-        action_items_service.refresh_from_analysis(db, document.id, analysis.get("action_items", []))
+        _normalized_structured, normalized_action_item_contents = self._normalize_action_items(document, document.action_items or [])
+        action_items_service.refresh_from_analysis(db, document.id, normalized_action_item_contents)
         return intelligence
 
     def regenerate(self, db: Session, document: Document) -> DocumentIntelligence:
@@ -69,9 +70,12 @@ class DocumentIntelligenceService:
         elif not intelligence.summary:
             intelligence.summary = ""
         timeline_events = analysis.get("timeline_events", []) or []
-        intelligence.key_points = analysis.get("key_points", [])
-        intelligence.suggested_tags = analysis.get("tags", [])
-        analysis_entities = analysis.get("entities", {})
+        normalized_tags = self._normalize_string_list(document, field_name="suggested_tags", values=analysis.get("tags", []))
+        normalized_key_points = self._normalize_string_list(document, field_name="key_points", values=analysis.get("key_points", []))
+        normalized_action_items, normalized_action_item_contents = self._normalize_action_items(document, analysis.get("action_items", []))
+        analysis_entities = self._normalize_entities(document, analysis.get("entities", {}))
+        intelligence.key_points = normalized_key_points
+        intelligence.suggested_tags = normalized_tags
         preview_event = timeline_events[0] if timeline_events and isinstance(timeline_events[0], dict) else {}
         logger.info(
             "timeline_pre_persist document_id=%s count=%s first_title=%s first_date=%s first_start=%s first_end=%s",
@@ -102,7 +106,7 @@ class DocumentIntelligenceService:
         document.key_points = intelligence.key_points
         document.entities = intelligence.entities
         document.ai_tags = intelligence.suggested_tags
-        document.action_items = analysis.get("action_items", [])
+        document.action_items = normalized_action_items
         document.ai_confidence = confidence_score
 
         db.add(document)
@@ -118,7 +122,7 @@ class DocumentIntelligenceService:
                     "document_id": str(document.id),
                     "duration_ms": round((time.perf_counter() - persist_start) * 1000, 2),
                     "timeline_event_count": len(timeline_events) if isinstance(timeline_events, list) else 0,
-                    "action_item_count": len(analysis.get("action_items", []) or []),
+                    "action_item_count": len(normalized_action_item_contents),
                     "success": False,
                 },
             )
@@ -134,11 +138,93 @@ class DocumentIntelligenceService:
                 "document_id": str(document.id),
                 "duration_ms": round((time.perf_counter() - persist_start) * 1000, 2),
                 "timeline_event_count": len(timeline_events) if isinstance(timeline_events, list) else 0,
-                "action_item_count": len(analysis.get("action_items", []) or []),
+                "action_item_count": len(normalized_action_item_contents),
                 "success": True,
             },
         )
         return intelligence
+
+    def _normalize_entities(self, document: Document, entities: object) -> dict:
+        if isinstance(entities, dict):
+            return entities
+        self._record_normalization_warning(document, "entities", entities, "Invalid entities payload type; defaulting to empty object")
+        return {}
+
+    def _normalize_string_list(self, document: Document, *, field_name: str, values: object) -> list[str]:
+        if not isinstance(values, list):
+            self._record_normalization_warning(document, field_name, values, "Expected list; defaulting to empty list")
+            return []
+        out: list[str] = []
+        seen: set[str] = set()
+        for item in values:
+            normalized = self._extract_human_string(item)
+            if not normalized:
+                self._record_normalization_warning(document, field_name, item, "Unable to extract stable string value")
+                continue
+            dedupe_key = normalized.lower()
+            if dedupe_key in seen:
+                continue
+            seen.add(dedupe_key)
+            out.append(normalized)
+        return out
+
+    def _normalize_action_items(self, document: Document, values: object) -> tuple[list[object], list[str]]:
+        if not isinstance(values, list):
+            self._record_normalization_warning(document, "action_items", values, "Expected list; defaulting to empty list")
+            return [], []
+        normalized_structured: list[object] = []
+        contents: list[str] = []
+        seen: set[str] = set()
+        for item in values:
+            content = self._extract_human_string(item)
+            if not content:
+                self._record_normalization_warning(document, "action_items", item, "Unable to extract action item content")
+                continue
+            key = content.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            contents.append(content)
+            if isinstance(item, dict):
+                enriched = dict(item)
+                enriched.setdefault("content", content)
+                normalized_structured.append(enriched)
+            else:
+                normalized_structured.append(content)
+        return normalized_structured, contents
+
+    def _extract_human_string(self, value: object) -> str:
+        if isinstance(value, str):
+            return value.strip()
+        if isinstance(value, dict):
+            for key in ("title", "name", "content", "label", "text", "summary", "description"):
+                candidate = value.get(key)
+                if isinstance(candidate, str) and candidate.strip():
+                    return candidate.strip()
+        return ""
+
+    def _record_normalization_warning(self, document: Document, field_name: str, item: object, warning: str) -> None:
+        logger = logging.getLogger(__name__)
+        item_type = type(item).__name__
+        logger.warning(
+            "document_intelligence_normalization_warning document_id=%s field_name=%s normalization_warning=%s item_type=%s",
+            document.id,
+            field_name,
+            warning,
+            item_type,
+        )
+        metadata = document.extracted_metadata if isinstance(document.extracted_metadata, dict) else {}
+        warnings = metadata.get("intelligence_normalization_warnings")
+        warnings_list = warnings if isinstance(warnings, list) else []
+        warnings_list.append(
+            {
+                "field_name": field_name,
+                "normalization_warning": warning,
+                "item_type": item_type,
+            }
+        )
+        metadata["intelligence_normalization_warnings"] = warnings_list
+        document.extracted_metadata = metadata
 
     def _refresh_gmail_thread_summary(self, db: Session, document: Document) -> None:
         if document.source != "gmail":

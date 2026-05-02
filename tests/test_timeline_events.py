@@ -191,3 +191,50 @@ def test_action_items_persist_to_document_from_analysis():
     db=FakeDB()
     document_intelligence_service._upsert_from_analysis(db, doc, analysis)
     assert doc.action_items == ['Submit signed form by 2026-05-10']
+
+
+def test_dict_tags_and_key_points_normalize_to_strings():
+    doc = _doc()
+    analysis = {
+        "summary": "s",
+        "key_points": [{"title": "Board approved budget"}],
+        "tags": [{"name": "finance"}, {"label": "Q2"}],
+        "entities": {},
+        "action_items": [],
+        "timeline_events": [],
+    }
+    document_intelligence_service._upsert_from_analysis(FakeDB(), doc, analysis)
+    assert doc.key_points == ["Board approved budget"]
+    assert doc.ai_tags == ["finance", "Q2"]
+
+
+def test_structured_action_items_preserve_payload_and_do_not_crash():
+    doc = _doc()
+    analysis = {
+        "summary": "s",
+        "key_points": [],
+        "tags": [],
+        "entities": {},
+        "action_items": [{"title": "File appeal", "due_date": "2026-06-01"}],
+        "timeline_events": [],
+    }
+    document_intelligence_service._upsert_from_analysis(FakeDB(), doc, analysis)
+    assert isinstance(doc.action_items[0], dict)
+    assert doc.action_items[0]["content"] == "File appeal"
+    assert doc.action_items[0]["due_date"] == "2026-06-01"
+
+
+def test_normalization_warning_persisted_when_fallback_occurs():
+    doc = _doc()
+    analysis = {
+        "summary": "s",
+        "key_points": [{}],
+        "tags": [123],
+        "entities": [],
+        "action_items": [None],
+        "timeline_events": [],
+    }
+    document_intelligence_service._upsert_from_analysis(FakeDB(), doc, analysis)
+    warnings = doc.extracted_metadata.get("intelligence_normalization_warnings", [])
+    assert len(warnings) >= 3
+    assert any(w.get("field_name") == "entities" for w in warnings)
