@@ -58,6 +58,8 @@ export const keys = {
   chatSession: (sessionId: string) => ['chat-session', sessionId] as const,
   reports: ['reports'] as const,
   usage: ['usage'] as const,
+  subscription: ['subscription'] as const,
+  plans: ['plans'] as const,
   report: (reportId: string) => ['report', reportId] as const,
   gmailConnections: ['connections'] as const,
 };
@@ -601,4 +603,6 @@ export function useTestPromptTemplate() {
 }
 
 export function useUsage() { const authReady = useAuthReady(); return useQuery({ queryKey: keys.usage, queryFn: api.getUsage, enabled: authReady }); }
+export function useSubscription() { const authReady = useAuthReady(); return useQuery({ queryKey: keys.subscription, queryFn: api.getSubscription, enabled: authReady }); }
+export function usePlans() { const authReady = useAuthReady(); return useQuery({ queryKey: keys.plans, queryFn: api.listPlans, enabled: authReady }); }
 export function useCreateCheckoutSession() { return useMutation({ mutationFn: (plan: string) => api.createCheckoutSession(plan) }); }

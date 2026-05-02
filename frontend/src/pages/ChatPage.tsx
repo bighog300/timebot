@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useCreateChatSession, useChatSession, useChatSessions, useCreateReport, useInvalidateChatSession } from '@/hooks/useApi';
 import { useUIStore } from '@/store/uiStore';
 import { api, getErrorDetail } from '@/services/api';
+import { UpgradePrompt } from '@/components/billing/UpgradePrompt';
 import type { ChatMessage, SourceRef } from '@/types/api';
 
 type FollowUpContext = {
@@ -140,6 +141,7 @@ export function ChatPage() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [hasStreamFinal, setHasStreamFinal] = useState(false);
   const [streamError, setStreamError] = useState<string | null>(null);
+  const [monetizationError, setMonetizationError] = useState<string | null>(null);
   const chunkBufferRef = useRef('');
   const frameRef = useRef<number | null>(null);
   const hasFinalEventRef = useRef(false);
@@ -160,6 +162,7 @@ export function ChatPage() {
   const onSend = async () => {
     try {
       setStreamError(null);
+      setMonetizationError(null);
       let sid = currentSessionId;
       if (!sid) { const s = await createSession.mutateAsync(undefined); sid = s.id; setSessionId(sid); }
       setIsStreaming(true);
@@ -196,8 +199,14 @@ export function ChatPage() {
     } catch (e) {
       const detail = getErrorDetail(e);
       setStreamError(detail);
-      if (detail.toLowerCase().includes('usage limit reached')) {
+      if (detail.toLowerCase().includes('usage limit reached') || detail.toLowerCase().includes('limit_reached')) {
+        setMonetizationError('You reached your plan usage limit. Upgrade to continue using chat.');
         pushToast("You’ve reached your limit. Upgrade to Pro to continue.", 'error');
+        return;
+      }
+      if (detail.toLowerCase().includes('feature_not_available')) {
+        setMonetizationError('This feature is not available on your current plan.');
+        pushToast('Upgrade your plan to unlock this feature.', 'error');
         return;
       }
       pushToast(detail.includes('503') ? 'OpenAI unavailable. Please retry shortly.' : detail, 'error');
@@ -222,6 +231,7 @@ export function ChatPage() {
     </aside>
     <div className='order-1 flex min-h-0 min-w-0 flex-col space-y-3 lg:order-2'>
       <h1 className='text-xl font-semibold'>Chat</h1>
+      {monetizationError ? <UpgradePrompt title='Upgrade required' message={monetizationError} /> : null}
       <div data-testid='chat-message-list' className='min-h-[18rem] flex-1 space-y-2 overflow-y-auto rounded-xl border border-slate-700 p-2.5 sm:p-4 lg:px-5'>
         {messages.map((m, index) => (
           <div key={m.id} className={isNewConversationTurn(messages, index) ? 'pt-2 first:pt-0' : 'pt-1'} data-testid='chat-flow-turn'>
