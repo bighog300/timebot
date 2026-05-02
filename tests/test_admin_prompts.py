@@ -175,3 +175,61 @@ def test_prompt_test_does_not_persist_or_activate(client, test_user, db, monkeyp
     assert before_count == after_count
     assert existing.is_active is True
     assert existing.content == "seed"
+
+
+def test_seed_default_prompt_templates_fresh_db_creates_all_types(db):
+    from app.services.prompt_templates import seed_default_prompt_templates
+
+    created = seed_default_prompt_templates(db)
+    assert created == 5
+    types = {row.type for row in db.query(PromptTemplate).all()}
+    assert types == {"chat", "retrieval", "report", "timeline_extraction", "relationship_detection"}
+
+
+def test_seed_default_prompt_templates_is_idempotent(db):
+    from app.services.prompt_templates import seed_default_prompt_templates
+
+    assert seed_default_prompt_templates(db) == 5
+    before_count = db.query(PromptTemplate).count()
+    assert seed_default_prompt_templates(db) == 0
+    assert db.query(PromptTemplate).count() == before_count
+
+
+def test_seed_default_prompt_templates_does_not_overwrite_existing(db):
+    from app.services.prompt_templates import seed_default_prompt_templates
+
+    existing = PromptTemplate(type="chat", name="edited", content="custom", version=7, is_active=True)
+    db.add(existing)
+    db.commit()
+
+    created = seed_default_prompt_templates(db)
+    assert created == 4
+    db.refresh(existing)
+    assert existing.name == "edited"
+    assert existing.content == "custom"
+    assert existing.version == 7
+
+
+def test_seeded_templates_are_editable_via_admin_api(client, test_user, db):
+    from app.services.prompt_templates import seed_default_prompt_templates
+
+    test_user.role = "admin"
+    db.commit()
+    seed_default_prompt_templates(db)
+    prompt = db.query(PromptTemplate).filter(PromptTemplate.type == "retrieval").first()
+
+    r = client.put(f"/api/v1/admin/prompts/{prompt.id}", json={"content": "Edited retrieval template", "is_active": True})
+    assert r.status_code == 200
+    assert r.json()["content"] == "Edited retrieval template"
+
+
+def test_runtime_falls_back_when_seeded_template_disabled(db):
+    from app.services.prompt_templates import seed_default_prompt_templates
+
+    seed_default_prompt_templates(db)
+    template = db.query(PromptTemplate).filter(PromptTemplate.type == "report").first()
+    template.is_active = False
+    db.add(template)
+    db.commit()
+
+    assert get_active_prompt_content(db, "report", "built-in report") == "built-in report"
