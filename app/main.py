@@ -32,6 +32,30 @@ from app.api.v1 import (
 
 logger = logging.getLogger(__name__)
 
+_INSECURE_DEFAULT_AUTH_SECRET = "dev-insecure-change-me"
+
+
+def _is_production_environment() -> bool:
+    return (settings.APP_ENV or "").strip().lower() == "production"
+
+
+def _validate_auth_secret_for_environment() -> None:
+    secret = (settings.AUTH_SECRET_KEY or "").strip()
+    if _is_production_environment() and (not secret or secret == _INSECURE_DEFAULT_AUTH_SECRET):
+        raise RuntimeError("AUTH_SECRET_KEY must be set to a non-default value in production")
+    if secret == _INSECURE_DEFAULT_AUTH_SECRET:
+        logger.warning("AUTH_SECRET_KEY is using the insecure development default. Set a unique secret for shared/prod environments.")
+
+
+def _sanitize_headers_for_log(headers: dict[str, str]) -> dict[str, str]:
+    sanitized: dict[str, str] = {}
+    for key, value in headers.items():
+        if key.lower() == "authorization":
+            sanitized[key] = "[redacted]"
+            continue
+        sanitized[key] = value
+    return sanitized
+
 
 def _redact_database_url(url: str) -> str:
     parts = urlsplit(url)
@@ -49,8 +73,7 @@ async def lifespan(app: FastAPI):
     # Import models so metadata is available for optional fallback init_db paths
     import app.models  # noqa: F401
 
-    if settings.AUTH_SECRET_KEY == "dev-insecure-change-me":
-        logger.warning("AUTH_SECRET_KEY is using the insecure development default. Set a unique secret for shared/prod environments.")
+    _validate_auth_secret_for_environment()
 
     init_db()
     data_dir = Path(settings.effective_data_dir)
@@ -101,8 +124,14 @@ app.add_middleware(
 
 
 @app.exception_handler(Exception)
-async def unhandled_exception_handler(_request: Request, exc: Exception) -> JSONResponse:
-    logger.error("Unhandled server exception", exc_info=True)
+async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    logger.error(
+        "Unhandled server exception method=%s path=%s headers=%s exc_type=%s",
+        request.method,
+        request.url.path,
+        _sanitize_headers_for_log(dict(request.headers)),
+        type(exc).__name__,
+    )
     return JSONResponse(status_code=500, content={"detail": "An unexpected error occurred"})
 
 
