@@ -13,6 +13,11 @@ export interface Document {
   source: string;
   upload_date: string;
   processing_status: string;
+  processing_stage?: 'uploading' | 'queued' | 'extracting' | 'analyzing' | 'enriching' | 'embedding' | 'completed' | 'failed';
+  processing_progress?: number;
+  processing_message?: string | null;
+  stage_started_at?: string | null;
+  stage_updated_at?: string | null;
   processing_error?: string | null;
   enrichment_status?: "pending" | "complete" | "degraded";
   enrichment_pending?: boolean;
@@ -38,6 +43,25 @@ export interface Document {
   word_count?: number | null;
   ai_category?: CategoryInfo | null;
   user_category?: CategoryInfo | null;
+}
+
+export interface ProcessingEvent {
+  id: string;
+  document_id: string;
+  user_id?: string | null;
+  stage: string;
+  event_type: string;
+  status: string;
+  message: string;
+  severity: 'info' | 'warning' | 'error';
+  duration_ms?: number | null;
+  provider?: string | null;
+  model?: string | null;
+  ai_call_count?: number | null;
+  parse_retry_used?: string | null;
+  error_type?: string | null;
+  safe_metadata: Record<string, unknown>;
+  created_at: string;
 }
 
 export interface SearchResultItem {

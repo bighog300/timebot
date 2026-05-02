@@ -9,6 +9,7 @@ vi.mock('@/services/api', () => ({
   api: {
     getDocument: vi.fn(),
     findSimilar: vi.fn(),
+    getDocumentIntelligence: vi.fn(),
     updateDocument: vi.fn(),
     reprocessDocument: vi.fn(),
     deleteDocument: vi.fn(),

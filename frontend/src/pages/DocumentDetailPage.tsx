@@ -233,7 +233,13 @@ export function DocumentDetailPage() {
   return (
     <div className="space-y-4">
       <h1 className="text-xl font-semibold">{doc.filename}</h1>
-      <ProcessingStatusIndicator status={doc.processing_status} processingError={doc.processing_error} showErrorBanner />
+      <ProcessingStatusIndicator
+        status={doc.processing_stage || doc.processing_status}
+        processingError={doc.processing_error}
+        progress={doc.processing_progress}
+        message={doc.processing_message}
+        showErrorBanner
+      />
       {doc.processing_status === "completed" && doc.enrichment_pending && (
         <Card>Analysis complete. Final enrichment is still running.</Card>
       )}
