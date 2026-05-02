@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/services/api';
+import { getUserFacingErrorMessage } from '@/lib/errors';
 import type { StructuredInsight, TimelineEvent } from '@/types/api';
 
 type NormalizedTimelineEvent = {
@@ -69,7 +70,7 @@ const ZOOM_OPTIONS: Array<{ mode: TimelineZoom; label: string }> = [
 
 export function TimelinePage() {
   const navigate = useNavigate();
-  const { data, isLoading, isError } = useQuery({ queryKey: ['timeline'], queryFn: api.getTimeline });
+  const { data, isLoading, isError, error } = useQuery({ queryKey: ['timeline'], queryFn: api.getTimeline });
   const insightsQuery = useQuery({ queryKey: ['insights-structured'], queryFn: api.getStructuredInsights });
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const [containerWidth, setContainerWidth] = useState<number>(0);
@@ -225,7 +226,7 @@ export function TimelinePage() {
   };
 
   if (isLoading) return <div>Loading timeline…</div>;
-  if (isError) return <div>Failed to load timeline.</div>;
+  if (isError) return <div>{getUserFacingErrorMessage(error, 'Failed to load timeline.')}</div>;
   if (!groupedEvents.length) return <div>No extracted timeline events yet. Upload documents with dated events or regenerate intelligence.</div>;
   if (!chart) return null;
 

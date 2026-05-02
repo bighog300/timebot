@@ -41,6 +41,12 @@ export const keys = {
   documentRelationships: (documentId: string) => ['document-relationships', documentId] as const,
   documentClusters: ['document-clusters'] as const,
   categories: ['categories'] as const,
+  search: ['search'] as const,
+  timeline: ['timeline'] as const,
+  insightsOverview: ['insights-overview'] as const,
+  insightsStructured: ['insights-structured'] as const,
+  suggestions: ['suggestions'] as const,
+  facets: ['facets'] as const,
   connections: ['connections'] as const,
   adminUsers: (page:number,limit:number)=>['admin-users',page,limit] as const,
   adminMetrics: ['admin-metrics'] as const,
@@ -99,6 +105,14 @@ export function useUploadDocument() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: keys.documents });
+      qc.invalidateQueries({ queryKey: keys.search });
+      qc.invalidateQueries({ queryKey: keys.suggestions });
+      qc.invalidateQueries({ queryKey: keys.facets });
+      qc.invalidateQueries({ queryKey: keys.timeline });
+      qc.invalidateQueries({ queryKey: keys.insightsOverview });
+      qc.invalidateQueries({ queryKey: keys.insightsStructured });
+      qc.invalidateQueries({ queryKey: keys.categories });
+      qc.invalidateQueries({ queryKey: ['relationship-reviews'] });
     },
   });
 }
@@ -127,6 +141,14 @@ export function useReviewDocument() {
       qc.invalidateQueries({ queryKey: keys.reviewQueue });
       qc.invalidateQueries({ queryKey: keys.queueStats });
       qc.invalidateQueries({ queryKey: keys.documents });
+      qc.invalidateQueries({ queryKey: keys.search });
+      qc.invalidateQueries({ queryKey: keys.suggestions });
+      qc.invalidateQueries({ queryKey: keys.facets });
+      qc.invalidateQueries({ queryKey: keys.timeline });
+      qc.invalidateQueries({ queryKey: keys.insightsOverview });
+      qc.invalidateQueries({ queryKey: keys.insightsStructured });
+      qc.invalidateQueries({ queryKey: keys.categories });
+      qc.invalidateQueries({ queryKey: ['relationship-reviews'] });
     },
   });
 }
@@ -406,6 +428,14 @@ export function useApproveDocumentCategory(documentId: string) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['document', documentId] });
       qc.invalidateQueries({ queryKey: keys.documents });
+      qc.invalidateQueries({ queryKey: keys.search });
+      qc.invalidateQueries({ queryKey: keys.suggestions });
+      qc.invalidateQueries({ queryKey: keys.facets });
+      qc.invalidateQueries({ queryKey: keys.timeline });
+      qc.invalidateQueries({ queryKey: keys.insightsOverview });
+      qc.invalidateQueries({ queryKey: keys.insightsStructured });
+      qc.invalidateQueries({ queryKey: keys.categories });
+      qc.invalidateQueries({ queryKey: ['relationship-reviews'] });
       qc.invalidateQueries({ queryKey: keys.documentIntelligence(documentId) });
     },
   });
@@ -418,6 +448,14 @@ export function useOverrideDocumentCategory(documentId: string) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['document', documentId] });
       qc.invalidateQueries({ queryKey: keys.documents });
+      qc.invalidateQueries({ queryKey: keys.search });
+      qc.invalidateQueries({ queryKey: keys.suggestions });
+      qc.invalidateQueries({ queryKey: keys.facets });
+      qc.invalidateQueries({ queryKey: keys.timeline });
+      qc.invalidateQueries({ queryKey: keys.insightsOverview });
+      qc.invalidateQueries({ queryKey: keys.insightsStructured });
+      qc.invalidateQueries({ queryKey: keys.categories });
+      qc.invalidateQueries({ queryKey: ['relationship-reviews'] });
       qc.invalidateQueries({ queryKey: keys.documentIntelligence(documentId) });
     },
   });
@@ -443,12 +481,12 @@ export function useDocumentAuditHistory(documentId: string) {
 
 export function useInsightsOverview() {
   const authReady = useAuthReady();
-  return useQuery({ queryKey: ['insights-overview'], queryFn: api.getInsightsOverview, enabled: authReady });
+  return useQuery({ queryKey: keys.insightsOverview, queryFn: api.getInsightsOverview, enabled: authReady });
 }
 
 export function useStructuredInsights() {
   const authReady = useAuthReady();
-  return useQuery({ queryKey: ['insights-structured'], queryFn: api.getStructuredInsights, enabled: authReady });
+  return useQuery({ queryKey: keys.insightsStructured, queryFn: api.getStructuredInsights, enabled: authReady });
 }
 
 export function useConnections() {
@@ -527,6 +565,14 @@ export function useGmailImport() {
     mutationFn: api.gmailImport,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: keys.documents });
+      qc.invalidateQueries({ queryKey: keys.search });
+      qc.invalidateQueries({ queryKey: keys.suggestions });
+      qc.invalidateQueries({ queryKey: keys.facets });
+      qc.invalidateQueries({ queryKey: keys.timeline });
+      qc.invalidateQueries({ queryKey: keys.insightsOverview });
+      qc.invalidateQueries({ queryKey: keys.insightsStructured });
+      qc.invalidateQueries({ queryKey: keys.categories });
+      qc.invalidateQueries({ queryKey: ['relationship-reviews'] });
     },
   });
 }
