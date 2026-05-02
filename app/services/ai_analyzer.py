@@ -82,19 +82,26 @@ class AIAnalyzer:
             if parse_retry_used:
                 ai_calls += 1
             duration_ms = round((time.perf_counter() - analyze_start) * 1000, 2)
+            provider_name = openai_client_service.selected_provider_name
             logger.info(
-                "ai_analysis_complete filename=%s timeline_event_count=%s ai_call_count=%s duration_ms=%s parse_retry_used=%s",
+                "ai_analysis_complete filename=%s timeline_event_count=%s ai_call_count=%s duration_ms=%s parse_retry_used=%s provider=%s model=%s",
                 filename,
                 len(analysis.get("timeline_events", [])),
                 ai_calls,
                 duration_ms,
                 parse_retry_used,
+                provider_name,
+                settings.OPENAI_MODEL,
             )
             summary = (analysis.get("summary") or "").strip()
             if not summary:
                 raise AIAnalysisError("AI enrichment failed: summary missing from model response.")
             analysis["json_parse_retry_used"] = parse_retry_used
             analysis["ai_analysis_degraded"] = degraded_output
+            analysis["ai_call_count"] = ai_calls
+            analysis["ai_provider"] = provider_name
+            analysis["ai_model"] = settings.OPENAI_MODEL
+            analysis["ai_duration_ms"] = duration_ms
             return analysis
 
         except APIError as e:
