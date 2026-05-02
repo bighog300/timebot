@@ -126,8 +126,15 @@ def retrieve_chat_context(
     full_text_by_doc: dict[str, Path] = {}
     if include_full_text:
         text_path = Path(settings.effective_artifact_dir) / "extracted_text"
+        by_doc: dict[str, list[Path]] = {}
         for candidate in text_path.glob("**/*.txt"):
-            full_text_by_doc[candidate.stem] = candidate
+            by_doc.setdefault(candidate.stem, []).append(candidate)
+        for doc_id, doc_candidates in by_doc.items():
+            latest = max(
+                sorted(doc_candidates, key=lambda p: p.as_posix()),
+                key=lambda p: p.stat().st_mtime,
+            )
+            full_text_by_doc[doc_id] = latest
 
     ranked: list[tuple[int, Document, dict[str, Any]]] = []
     for doc in candidates:

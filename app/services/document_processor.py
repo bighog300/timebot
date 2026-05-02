@@ -24,6 +24,9 @@ _EMPTY_TEXT_ERROR_MESSAGE = (
     "It may be scanned, image-only, encrypted, or unsupported."
 )
 _OCR_REQUIRED_MESSAGE = "OCR support is required for scanned PDFs."
+_LEGACY_OFFICE_UNSUPPORTED_MESSAGE = "Legacy Office formats (.doc, .xls, .ppt) are unsupported. Please upload modern Office files (.docx, .xlsx, .pptx)."
+_NON_PDF_EMPTY_TEXT_MESSAGE = "No readable text was extracted from this file type."
+_IMAGE_EMPTY_TEXT_MESSAGE = "No readable text was extracted from this image."
 
 
 class DocumentProcessor:
@@ -104,11 +107,18 @@ class DocumentProcessor:
                 extraction_error = None
                 if extracted_text is None:
                     extraction_status = "failed"
-                    extraction_error = "Text extraction failed."
+                    if document.file_type in {"doc", "xls", "ppt"}:
+                        extraction_error = _LEGACY_OFFICE_UNSUPPORTED_MESSAGE
+                    else:
+                        extraction_error = "Text extraction failed."
                 elif not text:
                     extraction_status = "empty"
                     if document.file_type == "pdf":
                         extraction_error = _OCR_REQUIRED_MESSAGE
+                    elif document.file_type in {"jpg", "jpeg", "png", "gif", "tiff", "bmp"}:
+                        extraction_error = _IMAGE_EMPTY_TEXT_MESSAGE
+                    else:
+                        extraction_error = _NON_PDF_EMPTY_TEXT_MESSAGE
 
                 self._record_extraction_metadata(
                     document,
@@ -259,9 +269,10 @@ class DocumentProcessor:
         except Exception:
             if file_path.exists():
                 raise
-        text_file = next(storage.text_path.rglob(f"{document_id}.txt"), None)
-        if text_file and text_file.exists():
-            return text_file.read_text(encoding="utf-8")
+        candidates = sorted(storage.text_path.rglob(f"{document_id}.txt"), key=lambda p: p.as_posix())
+        if candidates:
+            latest = max(candidates, key=lambda p: p.stat().st_mtime)
+            return latest.read_text(encoding="utf-8")
         return ""
 
     def _append_processing_warning(self, document: Document, message: str) -> None:
