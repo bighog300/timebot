@@ -9,6 +9,7 @@ from app.models.admin_audit import AdminAuditEvent
 from app.models.document import Document
 from app.models.intelligence import DocumentActionItem, DocumentRelationshipReview, DocumentReviewItem
 from app.models.user import User
+from app.models.processing_event import DocumentProcessingEvent
 
 from app.models.chat import ChatbotSettings
 from app.models.prompt_template import PromptTemplate
@@ -21,6 +22,7 @@ from app.schemas.admin import (
     AdminRoleUpdateRequest,
     AdminUserResponse,
     AdminUsersPageResponse,
+    ProcessingEventResponse,
 )
 from app.schemas.prompt_template import (
     PromptTemplateCreate,
@@ -149,6 +151,54 @@ def admin_processing_summary(_: str = Depends(require_admin), db: Session = Depe
         failed=counts.get("failed", 0),
         recently_failed=recently_failed,
     )
+
+
+@router.get("/documents/{document_id}/events", response_model=list[ProcessingEventResponse])
+def list_document_processing_events(
+    document_id: str,
+    limit: int = Query(100, ge=1, le=500),
+    _: str = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    return (
+        db.query(DocumentProcessingEvent)
+        .filter(DocumentProcessingEvent.document_id == document_id)
+        .order_by(DocumentProcessingEvent.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+
+
+@router.get("/processing-events", response_model=list[ProcessingEventResponse])
+def list_processing_events(
+    document_id: str | None = None,
+    stage: str | None = None,
+    severity: str | None = None,
+    event_type: str | None = None,
+    provider: str | None = None,
+    start_at: datetime | None = None,
+    end_at: datetime | None = None,
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    _: str = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    q = db.query(DocumentProcessingEvent)
+    if document_id:
+        q = q.filter(DocumentProcessingEvent.document_id == document_id)
+    if stage:
+        q = q.filter(DocumentProcessingEvent.stage == stage)
+    if severity:
+        q = q.filter(DocumentProcessingEvent.severity == severity)
+    if event_type:
+        q = q.filter(DocumentProcessingEvent.event_type == event_type)
+    if provider:
+        q = q.filter(DocumentProcessingEvent.provider == provider)
+    if start_at:
+        q = q.filter(DocumentProcessingEvent.created_at >= start_at)
+    if end_at:
+        q = q.filter(DocumentProcessingEvent.created_at <= end_at)
+    return q.order_by(DocumentProcessingEvent.created_at.desc()).offset(offset).limit(limit).all()
 
 
 @router.get("/prompts", response_model=list[PromptTemplateResponse])

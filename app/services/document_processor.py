@@ -15,6 +15,7 @@ from app.services.storage import storage
 from app.services.artifact_lookup import latest_artifact
 from app.services.text_extractor import text_extractor
 from app.services.thumbnail_generator import thumbnail_generator
+from app.services.processing_events import processing_event_service
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +61,15 @@ class DocumentProcessor:
         db.add(document)
         db.commit()
         db.refresh(document)
+        processing_event_service.update_progress(db, document, stage="queued", message="Upload accepted and queued for processing.")
+        processing_event_service.record_processing_event(
+            db,
+            document=document,
+            stage="queued",
+            event_type="upload_accepted",
+            status="success",
+            message="Document upload accepted and queued.",
+        )
 
         # Queue background task; fall back to sync if Celery unavailable
         try:
@@ -96,12 +106,14 @@ class DocumentProcessor:
         self._set_enrichment_status(document, "pending")
         db.add(document)
         db.commit()
+        processing_event_service.update_progress(db, document, stage="extracting", message="Extracting readable text from the document.")
 
         try:
             file_path = Path(document.original_path)
             text = ""
 
             extraction_start = time.perf_counter()
+            processing_event_service.record_processing_event(db, document=document, stage="extracting", event_type="extraction_started", status="started", message="Text extraction started.")
             if file_path.exists():
                 extracted_text, page_count, word_count = text_extractor.extract(file_path, document.file_type)
                 text = (extracted_text or "").strip()
@@ -155,6 +167,7 @@ class DocumentProcessor:
                     raise ValueError("Cannot reprocess: original uploaded file is missing from storage")
 
             extraction_duration_ms = int((time.perf_counter() - extraction_start) * 1000)
+            processing_event_service.record_processing_event(db, document=document, stage="extracting", event_type="extraction_finished", status="success", message="Text extraction completed.", duration_ms=extraction_duration_ms)
             logger.info(
                 "Document extraction completed doc_id=%s extraction_duration_ms=%s",
                 document.id,
@@ -171,10 +184,13 @@ class DocumentProcessor:
 
             # Step 3: AI analysis
             if settings.ENABLE_AUTO_CATEGORIZATION:
+                processing_event_service.update_progress(db, document, stage="analyzing", message="Analyzing document with AI.")
                 self._run_ai_analysis(db, document, text, run_relationship_detection=run_relationship_detection)
 
             document.processing_status = "completed"
             document.processed_date = datetime.now(timezone.utc)
+            processing_event_service.update_progress(db, document, stage="completed", message="Document processing complete.")
+            processing_event_service.record_processing_event(db, document=document, stage="completed", event_type="processing_finished", status="success", message="Document processing completed successfully.")
             if run_relationship_detection:
                 if document.enrichment_status not in {"degraded", "pending"}:
                     self._set_enrichment_status(document, "complete")
@@ -185,6 +201,8 @@ class DocumentProcessor:
             logger.error("Document processing error for %s: %s", document.id, e)
             document.processing_status = "failed"
             document.processing_error = sanitize_processing_error(str(e))
+            processing_event_service.update_progress(db, document, stage="failed", message=document.processing_error or "Processing failed.", failed=True)
+            processing_event_service.record_processing_event(db, document=document, stage="failed", event_type="processing_failed", status="failed", message=document.processing_error or "Processing failed.", severity="error", error_type=type(e).__name__)
 
         db.add(document)
         db.commit()
@@ -239,8 +257,10 @@ class DocumentProcessor:
                 len((getattr(intelligence, "summary", "") or "")),
             )
             ai_analysis_duration_ms = int((time.perf_counter() - ai_start) * 1000)
+            processing_event_service.record_processing_event(db, document=document, stage="analyzing", event_type="ai_finished", status="success", message="AI analysis completed.", duration_ms=ai_analysis_duration_ms, model=settings.OPENAI_MODEL)
             logger.info("AI analysis completed doc_id=%s ai_analysis_duration_ms=%s", document.id, ai_analysis_duration_ms)
             if run_relationship_detection:
+                processing_event_service.update_progress(db, document, stage="enriching", message="Enriching with relationship detection.")
                 relationship_start = time.perf_counter()
                 try:
                     logger.info("Starting relationship detection for document %s", document.id)

@@ -39,6 +39,11 @@ class DocumentResponse(BaseModel):
     source: str
     upload_date: datetime
     processing_status: str
+    processing_stage: str = "uploading"
+    processing_progress: int = 0
+    processing_message: str | None = None
+    stage_started_at: datetime | None = None
+    stage_updated_at: datetime | None = None
     processing_error: Optional[str] = None
     enrichment_status: str = "complete"
     enrichment_pending: bool = False

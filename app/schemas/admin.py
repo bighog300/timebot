@@ -59,3 +59,24 @@ class AdminProcessingSummaryResponse(BaseModel):
     completed: int
     failed: int
     recently_failed: int
+
+
+class ProcessingEventResponse(BaseModel):
+    id: UUID
+    document_id: UUID
+    user_id: UUID | None
+    stage: str
+    event_type: str
+    status: str
+    message: str
+    severity: str
+    duration_ms: int | None
+    provider: str | None
+    model: str | None
+    ai_call_count: int | None
+    parse_retry_used: str | None
+    error_type: str | None
+    safe_metadata: dict
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
