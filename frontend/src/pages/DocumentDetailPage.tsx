@@ -255,7 +255,7 @@ export function DocumentDetailPage() {
 
   const doc = documentQuery.data;
   const hasSuggestedCategory = Boolean(
-    intelligenceQuery.data?.suggested_category_id || doc.ai_category_id,
+    intelligenceQuery.data?.suggested_category_id || doc.ai_category?.id,
   );
   return (
     <div className="space-y-4">
