@@ -1,4 +1,3 @@
-import axios from 'axios';
 import { describe, expect, test } from 'vitest';
 import { getUserFacingErrorMessage } from '@/lib/errors';
 
