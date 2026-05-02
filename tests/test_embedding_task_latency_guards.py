@@ -74,3 +74,41 @@ def test_embed_task_regenerates_when_text_changes(monkeypatch):
     assert called["count"] == 1
     assert document.extracted_metadata["embedding_skipped"] is False
     assert "embedding_text_hash" in document.extracted_metadata
+
+
+def test_embed_task_failure_marks_degraded_and_does_not_raise(monkeypatch):
+    document = _doc(raw_text="sensitive text")
+    db = _FakeDB(document)
+    monkeypatch.setattr("app.db.base.SessionLocal", lambda: db)
+    monkeypatch.setattr(
+        "app.services.embedding_service.embedding_service.store_document_embedding",
+        lambda **_kwargs: (_ for _ in ()).throw(RuntimeError("boom")),
+    )
+
+    captured = {}
+
+    def _capture(*_args, **kwargs):
+        captured.update(kwargs)
+
+    monkeypatch.setattr("app.workers.tasks._finalize_enrichment_if_ready", _capture)
+
+    result = tasks.embed_document_task(str(document.id))
+    assert result["status"] == "degraded"
+    assert captured["task_status"] == "degraded"
+    assert "RuntimeError" in captured["warning"]
+
+
+def test_embed_task_failure_log_omits_raw_text(monkeypatch, caplog):
+    raw_text = "SUPER_SECRET_DOCUMENT_TEXT"
+    document = _doc(raw_text=raw_text)
+    db = _FakeDB(document)
+    monkeypatch.setattr("app.db.base.SessionLocal", lambda: db)
+    monkeypatch.setattr(
+        "app.services.embedding_service.embedding_service.store_document_embedding",
+        lambda **_kwargs: (_ for _ in ()).throw(ValueError("bad embedding")),
+    )
+
+    tasks.embed_document_task(str(document.id))
+    assert "embedding_generation_failed" in caplog.text
+    assert "error_type=ValueError" in caplog.text
+    assert raw_text not in caplog.text

@@ -59,11 +59,10 @@ class EmbeddingService:
         if not self.enabled or not text:
             return [0.0] * self.embedding_dim
         try:
-            response = openai_client_service.client.embeddings.create(
+            embedding = openai_client_service.generate_embedding(
                 model=settings.OPENAI_EMBEDDING_MODEL,
-                input=text[:8000],
+                input_text=text[:8000],
             )
-            embedding = response.data[0].embedding
             if len(embedding) != self.embedding_dim:
                 logger.warning(
                     "Embedding size mismatch: expected=%s got=%s. Updating runtime dimension.",
