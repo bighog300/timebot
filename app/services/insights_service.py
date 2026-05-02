@@ -33,22 +33,25 @@ except ModuleNotFoundError:  # pragma: no cover - local test fallback when deps 
 class InsightsService:
     _RISK_TERMS = ("deadline", "overdue", "urgent", "risk", "issue", "blocked")
 
-    def build_dashboard(self, db: Session, lookback_days: int = 30) -> Dict[str, Any]:
-        now = datetime.now(timezone.utc)
+    def build_dashboard(self, db: Session, lookback_days: int = 30, user_id: Any | None = None) -> Dict[str, Any]:
+        now = datetime.utcnow()
         since = now - timedelta(days=lookback_days)
 
-        docs = db.query(Document).filter(Document.is_archived.is_(False)).all()
+        query = db.query(Document).filter(Document.is_archived.is_(False))
+        if user_id is not None:
+            query = query.filter(Document.user_id == user_id)
+        docs = query.all()
         recent_docs = [d for d in docs if d.upload_date and d.upload_date >= since]
 
         return {
-            "generated_at": now.isoformat(),
+            "generated_at": now.replace(tzinfo=timezone.utc).isoformat(),
             "lookback_days": lookback_days,
             "volume_trends": self._volume_trends(recent_docs),
             "category_distribution": self._category_distribution(db, docs),
             "source_distribution": dict(Counter(d.source for d in docs)),
             "action_item_summary": self._action_item_summary(docs),
-            "duplicate_clusters": self._duplicate_clusters(db),
-            "relationship_summary": self._relationship_summary(db),
+            "duplicate_clusters": self._duplicate_clusters(db, {d.id for d in docs}),
+            "relationship_summary": self._relationship_summary(db, {d.id for d in docs}),
             "recent_activity": self._recent_activity(recent_docs),
         }
 
@@ -81,8 +84,11 @@ class InsightsService:
                     pending += 1
         return {"total": total, "pending_estimate": pending}
 
-    def _duplicate_clusters(self, db: Session) -> List[List[str]]:
-        rels = db.query(DocumentRelationship).filter(DocumentRelationship.relationship_type == "duplicates").all()
+    def _duplicate_clusters(self, db: Session, doc_ids: set[Any] | None = None) -> List[List[str]]:
+        rels_q = db.query(DocumentRelationship).filter(DocumentRelationship.relationship_type == "duplicates")
+        if doc_ids is not None:
+            rels_q = rels_q.filter(DocumentRelationship.source_doc_id.in_(doc_ids), DocumentRelationship.target_doc_id.in_(doc_ids))
+        rels = rels_q.all()
         if not rels:
             return []
         clusters: Dict[str, set] = {}
@@ -93,8 +99,11 @@ class InsightsService:
             clusters.setdefault(key, set()).update([a, b])
         return [sorted(list(v)) for v in clusters.values()]
 
-    def _relationship_summary(self, db: Session) -> Dict[str, int]:
-        rels = db.query(DocumentRelationship.relationship_type).all()
+    def _relationship_summary(self, db: Session, doc_ids: set[Any] | None = None) -> Dict[str, int]:
+        rels_q = db.query(DocumentRelationship.relationship_type)
+        if doc_ids is not None:
+            rels_q = rels_q.filter(DocumentRelationship.source_doc_id.in_(doc_ids), DocumentRelationship.target_doc_id.in_(doc_ids))
+        rels = rels_q.all()
         return dict(Counter(r[0] for r in rels))
 
     def _recent_activity(self, docs: List[Document]) -> List[Dict[str, Any]]:
