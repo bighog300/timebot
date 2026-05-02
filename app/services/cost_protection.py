@@ -10,6 +10,16 @@ from app.config import settings
 from app.services.usage import get_usage_total
 
 
+# TODO: Replace DB-window counting with Redis-backed token buckets for strict,
+# low-latency multi-worker rate-limit guarantees in production.
+RATE_LIMITS_PER_MINUTE: dict[str, int] = {
+    "upload_requests_rate": settings.RATE_LIMIT_UPLOADS_PER_MINUTE,
+    "processing_requests_rate": settings.RATE_LIMIT_PROCESSING_PER_MINUTE,
+    "expensive_reads_rate": settings.RATE_LIMIT_EXPENSIVE_READS_PER_MINUTE,
+    "relationship_detection_rate": settings.RATE_LIMIT_RELATIONSHIP_DETECTION_PER_MINUTE,
+}
+
+
 def _utc_day_window(now: datetime | None = None) -> tuple[datetime, datetime]:
     ts = now or datetime.now(timezone.utc)
     start = datetime(ts.year, ts.month, ts.day, tzinfo=timezone.utc)
@@ -47,3 +57,7 @@ def hard_daily_caps() -> dict[str, int]:
         "processing_jobs_daily": settings.HARD_DAILY_MAX_PROCESSING_JOBS,
         "failed_processing_retries_daily": settings.HARD_DAILY_MAX_FAILED_PROCESSING_RETRIES,
     }
+
+
+def configured_rate_limit(metric: str) -> int:
+    return RATE_LIMITS_PER_MINUTE.get(metric, 0)
