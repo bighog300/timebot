@@ -1,16 +1,17 @@
-from fastapi import APIRouter, Depends, HTTPException
+from datetime import timedelta
+
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
 from app.config import settings
 from app.models.billing import Plan
+from app.models.document import Document
 from app.models.user import User
 from app.services.billing import BillingService
+from app.services.subscriptions import ensure_default_free_subscription, get_user_subscription, seed_default_plans
 from app.services.usage import get_usage_total
-from datetime import timedelta
-from app.models.document import Document
-
 
 
 def usage_payload(db: Session, user: User) -> dict:
@@ -27,8 +28,16 @@ def usage_payload(db: Session, user: User) -> dict:
         "processing_jobs": {"used": jobs_used, "limit": limits.get("processing_jobs_per_month")},
         "storage_bytes": {"used": sum((d.file_size or 0) for d in db.query(Document).filter(Document.user_id == user.id).all()), "limit": limits.get("storage_bytes")},
     }
+
+
 router = APIRouter(tags=["monetization"])
-billing_service = BillingService(settings.STRIPE_SECRET_KEY, settings.STRIPE_WEBHOOK_SECRET)
+billing_service = BillingService(
+    settings.STRIPE_SECRET_KEY,
+    settings.STRIPE_WEBHOOK_SECRET,
+    settings.STRIPE_PRICE_PRO_MONTHLY,
+    settings.STRIPE_PRICE_TEAM_MONTHLY,
+    settings.PUBLIC_APP_URL,
+)
 
 
 class CheckoutRequest(BaseModel):
@@ -83,14 +92,32 @@ def list_plans(db: Session = Depends(get_db), user: User = Depends(get_current_u
     ]
 
 
-@router.post("/billing/checkout")
-def create_checkout(payload: CheckoutRequest, user: User = Depends(get_current_user)):
-    return billing_service.create_checkout_session(user, payload.plan)
+@router.post("/billing/checkout-session")
+def create_checkout(payload: CheckoutRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    try:
+        return billing_service.create_checkout_session(db, user, payload.plan)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/billing/customer-portal")
+def create_customer_portal(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    return billing_service.create_customer_portal_session(db, user)
 
 
 @router.post("/billing/webhook")
-def billing_webhook(event: dict, db: Session = Depends(get_db)):
+async def billing_webhook(
+    request: Request,
+    db: Session = Depends(get_db),
+    stripe_signature: str | None = Header(default=None, alias="Stripe-Signature"),
+):
+    payload = await request.body()
+    try:
+        event = billing_service.construct_event(payload=payload, signature=stripe_signature)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     processed = billing_service.handle_webhook(db, event)
     if not processed:
-        raise HTTPException(status_code=400, detail="Invalid webhook")
+        raise HTTPException(status_code=400, detail="Unsupported or invalid webhook event")
     return {"ok": True}

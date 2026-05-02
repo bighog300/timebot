@@ -85,6 +85,10 @@ class Settings(BaseSettings):
     RESET_INITIAL_ADMIN_PASSWORD: bool = False
     STRIPE_SECRET_KEY: str = ""
     STRIPE_WEBHOOK_SECRET: str = ""
+    STRIPE_PRICE_PRO_MONTHLY: str = ""
+    STRIPE_PRICE_TEAM_MONTHLY: str = ""
+    PUBLIC_STRIPE_PUBLISHABLE_KEY: str = ""
+    PUBLIC_APP_URL: str = "http://localhost:5174"
     SEED_DEFAULT_PROMPTS: bool = True
 
     model_config = {"env_file": ".env", "extra": "ignore"}
