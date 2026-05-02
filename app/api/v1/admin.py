@@ -9,6 +9,7 @@ from app.models.admin_audit import AdminAuditEvent
 from app.models.document import Document
 from app.models.intelligence import DocumentActionItem, DocumentRelationshipReview, DocumentReviewItem
 from app.models.user import User
+from app.models.billing import Plan, Subscription
 from app.models.processing_event import DocumentProcessingEvent
 
 from app.models.chat import ChatbotSettings
@@ -20,10 +21,18 @@ from app.schemas.admin import (
     AdminMetricsResponse,
     AdminProcessingSummaryResponse,
     AdminRoleUpdateRequest,
+    AdminSubscriptionResponse,
+    AdminUsageSummaryResponse,
+    AdminPlanUpdateRequest,
+    AdminUsageOverrideRequest,
+    AdminCancelDowngradeRequest,
     AdminUserResponse,
     AdminUsersPageResponse,
     ProcessingEventResponse,
 )
+from app.services.limit_enforcement import _current_period_window
+from app.services.subscriptions import ensure_default_free_subscription, seed_default_plans
+from app.services.usage import get_usage_summary
 from app.schemas.prompt_template import (
     PromptTemplateCreate,
     PromptTemplateResponse,
@@ -35,6 +44,18 @@ from app.services.openai_client import APIError, openai_client_service
 from app.services.prompt_templates import activate_prompt_template
 
 router = APIRouter(prefix="/admin", tags=["admin"])
+
+
+def _audit_admin_monetization_action(db: Session, *, current_user: User, target_user: User, action: str, details: dict) -> None:
+    db.add(
+        AdminAuditEvent(
+            actor_id=current_user.id,
+            entity_type="subscription",
+            entity_id=str(target_user.id),
+            action=action,
+            details={"target_email": target_user.email, **details},
+        )
+    )
 
 
 def require_admin(role: str = Depends(get_current_user_role)) -> str:
@@ -52,6 +73,89 @@ def list_users(
 ):
     q = db.query(User).order_by(User.created_at.desc())
     return AdminUsersPageResponse(items=q.offset(offset).limit(limit).all(), total_count=q.count(), limit=limit, offset=offset)
+
+
+@router.get("/subscriptions", response_model=list[AdminSubscriptionResponse])
+def list_user_subscriptions(_: str = Depends(require_admin), db: Session = Depends(get_db)):
+    seed_default_plans(db)
+    rows = db.query(Subscription, User, Plan).join(User, User.id == Subscription.user_id).join(Plan, Plan.id == Subscription.plan_id).all()
+    return [
+        AdminSubscriptionResponse(
+            user_id=u.id, email=u.email, subscription_id=s.id, plan_slug=p.slug, plan_name=p.name, status=s.status,
+            cancel_at_period_end=s.cancel_at_period_end, usage_credits=s.usage_credits_json or {}, limit_overrides=s.limit_overrides_json or {},
+        )
+        for s, u, p in rows
+    ]
+
+
+@router.get("/users/{user_id}/usage-summary", response_model=AdminUsageSummaryResponse)
+def admin_user_usage_summary(user_id: str, _: str = Depends(require_admin), db: Session = Depends(get_db)):
+    target = db.query(User).filter(User.id == user_id).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    ensure_default_free_subscription(db, target.id)
+    start, end = _current_period_window(db, target.id)
+    return AdminUsageSummaryResponse(user_id=target.id, window_start=start, window_end=end, usage=get_usage_summary(db, target.id, start, end))
+
+
+@router.patch("/users/{user_id}/plan", response_model=AdminSubscriptionResponse)
+def admin_change_user_plan(user_id: str, payload: AdminPlanUpdateRequest, _: str = Depends(require_admin), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    seed_default_plans(db)
+    target = db.query(User).filter(User.id == user_id).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    plan = db.query(Plan).filter(Plan.slug == payload.plan_slug, Plan.is_active.is_(True)).first()
+    if not plan:
+        raise HTTPException(status_code=404, detail="Plan not found")
+    sub = ensure_default_free_subscription(db, target.id)
+    prev = sub.plan.slug if sub.plan else None
+    sub.plan_id = plan.id
+    _audit_admin_monetization_action(db, current_user=current_user, target_user=target, action="plan_updated", details={"previous_plan": prev, "new_plan": plan.slug})
+    db.commit()
+    db.refresh(sub)
+    return AdminSubscriptionResponse(user_id=target.id, email=target.email, subscription_id=sub.id, plan_slug=sub.plan.slug, plan_name=sub.plan.name, status=sub.status, cancel_at_period_end=sub.cancel_at_period_end, usage_credits=sub.usage_credits_json or {}, limit_overrides=sub.limit_overrides_json or {})
+
+
+@router.patch("/users/{user_id}/usage-controls", response_model=AdminSubscriptionResponse)
+def admin_update_usage_controls(user_id: str, payload: AdminUsageOverrideRequest, _: str = Depends(require_admin), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    target = db.query(User).filter(User.id == user_id).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    sub = ensure_default_free_subscription(db, target.id)
+    credits = dict(sub.usage_credits_json or {})
+    overrides = dict(sub.limit_overrides_json or {})
+    credits.update(payload.usage_credits)
+    for metric, value in payload.limit_overrides.items():
+        if value is None:
+            overrides.pop(metric, None)
+        else:
+            overrides[metric] = int(value)
+    sub.usage_credits_json = credits
+    sub.limit_overrides_json = overrides
+    _audit_admin_monetization_action(db, current_user=current_user, target_user=target, action="usage_controls_updated", details={"usage_credits": payload.usage_credits, "limit_overrides": payload.limit_overrides})
+    db.commit()
+    db.refresh(sub)
+    return AdminSubscriptionResponse(user_id=target.id, email=target.email, subscription_id=sub.id, plan_slug=sub.plan.slug, plan_name=sub.plan.name, status=sub.status, cancel_at_period_end=sub.cancel_at_period_end, usage_credits=sub.usage_credits_json or {}, limit_overrides=sub.limit_overrides_json or {})
+
+
+@router.post("/users/{user_id}/cancel-or-downgrade", response_model=AdminSubscriptionResponse)
+def admin_cancel_or_downgrade_subscription(user_id: str, payload: AdminCancelDowngradeRequest, _: str = Depends(require_admin), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    seed_default_plans(db)
+    target = db.query(User).filter(User.id == user_id).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    sub = ensure_default_free_subscription(db, target.id)
+    plan = db.query(Plan).filter(Plan.slug == payload.downgrade_to_plan_slug, Plan.is_active.is_(True)).first()
+    if not plan:
+        raise HTTPException(status_code=404, detail="Plan not found")
+    prev_plan = sub.plan.slug if sub.plan else None
+    sub.plan_id = plan.id
+    sub.status = "canceled" if plan.slug == "free" else "active"
+    sub.cancel_at_period_end = True
+    _audit_admin_monetization_action(db, current_user=current_user, target_user=target, action="subscription_canceled_or_downgraded", details={"previous_plan": prev_plan, "new_plan": plan.slug, "status": sub.status})
+    db.commit()
+    db.refresh(sub)
+    return AdminSubscriptionResponse(user_id=target.id, email=target.email, subscription_id=sub.id, plan_slug=sub.plan.slug, plan_name=sub.plan.name, status=sub.status, cancel_at_period_end=sub.cancel_at_period_end, usage_credits=sub.usage_credits_json or {}, limit_overrides=sub.limit_overrides_json or {})
 
 
 @router.patch("/users/{user_id}/role", response_model=AdminUserResponse)

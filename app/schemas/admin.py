@@ -80,3 +80,35 @@ class ProcessingEventResponse(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class AdminSubscriptionResponse(BaseModel):
+    user_id: UUID
+    email: str
+    subscription_id: UUID
+    plan_slug: str
+    plan_name: str
+    status: str
+    cancel_at_period_end: bool
+    usage_credits: dict
+    limit_overrides: dict
+
+
+class AdminUsageSummaryResponse(BaseModel):
+    user_id: UUID
+    window_start: datetime
+    window_end: datetime
+    usage: dict[str, int]
+
+
+class AdminPlanUpdateRequest(BaseModel):
+    plan_slug: str
+
+
+class AdminUsageOverrideRequest(BaseModel):
+    usage_credits: dict[str, int] = Field(default_factory=dict)
+    limit_overrides: dict[str, int | None] = Field(default_factory=dict)
+
+
+class AdminCancelDowngradeRequest(BaseModel):
+    downgrade_to_plan_slug: str = "free"
