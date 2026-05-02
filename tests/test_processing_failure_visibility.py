@@ -126,3 +126,47 @@ def test_extraction_failure_records_sanitized_metadata(db, sample_document, tmp_
     assert sample_document.extracted_metadata["extraction_status"] == "failed"
     assert sample_document.extracted_metadata["extracted_text_length"] == 0
     assert sample_document.extracted_metadata["extraction_error"] == "Text extraction failed."
+
+
+def test_extraction_called_once_when_original_exists(db, sample_document, tmp_path):
+    processor = DocumentProcessor()
+    src = tmp_path / "once.txt"
+    src.write_text("hello", encoding="utf-8")
+    sample_document.original_path = str(src)
+    sample_document.file_type = "txt"
+    db.add(sample_document)
+    db.commit()
+
+    with patch("app.services.document_processor.text_extractor.extract", return_value=("Hello world", 1, 2)) as extract, patch(
+        "app.services.document_processor.thumbnail_generator.generate", return_value=None
+    ), patch("app.services.document_processor.storage.save_text"), patch(
+        "app.services.document_processor.settings.ENABLE_AUTO_CATEGORIZATION", False
+    ):
+        processor.process_document(db, sample_document)
+
+    db.refresh(sample_document)
+    assert sample_document.processing_status == "completed"
+    assert extract.call_count == 1
+
+
+def test_whitespace_extracted_text_fails_without_ai_call(db, sample_document, tmp_path):
+    processor = DocumentProcessor()
+    src = tmp_path / "empty-space.pdf"
+    src.write_bytes(b"%PDF-1.4 test")
+    sample_document.original_path = str(src)
+    db.add(sample_document)
+    db.commit()
+
+    with patch("app.services.document_processor.text_extractor.extract", return_value=("   \n\t  ", 1, 0)), patch(
+        "app.services.document_processor.thumbnail_generator.generate", return_value=None
+    ), patch("app.services.document_processor.storage.save_text") as save_text, patch.object(
+        processor, "_run_ai_analysis"
+    ) as run_ai:
+        processor.process_document(db, sample_document)
+
+    db.refresh(sample_document)
+    assert sample_document.processing_status == "failed"
+    assert sample_document.extracted_metadata["extraction_status"] == "empty"
+    assert sample_document.extracted_metadata["extracted_text_length"] == 0
+    run_ai.assert_not_called()
+    save_text.assert_not_called()

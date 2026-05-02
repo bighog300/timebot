@@ -92,51 +92,52 @@ class DocumentProcessor:
 
         try:
             file_path = Path(document.original_path)
-            text = self._load_or_extract_text(document.id, file_path, document.file_type)
-            if text:
-                self._record_extraction_metadata(
-                    document,
-                    text=text,
-                    status="success",
-                )
-                document.raw_text = text
-                document.page_count = None
-                document.word_count = len(text.split())
-            elif not file_path.exists():
-                self._record_extraction_metadata(
-                    document,
-                    text="",
-                    status="failed",
-                    error="Original uploaded file is missing from storage.",
-                )
-                raise ValueError("Cannot reprocess: original uploaded file is missing from storage")
+            text = ""
 
-            # Step 1: extract text
             if file_path.exists():
                 extracted_text, page_count, word_count = text_extractor.extract(file_path, document.file_type)
-                extracted = (extracted_text or "").strip()
+                text = (extracted_text or "").strip()
                 extraction_status = "success"
                 extraction_error = None
                 if extracted_text is None:
                     extraction_status = "failed"
                     extraction_error = "Text extraction failed."
-                elif not extracted:
+                elif not text:
                     extraction_status = "empty"
                     if document.file_type == "pdf":
                         extraction_error = _OCR_REQUIRED_MESSAGE
 
                 self._record_extraction_metadata(
                     document,
-                    text=extracted,
+                    text=text,
                     status=extraction_status,
                     error=extraction_error,
                 )
+
                 if extraction_status == "success":
-                    text = extracted
                     document.raw_text = text
                     document.page_count = page_count
                     document.word_count = word_count
                     storage.save_text(str(document.id), text)
+            else:
+                text = (self._load_or_extract_text(document.id, file_path, document.file_type) or "").strip()
+                if text:
+                    self._record_extraction_metadata(
+                        document,
+                        text=text,
+                        status="success",
+                    )
+                    document.raw_text = text
+                    document.page_count = None
+                    document.word_count = len(text.split())
+                else:
+                    self._record_extraction_metadata(
+                        document,
+                        text="",
+                        status="failed",
+                        error="Original uploaded file is missing from storage.",
+                    )
+                    raise ValueError("Cannot reprocess: original uploaded file is missing from storage")
 
             if not text:
                 raise ValueError(_EMPTY_TEXT_ERROR_MESSAGE)
@@ -176,6 +177,7 @@ class DocumentProcessor:
                 filename=document.filename,
                 file_type=document.file_type,
                 existing_categories=[c.name for c in categories],
+                db=db,
             )
             confidence = ai_analyzer.compute_confidence(analysis)
             logger.info("AI analysis succeeded doc_id=%s summary_length=%s timeline_events=%s action_items=%s", document.id, len(analysis.get("summary") or ""), len(analysis.get("timeline_events") or []), len(analysis.get("action_items") or []))
@@ -223,6 +225,7 @@ class DocumentProcessor:
         except AIAnalysisError as exc:
             self._append_processing_warning(document, str(exc))
             logger.warning("AI analysis failed doc_id=%s error=%s", document.id, exc)
+            raise
 
     def _load_or_extract_text(self, document_id: UUID, file_path: Path, file_type: str) -> str:
         try:
