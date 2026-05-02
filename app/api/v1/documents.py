@@ -262,7 +262,15 @@ def approve_document_category(document_id: UUID, db: Session = Depends(get_db), 
     try:
         return document_intelligence_service.approve_category(db, document, intelligence, actor_id=current_user.id)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "message": str(exc),
+                "document_id": str(document.id),
+                "suggested_category_id": str(intelligence.suggested_category_id) if intelligence.suggested_category_id else None,
+                "document_ai_category_id": str(document.ai_category_id) if document.ai_category_id else None,
+            },
+        ) from exc
 
 
 @router.post("/{document_id}/category/override", response_model=DocumentResponse)

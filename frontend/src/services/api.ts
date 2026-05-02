@@ -52,6 +52,14 @@ export function getErrorDetail(error: unknown): string {
   if (axios.isAxiosError(error)) {
     const detail = error.response?.data?.detail;
     if (typeof detail === 'string') return detail;
+    if (Array.isArray(detail)) {
+      return detail.map((item) => (typeof item?.msg === 'string' ? item.msg : JSON.stringify(item))).join('; ');
+    }
+    if (detail && typeof detail === 'object') {
+      const message = (detail as { message?: unknown }).message;
+      if (typeof message === 'string') return message;
+      return JSON.stringify(detail);
+    }
     return error.message;
   }
   return error instanceof Error ? error.message : 'Unexpected error';

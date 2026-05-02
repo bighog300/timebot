@@ -75,7 +75,9 @@ describe('Admin responsiveness and guard behavior', () => {
     expect(screen.getByText('Prompt Templates')).toBeTruthy();
     expect(container.querySelector('.overflow-x-auto')).toBeTruthy();
     expect(screen.getByPlaceholderText('Prompt content for preview').className).toContain('min-w-0');
-    expect(screen.getByRole('button', { name: 'Run preview' }).className).toContain('w-full');
+    const runPreview = screen.getByRole('button', { name: 'Run preview' });
+    expect(runPreview.className).toContain('w-full');
+    expect(runPreview).toBeDisabled();
   });
 
   it('non-admin guard still blocks access', () => {

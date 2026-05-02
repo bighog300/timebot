@@ -144,6 +144,16 @@ def test_non_admin_cannot_test_prompt_template(client, test_user, db):
     assert r.status_code == 403
 
 
+def test_admin_prompt_test_validation_error_shape(client, test_user, db):
+    test_user.role = "admin"
+    db.commit()
+    r = client.post("/api/v1/admin/prompts/test", json={"prompt_type": "chat", "prompt_content": "", "sample_context": ""})
+    assert r.status_code == 422
+    detail = r.json()["detail"]
+    assert isinstance(detail, list)
+    assert any(item.get("loc", [None])[-1] == "type" for item in detail)
+
+
 def test_prompt_test_does_not_persist_or_activate(client, test_user, db, monkeypatch):
     test_user.role = "admin"
     existing = PromptTemplate(type="chat", name="seed", content="seed", version=1, is_active=True)
