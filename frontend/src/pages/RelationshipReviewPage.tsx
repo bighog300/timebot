@@ -4,6 +4,7 @@ import { useConfirmRelationshipReview, useDismissRelationshipReview, useRelation
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui/States';
+import { getUserFacingErrorMessage } from '@/lib/errors';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { useRoleAccess } from '@/hooks/useRoleAccess';
 import { useUIStore } from '@/store/uiStore';
@@ -13,6 +14,7 @@ export function RelationshipReviewPage() {
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<'confirm' | 'dismiss' | null>(null);
   const reviews = useRelationshipReviews(status);
+  const error = reviews.error;
   const confirm = useConfirmRelationshipReview();
   const dismiss = useDismissRelationshipReview();
   const { canMutate } = useRoleAccess();
@@ -35,7 +37,7 @@ export function RelationshipReviewPage() {
       }} />
 
       {reviews.isLoading && <LoadingState label="Loading relationship reviews..." />}
-      {reviews.isError && <ErrorState message="Failed to load relationship reviews" />}
+      {reviews.isError && <ErrorState message={getUserFacingErrorMessage(error, 'Failed to load relationship reviews')} />}
       {reviews.isSuccess && (reviews.data?.length ?? 0) === 0 && <EmptyState label="No relationships to review" />}
 
       <div className="space-y-3">{(reviews.data ?? []).map((item) => (

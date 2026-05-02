@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useInsightsOverview, useStructuredInsights } from '@/hooks/useApi';
 import { Card } from '@/components/ui/Card';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui/States';
+import { getUserFacingErrorMessage } from '@/lib/errors';
 import { getSeverityBadgeClass, getSeverityLabel, normalizeSeverity, sortInsightsBySeverity } from '@/lib/insights';
 
 const TYPE_FILTERS = [
@@ -25,7 +26,7 @@ function normalizeFilterValue(value: string) {
 }
 
 export function InsightsPage() {
-  const { data, isLoading, isError } = useInsightsOverview();
+  const { data, isLoading, isError, error } = useInsightsOverview();
   const { data: structuredInsights, isLoading: structuredLoading, isError: structuredError } = useStructuredInsights();
   const [typeFilter, setTypeFilter] = useState<(typeof TYPE_FILTERS)[number]['value']>('all');
   const [severityFilter, setSeverityFilter] = useState<(typeof SEVERITY_FILTERS)[number]['value']>('all');
@@ -47,7 +48,7 @@ export function InsightsPage() {
     <div className="space-y-4">
       <h1 className="text-xl font-semibold">Insights</h1>
       {isInitialLoading && <LoadingState />}
-      {hasError && <ErrorState message="Failed to load insights" />}
+      {hasError && <ErrorState message={getUserFacingErrorMessage(error, 'Failed to load insights')} />}
       {!isInitialLoading && !hasError && !data && <EmptyState label="No insights available." />}
       {!isInitialLoading && !hasError && (
         <section className="space-y-3" aria-label="Structured insights">

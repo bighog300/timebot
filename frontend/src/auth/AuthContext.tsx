@@ -12,7 +12,7 @@ type AuthContextValue = {
 };
 
 const AUTH_TOKEN_KEY = 'timebot.auth.token';
-const AuthContext = createContext<AuthContextValue | undefined>(undefined);
+export const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 function applyToken(token: string | null) {
   if (token) http.defaults.headers.common.Authorization = `Bearer ${token}`;

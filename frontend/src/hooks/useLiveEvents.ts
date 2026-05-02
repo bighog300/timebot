@@ -3,6 +3,7 @@ import { useAuth } from '@/auth/AuthContext';
 import { useQueryClient } from '@tanstack/react-query';
 import { env } from '@/lib/env';
 import { keys } from '@/hooks/useApi';
+import { useUIStore } from '@/store/uiStore';
 
 type LiveEventPayload = {
   event_type?: string;
@@ -23,6 +24,7 @@ function isValidTimestamp(value: unknown): boolean {
 export function useLiveEvents() {
   const qc = useQueryClient();
   const { token, loading } = useAuth();
+  const pushToast = useUIStore((state) => state.pushToast);
 
   useEffect(() => {
     if (loading || !token) {
@@ -70,6 +72,12 @@ export function useLiveEvents() {
       // Optional in dev. Fail silently so auth/login flows are unaffected.
     };
 
+    ws.onclose = (event) => {
+      if (event.code === 1008) {
+        pushToast('Live updates paused due to an authorization policy issue. Please sign in again.', 'error');
+      }
+    };
+
     return () => ws?.close();
-  }, [qc, loading, token]);
+  }, [qc, loading, pushToast, token]);
 }
