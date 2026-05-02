@@ -133,6 +133,15 @@ class AIClientRouter(AIClient):
 
         return str(response).strip()
 
+    def generate_embedding(self, *, model: str, input_text: str) -> list[float]:
+        """Generate embeddings using the OpenAI provider regardless of selected chat provider."""
+        provider = self.get_provider("openai")
+        client = getattr(provider, "client", None)
+        if client is None:
+            raise AIProviderExecutionError("OpenAI provider does not expose embeddings client")
+        response = client.embeddings.create(model=model, input=input_text)
+        return response.data[0].embedding
+
     @property
     def _client(self) -> Any:
         current = self._registry.get(self.selected_provider_name)

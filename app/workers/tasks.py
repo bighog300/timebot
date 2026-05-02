@@ -245,14 +245,19 @@ def embed_document_task(document_id: str):
         db.commit()
         _finalize_enrichment_if_ready(db, document_id, task_name="embeddings", task_status="complete")
     except Exception as exc:
+        logger.warning(
+            "embedding_generation_failed document_id=%s error_type=%s",
+            document_id,
+            type(exc).__name__,
+        )
         _finalize_enrichment_if_ready(
             db,
             document_id,
             task_name="embeddings",
             task_status="degraded",
-            warning=f"Embedding generation failed: {exc}",
+            warning=f"Embedding generation failed (error_type={type(exc).__name__})",
         )
-        raise
+        return {"status": "degraded", "error_type": type(exc).__name__}
     finally:
         db.close()
 

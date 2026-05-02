@@ -265,3 +265,23 @@ def test_all_provider_failure_raises_clear_error(monkeypatch):
     monkeypatch.setattr("app.services.openai_client.settings.AI_PROVIDER_FALLBACKS", "openai")
     with pytest.raises(AIProviderExecutionError, match="All AI providers failed"):
         router.generate_completion({"x": 1})
+
+
+def test_router_generate_embedding_uses_openai_provider_without_client_property_on_router(monkeypatch):
+    router = AIClientRouter()
+
+    class DummyEmbeddings:
+        def create(self, **kwargs):
+            assert kwargs["model"] == "text-embedding-3-small"
+            assert kwargs["input"] == "hello"
+            return types.SimpleNamespace(data=[types.SimpleNamespace(embedding=[0.1, 0.2])])
+
+    class DummyOpenAIProvider(_Provider):
+        @property
+        def client(self):
+            return types.SimpleNamespace(embeddings=DummyEmbeddings())
+
+    router._registry["openai"] = DummyOpenAIProvider(ok_value=None)
+
+    embedding = router.generate_embedding(model="text-embedding-3-small", input_text="hello")
+    assert embedding == [0.1, 0.2]
