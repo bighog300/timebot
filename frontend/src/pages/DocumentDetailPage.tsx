@@ -23,9 +23,30 @@ import {
   useStructuredInsights,
 } from '@/hooks/useApi';
 
+const IN_FLIGHT_PROCESSING_STAGES = new Set(['queued', 'extracting', 'analyzing', 'enriching', 'embedding']);
+
 function docStatusReady(status?: string) {
   if (!status) return false;
   return status !== 'uploading' && status !== 'processing';
+}
+
+export function shouldContinuePolling(data?: { processing_status?: string; processing_stage?: string; enrichment_pending?: boolean; enrichment_status?: string }) {
+  if (!data) return false;
+  const status = data.processing_status;
+  const stage = data.processing_stage;
+  const enrichmentPending = Boolean(data.enrichment_pending);
+  const processingInFlight =
+    status === 'uploading' ||
+    status === 'processing' ||
+    (typeof stage === 'string' && IN_FLIGHT_PROCESSING_STAGES.has(stage));
+
+  if (processingInFlight || enrichmentPending) return true;
+
+  const processingTerminal = status === 'completed' || status === 'failed';
+  const enrichmentCompleteOrDegraded = data.enrichment_status === 'complete' || data.enrichment_status === 'degraded';
+  if (processingTerminal && enrichmentCompleteOrDegraded) return false;
+
+  return false;
 }
 
 const SIGNAL_LABELS: Record<string, string> = {
@@ -49,13 +70,8 @@ export function DocumentDetailPage() {
     queryFn: () => api.getDocument(id),
     enabled: !!id,
     refetchInterval: (query) => {
-      const data = query.state.data as { processing_status?: string; enrichment_pending?: boolean; enrichment_status?: string } | undefined;
-      const status = data?.processing_status;
-      const enrichmentPending = Boolean(data?.enrichment_pending);
-      if (status === 'uploading' || status === 'processing' || enrichmentPending) return 3000;
-      const enrichmentStatus = data?.enrichment_status;
-      if ((status === 'completed' || status === 'failed') && (enrichmentStatus === 'complete' || enrichmentStatus === 'degraded')) return false;
-      return false;
+      const data = query.state.data as { processing_status?: string; processing_stage?: string; enrichment_pending?: boolean; enrichment_status?: string } | undefined;
+      return shouldContinuePolling(data) ? 3000 : false;
     },
   });
   const similarQuery = useQuery({ queryKey: ['similar', id], queryFn: () => api.findSimilar(id), enabled: !!id });
@@ -250,6 +266,18 @@ export function DocumentDetailPage() {
       )}
       {doc.ai_analysis_degraded && (
         <Card>Analysis completed with partial AI output.</Card>
+      )}
+      {Array.isArray(doc.intelligence_warnings) && doc.intelligence_warnings.length > 0 && (
+        <Card>
+          <h2 className="mb-2 text-sm font-semibold text-amber-300">Intelligence warnings</h2>
+          <ul className="space-y-1 text-sm text-amber-100" data-testid="intelligence-warnings">
+            {doc.intelligence_warnings.map((warning, index) => (
+              <li className="break-words" key={`${warning}-${index}`}>
+                • {warning}
+              </li>
+            ))}
+          </ul>
+        </Card>
       )}
       <div className="flex flex-wrap gap-2">
         <Button onClick={() => updateMutation.mutate({ is_favorite: !doc.is_favorite })}>{doc.is_favorite ? 'Unfavorite' : 'Favorite'}</Button>
