@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react';
-import { useInsightsOverview, useStructuredInsights } from '@/hooks/useApi';
+import { useInsightsAccess, useInsightsOverview, useStructuredInsights } from '@/hooks/useApi';
 import { Card } from '@/components/ui/Card';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui/States';
 import { getUserFacingErrorMessage } from '@/lib/errors';
 import { getSeverityBadgeClass, getSeverityLabel, normalizeSeverity, sortInsightsBySeverity } from '@/lib/insights';
+import { UpgradePrompt } from '@/components/billing/UpgradePrompt';
 
 const TYPE_FILTERS = [
   { label: 'All', value: 'all' },
@@ -26,6 +27,7 @@ function normalizeFilterValue(value: string) {
 }
 
 export function InsightsPage() {
+  const { insightsEnabled, isLoading: insightsAccessLoading } = useInsightsAccess();
   const { data, isLoading, isError, error } = useInsightsOverview();
   const { data: structuredInsights, isLoading: structuredLoading, isError: structuredError } = useStructuredInsights();
   const [typeFilter, setTypeFilter] = useState<(typeof TYPE_FILTERS)[number]['value']>('all');
@@ -42,15 +44,16 @@ export function InsightsPage() {
     }));
   }, [severityFilter, structuredInsights, typeFilter]);
 
-  const isInitialLoading = isLoading || structuredLoading;
+  const isInitialLoading = insightsAccessLoading || isLoading || structuredLoading;
   const hasError = isError || structuredError;
   return (
     <div className="space-y-4">
       <h1 className="text-xl font-semibold">Insights</h1>
       {isInitialLoading && <LoadingState />}
+      {!isInitialLoading && !insightsEnabled && <UpgradePrompt title='Upgrade required' message='Insights are available on paid plans. Upgrade to unlock this feature.' />}
       {hasError && <ErrorState message={getUserFacingErrorMessage(error, 'Failed to load insights')} />}
       {!isInitialLoading && !hasError && !data && <EmptyState label="No insights available." />}
-      {!isInitialLoading && !hasError && (
+      {!isInitialLoading && insightsEnabled && !hasError && (
         <section className="space-y-3" aria-label="Structured insights">
           <h2 className="text-base font-medium">Structured insights</h2>
           {!!structuredInsights?.length && (

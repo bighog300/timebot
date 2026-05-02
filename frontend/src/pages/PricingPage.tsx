@@ -1,4 +1,5 @@
 import { Card } from '@/components/ui/Card';
+import axios from 'axios';
 import { useCreateCheckoutSession, useCreateCustomerPortalSession, usePlans, useSubscription } from '@/hooks/useApi';
 import { useUIStore } from '@/store/uiStore';
 
@@ -8,12 +9,13 @@ export function PricingPage() {
   const subscription = useSubscription();
   const checkout = useCreateCheckoutSession();
   const portal = useCreateCustomerPortalSession();
+  const billingConfigured = (plans.data ?? []).some((plan) => plan.slug !== 'free' && plan.price_monthly_cents > 0 && plan.features?.billing_configured !== false);
 
   return (
     <div className="space-y-4">
       <h1 className="text-xl font-semibold">Plans & Pricing</h1>
       <div className="text-sm">Current plan: <span className="font-semibold uppercase">{subscription.data?.plan.slug ?? 'free'}</span></div>
-      <button className="rounded bg-slate-700 px-3 py-2 text-sm" onClick={async () => {
+      <button disabled={!billingConfigured} className="rounded bg-slate-700 px-3 py-2 text-sm disabled:opacity-50" onClick={async () => {
         try {
           const result = await portal.mutateAsync();
           window.location.href = result.portal_url;
@@ -32,15 +34,26 @@ export function PricingPage() {
             <ul className="mt-3 space-y-1 text-xs text-slate-300">
               {Object.entries(plan.limits).slice(0, 4).map(([k, v]) => <li key={k}>{k}: {v ?? 'Unlimited'}</li>)}
             </ul>
-            <button disabled={plan.is_current || checkout.isPending} className="mt-3 rounded bg-indigo-700 px-3 py-2 text-sm disabled:opacity-50" onClick={async () => {
+            <button disabled={plan.is_current || checkout.isPending || (!billingConfigured && plan.slug !== 'free')} className="mt-3 rounded bg-indigo-700 px-3 py-2 text-sm disabled:opacity-50" onClick={async () => {
               try {
                 const result = await checkout.mutateAsync(plan.slug);
                 window.location.href = result.checkout_url;
-              } catch {
+              } catch (error) {
+                if (axios.isAxiosError(error)) {
+                  const detail = error.response?.data?.detail;
+                  if (detail?.code === 'billing_not_configured') {
+                    pushToast(detail.message, 'error');
+                    return;
+                  }
+                  if (typeof detail === 'string') {
+                    pushToast(detail, 'error');
+                    return;
+                  }
+                }
                 pushToast('Unable to start checkout', 'error');
               }
             }}>
-              {plan.is_current ? 'Current plan' : 'Choose plan'}
+              {plan.is_current ? 'Current plan' : (!billingConfigured && plan.slug !== 'free' ? 'Billing not configured' : 'Choose plan')}
             </button>
           </Card>
         ))}

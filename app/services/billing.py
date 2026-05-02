@@ -25,6 +25,11 @@ class BillingService:
     def __post_init__(self) -> None:
         pass
 
+
+    def _ensure_configured(self) -> None:
+        if not self.stripe_secret_key or not self.stripe_price_pro_monthly or not self.stripe_price_team_monthly:
+            raise ValueError("Billing not configured")
+
     def _price_id_for_plan(self, plan_slug: str) -> str:
         mapping = {
             "pro": self.stripe_price_pro_monthly,
@@ -48,6 +53,7 @@ class BillingService:
         return customer["id"]
 
     def create_checkout_session(self, db: Session, user: User, plan: str) -> dict[str, str]:
+        self._ensure_configured()
         _ = self._price_id_for_plan(plan)
         customer_id = self._get_or_create_customer(db, user)
         import stripe
@@ -64,6 +70,7 @@ class BillingService:
         return {"checkout_session_id": session["id"], "checkout_url": session["url"], "plan": plan}
 
     def create_customer_portal_session(self, db: Session, user: User) -> dict[str, str]:
+        self._ensure_configured()
         customer_id = self._get_or_create_customer(db, user)
         import stripe
         stripe.api_key = self.stripe_secret_key

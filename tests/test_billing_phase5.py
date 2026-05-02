@@ -63,3 +63,10 @@ def test_canceled_subscription_handled(client, db, test_user, monkeypatch):
 def test_invalid_plan_checkout_rejected(client):
     resp = client.post('/api/v1/billing/checkout-session', json={'plan': 'enterprise'})
     assert resp.status_code == 400
+
+
+def test_checkout_returns_structured_error_when_billing_not_configured(client, monkeypatch):
+    monkeypatch.setattr(monetization.billing_service, "create_checkout_session", lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError("Billing not configured")))
+    resp = client.post("/api/v1/billing/checkout-session", json={"plan": "pro"})
+    assert resp.status_code == 400
+    assert resp.json()["detail"]["code"] == "billing_not_configured"

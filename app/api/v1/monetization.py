@@ -99,7 +99,10 @@ def create_checkout(payload: CheckoutRequest, db: Session = Depends(get_db), use
     try:
         return billing_service.create_checkout_session(db, user, payload.plan)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        detail = str(exc)
+        if detail == 'Billing not configured':
+            raise HTTPException(status_code=400, detail={'code': 'billing_not_configured', 'message': 'Billing is not configured in this environment.'}) from exc
+        raise HTTPException(status_code=400, detail=detail) from exc
 
 
 @router.post("/billing/customer-portal")
