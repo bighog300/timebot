@@ -130,12 +130,11 @@ class AIAnalyzer:
         categories: str = "none yet",
     ) -> str:
         if prompt_type == "timeline_extraction":
-            return build_document_analysis_prompt(
+            return build_default_summary_prompt(
                 filename=filename,
                 file_type=file_type,
                 char_limit=char_limit,
                 text=text,
-                categories=categories,
             )
         raise AIAnalysisError(f"AI enrichment failed: unsupported prompt type '{prompt_type}'.")
 
