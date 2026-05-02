@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { DocumentDetailPage } from './DocumentDetailPage';
+import { DocumentDetailPage, shouldContinuePolling } from './DocumentDetailPage';
 
 vi.mock('@/store/uiStore', () => ({ useUIStore: vi.fn() }));
 vi.mock('@/services/api', () => ({
@@ -292,4 +292,61 @@ it('shows true empty relationship state when enrichment is complete', async () =
   vi.mocked(useDocumentRelationships).mockReturnValue({ isLoading: false, isError: false, isSuccess: true, data: [] } as never);
   renderPage();
   expect(await screen.findByText('No related documents found.')).toBeInTheDocument();
+});
+
+
+describe('intelligence warnings panel', () => {
+  it('renders warnings when intelligence_warnings is non-empty and treats text safely', async () => {
+    vi.mocked(api.getDocument).mockResolvedValue({
+      id: 'doc-1',
+      filename: 'Contract.pdf',
+      processing_status: 'completed',
+      processing_error: null,
+      is_favorite: false,
+      is_archived: false,
+      summary: '',
+      ai_category: null,
+      intelligence_warnings: ['Low confidence classification', '<script>alert(1)</script>'],
+    } as never);
+    vi.mocked(api.findSimilar).mockResolvedValue({ results: [], query: '', total: 0 } as never);
+    renderPage();
+    expect(await screen.findByText('Intelligence warnings')).toBeInTheDocument();
+    expect(screen.getByText('• Low confidence classification')).toBeInTheDocument();
+    expect(screen.getByText('• <script>alert(1)</script>')).toBeInTheDocument();
+  });
+
+  it('does not render warnings panel when warnings are absent', async () => {
+    cleanup();
+    vi.mocked(api.getDocument).mockResolvedValue({
+      id: 'doc-1',
+      filename: 'Contract.pdf',
+      processing_status: 'completed',
+      processing_error: null,
+      is_favorite: false,
+      is_archived: false,
+      summary: '',
+      ai_category: null,
+      intelligence_warnings: [],
+    } as never);
+    vi.mocked(api.findSimilar).mockResolvedValue({ results: [], query: '', total: 0 } as never);
+    renderPage();
+    await screen.findAllByRole('heading', { name: 'Contract.pdf' });
+    expect(screen.queryByText('Intelligence warnings')).toBeNull();
+  });
+});
+
+describe('shouldContinuePolling', () => {
+  it('continues polling for in-flight processing stages', () => {
+    expect(shouldContinuePolling({ processing_status: 'processing', processing_stage: 'queued' })).toBe(true);
+    expect(shouldContinuePolling({ processing_status: 'processing', processing_stage: 'extracting' })).toBe(true);
+    expect(shouldContinuePolling({ processing_status: 'processing', processing_stage: 'analyzing' })).toBe(true);
+    expect(shouldContinuePolling({ processing_status: 'processing', processing_stage: 'enriching' })).toBe(true);
+    expect(shouldContinuePolling({ processing_status: 'processing', processing_stage: 'embedding' })).toBe(true);
+  });
+
+  it('continues polling while enrichment is pending and stops at terminal + complete/degraded', () => {
+    expect(shouldContinuePolling({ processing_status: 'completed', enrichment_pending: true, enrichment_status: 'pending' })).toBe(true);
+    expect(shouldContinuePolling({ processing_status: 'completed', enrichment_pending: false, enrichment_status: 'complete' })).toBe(false);
+    expect(shouldContinuePolling({ processing_status: 'failed', enrichment_pending: false, enrichment_status: 'degraded' })).toBe(false);
+  });
 });
