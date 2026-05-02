@@ -498,6 +498,29 @@ export interface GmailPreviewMessage { gmail_message_id: string; sender: string;
 export interface GmailPreviewResponse { messages: GmailPreviewMessage[]; }
 export interface GmailImportResponse { imported_count: number; imported_email_count: number; imported_attachment_count: number; skipped_attachment_count: number; skipped_attachments: Array<{ filename: string; reason: string }>; duplicate_message_count: number; created_document_ids: string[]; }
 
+export interface SubscriptionSummary {
+  status: string;
+  current_period_start: string | null;
+  current_period_end: string | null;
+  cancel_at_period_end: boolean;
+  plan: {
+    slug: string;
+    name: string;
+    price_monthly_cents: number;
+    currency: string;
+  };
+}
+
+export interface PlanSummary {
+  slug: string;
+  name: string;
+  price_monthly_cents: number;
+  currency: string;
+  limits: Record<string, number | null>;
+  features: Record<string, boolean>;
+  is_current: boolean;
+}
+
 export interface UsageMetric { used: number; limit: number | null; }
 export interface UsageSummary {
   plan: 'free' | 'pro' | string;

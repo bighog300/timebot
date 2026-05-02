@@ -23,6 +23,7 @@ import { AdminChatbotSettingsPage } from '@/pages/AdminChatbotSettingsPage';
 import { ReportsPage } from '@/pages/ReportsPage';
 import { ChatPage } from '@/pages/ChatPage';
 import { AdminPromptTemplatesPage } from '@/pages/AdminPromptTemplatesPage';
+import { PricingPage } from '@/pages/PricingPage';
 
 export const router = createBrowserRouter([
   { path: '/login', element: <LoginPage /> },
@@ -51,6 +52,7 @@ export const router = createBrowserRouter([
       { path: 'connections', element: <ConnectionsPage /> },
       { path: 'chat', element: <ChatPage /> },
       { path: 'reports', element: <ReportsPage /> },
+      { path: 'pricing', element: <PricingPage /> },
       { path: 'connections/callback', element: <ConnectionCallbackPage /> },
       { path: 'admin', element: <RequireAdmin><AdminPage /></RequireAdmin> },
       { path: 'admin/chatbot-settings', element: <RequireAdmin><AdminChatbotSettingsPage /></RequireAdmin> },
