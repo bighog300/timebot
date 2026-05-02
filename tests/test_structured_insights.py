@@ -25,7 +25,8 @@ def _mk_doc(db, user_id, filename, *, summary="", entities=None):
     return doc
 
 
-def test_structured_risk_and_milestone_generated(client, db, test_user):
+def test_structured_risk_and_milestone_generated(client, db, test_user, grant_pro_subscription):
+    grant_pro_subscription(test_user.id)
     _mk_doc(
         db,
         test_user.id,
@@ -41,7 +42,8 @@ def test_structured_risk_and_milestone_generated(client, db, test_user):
     assert "milestone" in types
 
 
-def test_structured_missing_information_generated_conservatively(client, db, test_user):
+def test_structured_missing_information_generated_conservatively(client, db, test_user, grant_pro_subscription):
+    grant_pro_subscription(test_user.id)
     _mk_doc(
         db,
         test_user.id,
@@ -54,7 +56,8 @@ def test_structured_missing_information_generated_conservatively(client, db, tes
     assert missing
 
 
-def test_structured_insights_user_isolation(client, db, test_user):
+def test_structured_insights_user_isolation(client, db, test_user, grant_pro_subscription):
+    grant_pro_subscription(test_user.id)
     mine = _mk_doc(db, test_user.id, "mydoc.txt", summary="deadline tomorrow")
     other_user_id = uuid.uuid4()
     other_doc = _mk_doc(db, other_user_id, "other.txt", summary="urgent risk")
@@ -65,14 +68,16 @@ def test_structured_insights_user_isolation(client, db, test_user):
     assert str(other_doc.id) not in related
 
 
-def test_structured_no_insight_without_evidence(client, db, test_user):
+def test_structured_no_insight_without_evidence(client, db, test_user, grant_pro_subscription):
+    grant_pro_subscription(test_user.id)
     _mk_doc(db, test_user.id, "plain.txt", summary="Routine status update.", entities={"timeline_events": [{"title": "General update", "date": "2026-01-01"}]})
     res = client.get("/api/v1/insights/structured")
     assert res.status_code == 200
     assert res.json()["count"] == 0
 
 
-def test_structured_inconsistency_from_conflicting_thread_outcomes(client, db, test_user):
+def test_structured_inconsistency_from_conflicting_thread_outcomes(client, db, test_user, grant_pro_subscription):
+    grant_pro_subscription(test_user.id)
     left = _mk_doc(db, test_user.id, "a.txt")
     right = _mk_doc(db, test_user.id, "b.txt")
     db.add(DocumentRelationship(source_doc_id=left.id, target_doc_id=right.id, relationship_type="thread", relationship_metadata={"thread_outcome": "approved", "reason": "message says approved"}))

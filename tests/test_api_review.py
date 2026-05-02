@@ -40,6 +40,7 @@ def _doc(**kwargs):
         "word_count": None,
         "ai_category": None,
         "user_category": None,
+        "user_id": uuid4(),
     }
     defaults.update(kwargs)
     return SimpleNamespace(**defaults)
@@ -158,6 +159,10 @@ def test_low_confidence_documents_enter_pending_review(monkeypatch):
     class FakeDB:
         def query(self, _model):
             return FakeCategoryQuery()
+        def add(self, *_args, **_kwargs):
+            return None
+        def commit(self):
+            return None
 
     processor._run_ai_analysis(FakeDB(), document, "source text")
 

@@ -28,6 +28,7 @@ async def upload_document(
         enforce_daily_cap(db, user_id=current_user.id, metric="uploads_daily", cap=hard_daily_caps()["uploads_daily"])
         enforce_limit(db, current_user.id, "documents_per_month", quantity=1)
         document = await document_processor.process_upload(db, file, current_user)
+        record_usage(db, user_id=current_user.id, metric="document_upload", quantity=1)
         record_usage(db, user_id=current_user.id, metric="upload_requests_rate", quantity=1)
         record_usage(db, user_id=current_user.id, metric="uploads_daily", quantity=1)
         db.commit()

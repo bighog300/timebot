@@ -299,10 +299,11 @@ class DocumentProcessor:
             )
             ai_analysis_duration_ms = int((time.perf_counter() - ai_start) * 1000)
             processing_event_service.record_processing_event(db, document=document, stage="analyzing", event_type="ai_finished", status="success", message="AI analysis completed.", duration_ms=ai_analysis_duration_ms, model=settings.OPENAI_MODEL)
-            if document.user_id is not None:
+            document_user_id = getattr(document, "user_id", None)
+            if document_user_id is not None:
                 record_usage(
                     db,
-                    user_id=document.user_id,
+                    user_id=document_user_id,
                     metric="ai_call",
                     quantity=max(int(analysis.get("ai_call_count") or 1), 1),
                     metadata={
@@ -312,8 +313,8 @@ class DocumentProcessor:
                     },
                 )
             logger.info("AI analysis completed doc_id=%s ai_analysis_duration_ms=%s", document.id, ai_analysis_duration_ms)
-            if document.user_id is not None:
-                record_usage(db, user_id=document.user_id, metric="processing_jobs_per_month", quantity=1, metadata={"document_id": str(document.id)})
+            if document_user_id is not None:
+                record_usage(db, user_id=document_user_id, metric="processing_jobs_per_month", quantity=1, metadata={"document_id": str(document.id)})
             if run_relationship_detection:
                 processing_event_service.update_progress(db, document, stage="enriching", message="Enriching with relationship detection.")
                 relationship_start = time.perf_counter()

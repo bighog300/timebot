@@ -58,7 +58,8 @@ def test_relationship_detect_requires_authentication(db, sample_document):
     assert resp.status_code == 401
 
 
-def test_relationship_detect_cross_user_hidden_as_not_found(client, db, test_user):
+def test_relationship_detect_cross_user_hidden_as_not_found(client, db, test_user, grant_pro_subscription):
+    grant_pro_subscription(test_user.id)
     other = _mk_user(db, "other@example.com")
     other_doc = _mk_doc(db, other.id, "other.pdf")
     resp = client.post(f"/api/v1/search/relationships/detect/{other_doc.id}")
@@ -74,8 +75,9 @@ def test_relationship_backfill_non_admin_forbidden(db, test_user):
     assert resp.status_code == 403
 
 
-def test_relationship_backfill_admin_allowed(db):
+def test_relationship_backfill_admin_allowed(db, grant_pro_subscription):
     admin = _mk_user(db, "admin@example.com", role="admin")
+    grant_pro_subscription(admin.id)
     _mk_doc(db, admin.id, "a.pdf")
     _mk_doc(db, admin.id, "b.pdf")
     app.dependency_overrides[get_db] = lambda: db
