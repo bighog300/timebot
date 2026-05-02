@@ -68,7 +68,7 @@ def test_pending_review_created_from_raw_relationship(db, test_user):
     assert review is not None
     assert review.status == "pending"
     explanation = review.metadata_json.get("explanation", {})
-    assert "ai_detected" in explanation.get("signals", [])
+    assert "heuristic_detected" in explanation.get("signals", [])
     assert isinstance(explanation.get("reason"), str)
     assert 0.0 <= float(explanation.get("confidence", 0.0)) <= 1.0
 
@@ -103,7 +103,7 @@ def test_ai_relationship_explanation_metadata_is_normalized(db, test_user):
     explanation = (rel.relationship_metadata or {}).get("explanation", {})
     assert 0.0 <= float(explanation.get("confidence", 0.0)) <= 1.0
     assert isinstance(explanation.get("signals"), list)
-    assert "ai_detected" in explanation.get("signals", [])
+    assert "heuristic_detected" in explanation.get("signals", [])
     assert isinstance(explanation.get("reason"), str)
 
 
