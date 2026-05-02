@@ -106,8 +106,8 @@ ALLOWED_ORIGINS=http://localhost:5174,http://127.0.0.1:5174,http://192.168.1.50:
 | `AUTH_ALGORITHM` | Optional | JWT algorithm (default `HS256`) |
 | `AUTH_ACCESS_TOKEN_EXPIRE_MINUTES` | Optional | Access token TTL |
 | `ALLOWED_ORIGINS` | Yes | CSV of frontend origins for CORS |
-| `GOOGLE_OAUTH_CLIENT_ID` | Optional | Google Drive OAuth client ID |
-| `GOOGLE_OAUTH_CLIENT_SECRET` | Optional | Google Drive OAuth secret |
+| `GOOGLE_OAUTH_CLIENT_ID` | Optional | Google Drive OAuth client ID (for connector authorization only; not app login) |
+| `GOOGLE_OAUTH_CLIENT_SECRET` | Optional | Google Drive OAuth secret (for connector authorization only; not app login) |
 | `GOOGLE_OAUTH_REDIRECT_URI` | Optional | OAuth callback URL |
 | `GOOGLE_OAUTH_SCOPES` | Optional | OAuth scopes list |
 | `CONNECTOR_TOKEN_ENCRYPTION_KEY` | Required when connectors are used | Fernet key used to encrypt connector `access_token`/`refresh_token` values at rest |
@@ -235,7 +235,7 @@ MIT
 
 ## Admin panel (Plan B)
 
-- Seeded initial admin behavior: if `INITIAL_ADMIN_EMAIL` + `INITIAL_ADMIN_PASSWORD` are configured, startup seed ensures that account exists and is promoted to `admin` (idempotent).
+- Seeded initial admin behavior: if `INITIAL_ADMIN_EMAIL` + `INITIAL_ADMIN_PASSWORD` are configured, startup seed ensures that account exists and is promoted to `admin` (idempotent). Existing admin passwords are not overwritten by default. For local/non-production recovery only, set `RESET_INITIAL_ADMIN_PASSWORD=true` to reset the seeded admin password for `INITIAL_ADMIN_EMAIL` at startup.
 - Seeded default prompt templates (`chat`, `retrieval`, `report`, `timeline_extraction`, `relationship_detection`) are created at startup when `SEED_DEFAULT_PROMPTS=true` (idempotent; existing templates are never overwritten).
 - Access `/admin` after login with an account whose role is `admin`.
 - Current capabilities:

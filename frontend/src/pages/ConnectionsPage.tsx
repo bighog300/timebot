@@ -50,6 +50,7 @@ export function ConnectionsPage() {
   return (
     <div className="space-y-4">
       <h1 className="text-xl font-semibold">Connections</h1>
+      <p className="text-sm text-slate-400">Google OAuth here is for connecting Google Drive data sources, not for signing in to Timebot.</p>
       {isLoading && <LoadingState />}
       {isError && <ErrorState message="Failed to load connections" />}
       {!isLoading && !isError && (data?.length ?? 0) === 0 && <EmptyState label="No providers configured." />}
