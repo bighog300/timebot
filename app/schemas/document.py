@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class CategoryInfo(BaseModel):
@@ -11,7 +11,7 @@ class CategoryInfo(BaseModel):
     color: str
     icon: Optional[str] = None
 
-    model_config = {"from_attributes": True}
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
 
 class DocumentCreate(BaseModel):
@@ -53,7 +53,7 @@ class DocumentResponse(BaseModel):
     summary: Optional[str] = None
     key_points: Optional[List[str]] = None
     entities: Optional[Dict[str, Any]] = None
-    action_items: Optional[List[str]] = None
+    action_items: Optional[List[str]] = Field(default=None, validation_alias="action_item_texts")
     ai_tags: List[str] = []
     user_tags: List[str] = []
     ai_confidence: Optional[float] = None
@@ -70,7 +70,16 @@ class DocumentResponse(BaseModel):
     ai_category: Optional[CategoryInfo] = None
     user_category: Optional[CategoryInfo] = None
 
-    model_config = {"from_attributes": True}
+    @field_validator("action_items", mode="before")
+    @classmethod
+    def _coerce_action_items(cls, value: object) -> list[str] | None:
+        if value is None:
+            return None
+        if not isinstance(value, list):
+            return []
+        return [str(item).strip() for item in value if isinstance(item, str) and str(item).strip()]
+
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
 
 class DocumentSearchResponse(BaseModel):

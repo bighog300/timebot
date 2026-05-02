@@ -25,8 +25,10 @@ class TimelineService:
     _MILESTONE_KEYWORDS = ("signed", "approved", "completed", "launched", "deadline")
     _GAP_THRESHOLD_DAYS = 30
 
-    def build_timeline(self, db: Session, *, group_by: str = "day", category_ids: Optional[List[str]] = None, sources: Optional[List[str]] = None, file_types: Optional[List[str]] = None, document_id: Optional[str] = None, start_date: Optional[str] = None, end_date: Optional[str] = None, category: Optional[str] = None, min_confidence: float = 0.0, limit: int = 500) -> Dict[str, Any]:
+    def build_timeline(self, db: Session, *, user_id: Optional[Any] = None, group_by: str = "day", category_ids: Optional[List[str]] = None, sources: Optional[List[str]] = None, file_types: Optional[List[str]] = None, document_id: Optional[str] = None, start_date: Optional[str] = None, end_date: Optional[str] = None, category: Optional[str] = None, min_confidence: float = 0.0, limit: int = 500) -> Dict[str, Any]:
         query = db.query(Document).filter(Document.is_archived.is_(False))
+        if user_id:
+            query = query.filter(Document.user_id == user_id)
         if category_ids:
             query = query.filter((Document.ai_category_id.in_(category_ids)) | (Document.user_category_id.in_(category_ids)))
         if sources:
