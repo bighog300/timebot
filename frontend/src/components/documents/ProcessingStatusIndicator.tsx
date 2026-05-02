@@ -1,7 +1,7 @@
-type ProcessingStatus = 'uploading' | 'processing' | 'completed' | 'failed' | 'queued';
+type ProcessingStatus = 'uploading' | 'processing' | 'completed' | 'failed' | 'queued' | 'extracting' | 'analyzing' | 'enriching' | 'embedding';
 
 function normalizeStatus(status: string): ProcessingStatus {
-  if (status === 'uploading' || status === 'processing' || status === 'completed' || status === 'failed' || status === 'queued') {
+  if (status === 'uploading' || status === 'processing' || status === 'completed' || status === 'failed' || status === 'queued' || status === 'extracting' || status === 'analyzing' || status === 'enriching' || status === 'embedding') {
     return status;
   }
   return 'processing';
@@ -25,7 +25,7 @@ export function ProcessingStatusIndicator({
   return (
     <div className="space-y-2">
       <div className="inline-flex items-center gap-2 rounded-full border border-slate-700 bg-slate-900 px-2 py-1 text-xs">
-        {(normalized === 'uploading' || normalized === 'processing' || normalized === 'queued') && (
+        {(normalized === 'uploading' || normalized === 'processing' || normalized === 'queued' || normalized === 'extracting' || normalized === 'analyzing' || normalized === 'enriching' || normalized === 'embedding') && (
           <span className="h-3 w-3 animate-spin rounded-full border-2 border-slate-500 border-t-blue-400" aria-hidden="true" />
         )}
         {normalized === 'completed' && <span aria-hidden="true">✅</span>}

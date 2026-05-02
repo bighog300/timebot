@@ -128,6 +128,16 @@ describe('DocumentsPage onboarding and first-value guidance', () => {
     expect(screen.queryByRole('table')).toBeNull();
   });
 
+  it('shows stage-aware status label on document list entries', () => {
+    vi.mocked(useDocuments).mockReturnValue({
+      data: [{ id: 'doc-1', filename: 'A.pdf', summary: 'A summary', upload_date: '2026-01-01T00:00:00Z', processing_status: 'processing', processing_stage: 'enriching' }],
+      isLoading: false,
+      isError: false,
+    } as never);
+    renderPage('/documents');
+    expect(screen.getAllByText('enriching').length).toBeGreaterThan(0);
+  });
+
   it('keeps upload and gmail actions accessible', () => {
     renderPage('/documents');
     expect(screen.getByRole('button', { name: 'Choose files' })).toBeTruthy();

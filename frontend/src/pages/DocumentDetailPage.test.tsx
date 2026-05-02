@@ -277,3 +277,19 @@ it('shows enrichment pending and degraded banners', async () => {
   expect(await screen.findByText('Analysis complete. Final enrichment is still running.')).toBeInTheDocument();
   expect(await screen.findByText('Analysis completed with partial AI output.')).toBeInTheDocument();
 });
+
+it('shows pending relationship enrichment message when related list is empty and enrichment is pending', async () => {
+  vi.mocked(api.getDocument).mockResolvedValue({ id: 'doc-1', filename: 'Contract.pdf', processing_status: 'completed', enrichment_pending: true, enrichment_status: 'pending', processing_error: null, is_favorite: false, is_archived: false, summary: '', ai_category: null, file_type:'pdf', file_size:1, source:'upload', upload_date:new Date().toISOString(), ai_tags:[], user_tags:[] } as never);
+  vi.mocked(api.findSimilar).mockResolvedValue({ query: '', total: 0, results: [] } as never);
+  vi.mocked(useDocumentRelationships).mockReturnValue({ isLoading: false, isError: false, isSuccess: true, data: [] } as never);
+  renderPage();
+  expect(await screen.findByText('Relationship enrichment is still running. Related documents will appear when ready.')).toBeInTheDocument();
+});
+
+it('shows true empty relationship state when enrichment is complete', async () => {
+  vi.mocked(api.getDocument).mockResolvedValue({ id: 'doc-1', filename: 'Contract.pdf', processing_status: 'completed', enrichment_pending: false, enrichment_status: 'complete', processing_error: null, is_favorite: false, is_archived: false, summary: '', ai_category: null, file_type:'pdf', file_size:1, source:'upload', upload_date:new Date().toISOString(), ai_tags:[], user_tags:[] } as never);
+  vi.mocked(api.findSimilar).mockResolvedValue({ query: '', total: 0, results: [] } as never);
+  vi.mocked(useDocumentRelationships).mockReturnValue({ isLoading: false, isError: false, isSuccess: true, data: [] } as never);
+  renderPage();
+  expect(await screen.findByText('No related documents found.')).toBeInTheDocument();
+});

@@ -49,8 +49,13 @@ export function DocumentDetailPage() {
     queryFn: () => api.getDocument(id),
     enabled: !!id,
     refetchInterval: (query) => {
-      const status = (query.state.data as { processing_status?: string } | undefined)?.processing_status;
-      return status === 'uploading' || status === 'processing' ? 3000 : false;
+      const data = query.state.data as { processing_status?: string; enrichment_pending?: boolean; enrichment_status?: string } | undefined;
+      const status = data?.processing_status;
+      const enrichmentPending = Boolean(data?.enrichment_pending);
+      if (status === 'uploading' || status === 'processing' || enrichmentPending) return 3000;
+      const enrichmentStatus = data?.enrichment_status;
+      if ((status === 'completed' || status === 'failed') && (enrichmentStatus === 'complete' || enrichmentStatus === 'degraded')) return false;
+      return false;
     },
   });
   const similarQuery = useQuery({ queryKey: ['similar', id], queryFn: () => api.findSimilar(id), enabled: !!id });
@@ -374,7 +379,15 @@ export function DocumentDetailPage() {
         )}
         {relationshipsQuery.isLoading && <LoadingState label="Loading related documents..." />}
         {relationshipsQuery.isError && <ErrorState message={`Failed to load related documents: ${relationshipsQuery.error.message}`} />}
-        {relationshipsQuery.isSuccess && (relationshipsQuery.data?.length ?? 0) === 0 && <EmptyState label="No related documents yet." />}
+        {relationshipsQuery.isSuccess && (relationshipsQuery.data?.length ?? 0) === 0 && (
+          <EmptyState
+            label={
+              doc.enrichment_pending
+                ? 'Relationship enrichment is still running. Related documents will appear when ready.'
+                : 'No related documents found.'
+            }
+          />
+        )}
         {relationshipsQuery.isSuccess && (relationshipsQuery.data?.length ?? 0) > 0 && (
           <div className="space-y-4 text-sm">
             <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center" role="group" aria-label="Relationship filters" data-testid="relationship-filters">
