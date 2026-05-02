@@ -74,3 +74,55 @@ def test_successful_processing_behavior_unchanged(db, sample_document):
     db.refresh(sample_document)
     assert sample_document.processing_status == "completed"
     assert sample_document.processing_error is None
+
+
+def test_empty_extracted_text_fails_without_ai_call(db, sample_document, tmp_path):
+    processor = DocumentProcessor()
+    src = tmp_path / "empty.pdf"
+    src.write_bytes(b"%PDF-1.4 test")
+    sample_document.original_path = str(src)
+    db.add(sample_document)
+    db.commit()
+
+    with patch(
+        "app.services.document_processor.text_extractor.extract", return_value=("", 1, 0)
+    ), patch("app.services.document_processor.thumbnail_generator.generate", return_value=None), patch(
+        "app.services.document_processor.storage.save_text"
+    ) as save_text, patch.object(
+        processor, "_run_ai_analysis"
+    ) as run_ai:
+        processor.process_document(db, sample_document)
+
+    db.refresh(sample_document)
+    assert sample_document.processing_status == "failed"
+    assert (
+        sample_document.processing_error
+        == "No readable text could be extracted from this document. It may be scanned, image-only, encrypted, or unsupported."
+    )
+    assert sample_document.extracted_metadata["extraction_status"] == "empty"
+    assert sample_document.extracted_metadata["extracted_text_length"] == 0
+    assert sample_document.extracted_metadata["extraction_error"] == "OCR support is required for scanned PDFs."
+    run_ai.assert_not_called()
+    save_text.assert_not_called()
+
+
+def test_extraction_failure_records_sanitized_metadata(db, sample_document, tmp_path):
+    processor = DocumentProcessor()
+    src = tmp_path / "sample.txt"
+    src.write_text("placeholder", encoding="utf-8")
+    sample_document.original_path = str(src)
+    sample_document.file_type = "txt"
+    db.add(sample_document)
+    db.commit()
+
+    with patch(
+        "app.services.document_processor.text_extractor.extract",
+        return_value=(None, None, None),
+    ):
+        processor.process_document(db, sample_document)
+
+    db.refresh(sample_document)
+    assert sample_document.processing_status == "failed"
+    assert sample_document.extracted_metadata["extraction_status"] == "failed"
+    assert sample_document.extracted_metadata["extracted_text_length"] == 0
+    assert sample_document.extracted_metadata["extraction_error"] == "Text extraction failed."

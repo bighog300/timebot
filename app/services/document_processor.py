@@ -18,6 +18,11 @@ logger = logging.getLogger(__name__)
 
 _ALLOWED = set(settings.ALLOWED_FILE_TYPES.split(","))
 _MAX_BYTES = settings.MAX_UPLOAD_SIZE_MB * 1024 * 1024
+_EMPTY_TEXT_ERROR_MESSAGE = (
+    "No readable text could be extracted from this document. "
+    "It may be scanned, image-only, encrypted, or unsupported."
+)
+_OCR_REQUIRED_MESSAGE = "OCR support is required for scanned PDFs."
 
 
 class DocumentProcessor:
@@ -87,23 +92,54 @@ class DocumentProcessor:
 
         try:
             file_path = Path(document.original_path)
-
             text = self._load_or_extract_text(document.id, file_path, document.file_type)
-            if not text:
-                raise ValueError("Cannot reprocess: original uploaded file is missing from storage" if not file_path.exists() else "Cannot process document: extracted text is empty")
-
-            document.raw_text = text
-            document.page_count = None
-            document.word_count = len(text.split())
+            if text:
+                self._record_extraction_metadata(
+                    document,
+                    text=text,
+                    status="success",
+                )
+                document.raw_text = text
+                document.page_count = None
+                document.word_count = len(text.split())
+            elif not file_path.exists():
+                self._record_extraction_metadata(
+                    document,
+                    text="",
+                    status="failed",
+                    error="Original uploaded file is missing from storage.",
+                )
+                raise ValueError("Cannot reprocess: original uploaded file is missing from storage")
 
             # Step 1: extract text
-            extracted_text, page_count, word_count = text_extractor.extract(file_path, document.file_type)
-            if extracted_text:
-                text = extracted_text
-                document.raw_text = text
-                document.page_count = page_count
-                document.word_count = word_count
-                storage.save_text(str(document.id), text)
+            if file_path.exists():
+                extracted_text, page_count, word_count = text_extractor.extract(file_path, document.file_type)
+                extracted = (extracted_text or "").strip()
+                extraction_status = "success"
+                extraction_error = None
+                if extracted_text is None:
+                    extraction_status = "failed"
+                    extraction_error = "Text extraction failed."
+                elif not extracted:
+                    extraction_status = "empty"
+                    if document.file_type == "pdf":
+                        extraction_error = _OCR_REQUIRED_MESSAGE
+
+                self._record_extraction_metadata(
+                    document,
+                    text=extracted,
+                    status=extraction_status,
+                    error=extraction_error,
+                )
+                if extraction_status == "success":
+                    text = extracted
+                    document.raw_text = text
+                    document.page_count = page_count
+                    document.word_count = word_count
+                    storage.save_text(str(document.id), text)
+
+            if not text:
+                raise ValueError(_EMPTY_TEXT_ERROR_MESSAGE)
 
             # Step 2: thumbnail
             thumb = thumbnail_generator.generate(file_path, document.file_type)
@@ -212,6 +248,18 @@ class DocumentProcessor:
         if safe_message in document.processing_error:
             return
         document.processing_error = f"{document.processing_error} | {safe_message}"
+
+    def _record_extraction_metadata(self, document: Document, *, text: str, status: str, error: str | None = None) -> None:
+        metadata = document.extracted_metadata if isinstance(document.extracted_metadata, dict) else {}
+        updated_metadata = dict(metadata)
+        updated_metadata["extracted_text_length"] = len(text or "")
+        updated_metadata["extraction_status"] = status
+        safe_error = sanitize_processing_error(error) if error else None
+        if safe_error:
+            updated_metadata["extraction_error"] = safe_error
+        else:
+            updated_metadata.pop("extraction_error", None)
+        document.extracted_metadata = updated_metadata
 
 
 document_processor = DocumentProcessor()
