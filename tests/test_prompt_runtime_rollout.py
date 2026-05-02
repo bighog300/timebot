@@ -43,7 +43,13 @@ def test_timeline_extraction_uses_active_prompt_when_configured(monkeypatch, db)
     monkeypatch.setattr("app.services.ai_analyzer.settings.OPENAI_API_KEY", "test-key")
     monkeypatch.setattr("app.services.ai_analyzer.settings.OPENAI_MODEL", "gpt-4o-mini")
     monkeypatch.setattr("app.services.ai_analyzer.settings.AI_MAX_TOKENS", 300)
-    db.add(PromptTemplate(type="timeline_extraction", name="v2", content="CUSTOM TIMELINE PROMPT", version=2, is_active=True))
+    db.add(PromptTemplate(
+        type="timeline_extraction",
+        name="v2",
+        content='Return JSON with keys: "summary", "timeline_events", "relationships", "entities", "key_points".',
+        version=2,
+        is_active=True,
+    ))
     db.commit()
 
     captured = {}
@@ -56,7 +62,29 @@ def test_timeline_extraction_uses_active_prompt_when_configured(monkeypatch, db)
 
     monkeypatch.setattr("app.services.ai_analyzer.openai_client_service._client", SimpleNamespace(chat=SimpleNamespace(completions=_Completions())))
     analyzer.analyze_document("sample text", filename="sample.txt", file_type="txt", db=db)
-    assert captured["user_prompt"] == "CUSTOM TIMELINE PROMPT"
+    assert '"summary"' in captured["user_prompt"]
+
+
+def test_timeline_extraction_invalid_active_prompt_falls_back_to_default(monkeypatch, db, caplog):
+    analyzer = AIAnalyzer()
+    monkeypatch.setattr("app.services.ai_analyzer.settings.OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr("app.services.ai_analyzer.settings.OPENAI_MODEL", "gpt-4o-mini")
+    monkeypatch.setattr("app.services.ai_analyzer.settings.AI_MAX_TOKENS", 300)
+    db.add(PromptTemplate(type="timeline_extraction", name="short", content="Extract dates only.", version=2, is_active=True))
+    db.commit()
+
+    captured = {}
+    payload = '{"summary":"ok","key_points":[],"entities":{},"tags":[],"action_items":[]}'
+
+    class _Completions:
+        def create(self, **kwargs):
+            captured["user_prompt"] = kwargs["messages"][1]["content"]
+            return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=payload))])
+
+    monkeypatch.setattr("app.services.ai_analyzer.openai_client_service._client", SimpleNamespace(chat=SimpleNamespace(completions=_Completions())))
+    analyzer.analyze_document("sample text", filename="sample.txt", file_type="txt", db=db)
+    assert "You are analyzing a document." in captured["user_prompt"]
+    assert "Extract dates only." not in caplog.text
 
 
 def test_relationship_detection_uses_active_prompt_when_configured(db, test_user):

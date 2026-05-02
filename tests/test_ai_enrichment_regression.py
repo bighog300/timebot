@@ -149,7 +149,7 @@ def test_process_document_fails_when_ai_analysis_errors(db, sample_document, tmp
 
     db.refresh(sample_document)
     assert sample_document.processing_status == "failed"
-    assert sample_document.processing_error == "Processing failed due to an internal error."
+    assert sample_document.processing_error == "AI analysis did not return required summary field."
 
 
 def test_ai_fallback_markers_are_persisted(monkeypatch):

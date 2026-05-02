@@ -15,6 +15,8 @@ def sanitize_processing_error(message: str | None) -> str | None:
     if not message:
         return None
     trimmed = " ".join(str(message).split())
+    if "summary missing from model response" in trimmed.lower():
+        return "AI analysis did not return required summary field."
     for pattern in _SENSITIVE_PATTERNS:
         trimmed = pattern.sub("[redacted]", trimmed)
     if len(trimmed) > _MAX_LEN:

@@ -19,6 +19,7 @@ from app.services.prompt_templates import get_active_prompt_content
 logger = logging.getLogger(__name__)
 
 MAX_TEXT_CHARS = 15_000  # ~3 750 tokens
+_ANALYSIS_REQUIRED_PROMPT_TOKENS = ("summary", "timeline_events", "relationships", "entities", "key_points")
 
 
 class AIAnalysisError(RuntimeError):
@@ -43,6 +44,7 @@ class AIAnalyzer:
             analyze_start = time.perf_counter()
             ai_calls = 0
             categories_str = ", ".join(existing_categories) if existing_categories else "none yet"
+            prompt_source = "default"
             try:
                 prompt = self.get_prompt_template(
                     "timeline_extraction",
@@ -53,6 +55,7 @@ class AIAnalyzer:
                     char_limit=MAX_TEXT_CHARS,
                     categories=categories_str,
                 )
+                prompt_source = self.last_prompt_source
             except Exception as render_exc:
                 logger.error(
                     "AI prompt rendering failed: exception_type=%s message=%s",
@@ -62,9 +65,10 @@ class AIAnalyzer:
                 raise
 
             logger.info(
-                "ai_summary_prompt_used prompt_type=%s provider_used=%s prompt_length=%s",
+                "ai_summary_prompt_used prompt_type=%s provider_used=%s prompt_source=%s prompt_length=%s",
                 "timeline_extraction",
                 openai_client_service.selected_provider_name,
+                prompt_source,
                 len(prompt),
             )
             ai_calls += 1
@@ -135,6 +139,7 @@ class AIAnalyzer:
         char_limit: int,
         categories: str = "none yet",
     ) -> str:
+        self.last_prompt_source = "default"
         default_prompt = self._get_default_prompt(
             prompt_type, filename, file_type, text, char_limit, categories
         )
@@ -146,7 +151,22 @@ class AIAnalyzer:
         raw = get_active_prompt_content(db, prompt_type, default_prompt)
         if raw is default_prompt:
             return default_prompt
-        return self._render_db_prompt(raw, filename, file_type, text, char_limit, categories)
+        rendered = self._render_db_prompt(raw, filename, file_type, text, char_limit, categories)
+        if self._is_valid_analysis_prompt(rendered):
+            self.last_prompt_source = "admin"
+            return rendered
+        logger.warning(
+            "ai_prompt_template_invalid prompt_type=%s prompt_source=admin prompt_length=%s fallback_source=default",
+            prompt_type,
+            len(rendered),
+        )
+        return default_prompt
+
+    def _is_valid_analysis_prompt(self, prompt: str) -> bool:
+        compact = (prompt or "").strip().lower()
+        if not compact:
+            return False
+        return all(token in compact for token in _ANALYSIS_REQUIRED_PROMPT_TOKENS)
 
     def _get_default_prompt(
         self,
