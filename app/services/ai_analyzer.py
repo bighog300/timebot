@@ -7,7 +7,11 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.prompts.document_analysis import DOCUMENT_ANALYSIS_SYSTEM, build_default_summary_prompt
+from app.prompts.document_analysis import (
+    DOCUMENT_ANALYSIS_SYSTEM,
+    build_document_analysis_prompt,
+    build_default_summary_prompt,
+)
 from app.services.openai_client import APIError, openai_client_service
 from app.services.prompt_templates import get_active_prompt_content
 
@@ -44,6 +48,7 @@ class AIAnalyzer:
                     file_type=file_type,
                     text=text[:MAX_TEXT_CHARS],
                     char_limit=MAX_TEXT_CHARS,
+                    categories=categories_str,
                 )
             except Exception as render_exc:
                 logger.error(
@@ -100,21 +105,61 @@ class AIAnalyzer:
         file_type: str,
         text: str,
         char_limit: int,
+        categories: str = "none yet",
     ) -> str:
-        default_prompt = self._get_default_prompt(prompt_type, filename, file_type, text, char_limit)
+        default_prompt = self._get_default_prompt(
+            prompt_type, filename, file_type, text, char_limit, categories
+        )
         if db is None:
             return default_prompt
-        return get_active_prompt_content(db, prompt_type, default_prompt)
+        # A DB-stored template may contain the same {placeholder} tokens as the
+        # default template. Render them so the model receives real values, not
+        # literal brace strings.
+        raw = get_active_prompt_content(db, prompt_type, default_prompt)
+        if raw is default_prompt:
+            return default_prompt
+        return self._render_db_prompt(raw, filename, file_type, text, char_limit, categories)
 
-    def _get_default_prompt(self, prompt_type: str, filename: str, file_type: str, text: str, char_limit: int) -> str:
+    def _get_default_prompt(
+        self,
+        prompt_type: str,
+        filename: str,
+        file_type: str,
+        text: str,
+        char_limit: int,
+        categories: str = "none yet",
+    ) -> str:
         if prompt_type == "timeline_extraction":
-            return build_default_summary_prompt(
+            return build_document_analysis_prompt(
                 filename=filename,
                 file_type=file_type,
                 char_limit=char_limit,
                 text=text,
+                categories=categories,
             )
         raise AIAnalysisError(f"AI enrichment failed: unsupported prompt type '{prompt_type}'.")
+
+    def _render_db_prompt(
+        self,
+        template: str,
+        filename: str,
+        file_type: str,
+        text: str,
+        char_limit: int,
+        categories: str,
+    ) -> str:
+        """Substitute known placeholders in an admin-supplied prompt template."""
+        replacements = {
+            "{filename}": filename,
+            "{file_type}": file_type,
+            "{char_limit}": str(char_limit),
+            "{text}": text,
+            "{categories}": categories,
+        }
+        result = template
+        for token, value in replacements.items():
+            result = result.replace(token, value)
+        return result
 
     def _parse_and_normalize(self, content: str, *, filename: str) -> Dict[str, Any]:
         try:
