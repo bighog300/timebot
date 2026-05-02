@@ -61,7 +61,12 @@ class AIAnalyzer:
                 )
                 raise
 
-            logger.info("ai_summary_prompt_used prompt_type=%s provider_used=%s", "timeline_extraction", openai_client_service.selected_provider_name)
+            logger.info(
+                "ai_summary_prompt_used prompt_type=%s provider_used=%s prompt_length=%s",
+                "timeline_extraction",
+                openai_client_service.selected_provider_name,
+                len(prompt),
+            )
             ai_calls += 1
             response = openai_client_service.generate_completion({
                 "model": settings.OPENAI_MODEL,

@@ -16,7 +16,10 @@ def get_active_prompt_content(db: Session, prompt_type: str, default_content: st
         .order_by(PromptTemplate.updated_at.desc())
         .first()
     )
-    return row.content if row else default_content
+    if not row:
+        return default_content
+    content = row.content if isinstance(row.content, str) else ""
+    return content if content.strip() else default_content
 
 
 def activate_prompt_template(db: Session, template: PromptTemplate) -> PromptTemplate:

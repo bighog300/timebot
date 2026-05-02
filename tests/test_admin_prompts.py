@@ -35,6 +35,13 @@ def test_active_prompt_loaded_by_type_and_fallback(db):
     assert get_active_prompt_content(db, "report", "default report") == "custom report"
 
 
+
+def test_blank_active_prompt_falls_back_to_default(db):
+    template = PromptTemplate(type="report", name="blank", content="   ", version=1, is_active=True)
+    db.add(template)
+    db.commit()
+    assert get_active_prompt_content(db, "report", "default report") == "default report"
+
 def test_activating_prompt_deactivates_others_same_type(db):
     p1 = PromptTemplate(type="retrieval", name="v1", content="one", version=1, is_active=True)
     p2 = PromptTemplate(type="retrieval", name="v2", content="two", version=2, is_active=False)
