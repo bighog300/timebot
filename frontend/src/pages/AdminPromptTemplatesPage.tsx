@@ -53,13 +53,18 @@ export function AdminPromptTemplatesPage() {
       <textarea placeholder='Sample context/query/document text' value={testForm.sample_context} onChange={(e) => setTestForm((v) => ({ ...v, sample_context: e.target.value }))} className='h-32 w-full min-w-0 rounded border border-slate-700 bg-slate-900 p-2 text-sm' />
       <button className='w-full rounded bg-indigo-700 px-3 py-2 text-sm sm:w-auto' onClick={async () => {
         setPreview(''); setPreviewError('');
+        if (!testForm.prompt_content.trim() || !testForm.sample_context.trim()) {
+          setPreviewError('Prompt content and sample context are required.');
+          return;
+        }
         try {
           const resp = await testPrompt.mutateAsync(testForm);
           setPreview(resp.preview);
         } catch (e) {
+          console.error('Prompt test request failed', (e as { response?: { data?: unknown } })?.response?.data ?? e);
           setPreviewError(getErrorDetail(e));
         }
-      }}>Run preview</button>
+      }} disabled={testPrompt.isPending || !testForm.prompt_content.trim() || !testForm.sample_context.trim()}>Run preview</button>
       {testPrompt.isPending && <div className='text-sm text-slate-300'>Generating preview...</div>}
       {previewError && <div className='text-sm text-rose-400' role='alert'>{previewError}</div>}
       {preview && <pre className='overflow-x-auto whitespace-pre-wrap break-words rounded border border-slate-700 bg-slate-950 p-2 text-sm'>{preview}</pre>}

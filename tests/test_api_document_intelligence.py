@@ -130,7 +130,10 @@ def test_category_approve_returns_400_when_no_suggestion_available(client, db, s
 
     response = client.post(f"/api/v1/documents/{sample_document.id}/category/approve")
     assert response.status_code == 400
-    assert response.json()["detail"] == "No suggested category to approve. Regenerate intelligence or set a suggested category first."
+    detail = response.json()["detail"]
+    assert detail["message"] == "No suggested category to approve"
+    assert detail["suggested_category_id"] is None
+    assert detail["document_ai_category_id"] is None
 
 
 def test_category_approve_returns_not_found_for_other_users_document(client, db, test_user):

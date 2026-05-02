@@ -340,7 +340,9 @@ export function DocumentDetailPage() {
                 onClick={() =>
                   approveCategory.mutate(undefined, {
                     onError: (error) => {
-                      const message = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+                      const detail = (error as { response?: { data?: { detail?: string | { message?: string } } } })?.response?.data?.detail;
+                      const message = typeof detail === 'string' ? detail : detail?.message;
+                      console.error('Category approval failed', (error as { response?: { data?: unknown } })?.response?.data ?? error);
                       pushToast(message ? `Failed to approve category: ${message}` : 'Failed to approve category');
                     },
                   })

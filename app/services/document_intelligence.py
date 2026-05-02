@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 import logging
 import re
+import logging
 import time
 from uuid import UUID
 
@@ -432,9 +433,16 @@ class DocumentIntelligenceService:
             intelligence.suggested_category_id = document.ai_category_id
 
         if not suggested_category_id:
-            raise ValueError(
-                "No suggested category to approve. Regenerate intelligence or set a suggested category first."
+            logging.getLogger(__name__).warning(
+                "Category approval failed: no suggested category available",
+                extra={
+                    "document_id": str(document.id),
+                    "intelligence_id": str(intelligence.id) if getattr(intelligence, "id", None) else None,
+                    "has_intelligence_suggested_category": bool(intelligence.suggested_category_id),
+                    "has_document_ai_category_id": bool(document.ai_category_id),
+                },
             )
+            raise ValueError("No suggested category to approve")
 
         before = {"user_category_id": str(document.user_category_id) if document.user_category_id else None, "category_status": intelligence.category_status}
         document.user_category_id = suggested_category_id
