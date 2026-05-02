@@ -16,11 +16,27 @@ def test_validate_auth_secret_rejects_default_in_production(monkeypatch):
         _validate_auth_secret_for_environment()
 
 
-def test_validate_auth_secret_rejects_missing_in_production(monkeypatch):
-    monkeypatch.setattr("app.main.settings.APP_ENV", "production")
+def test_validate_auth_secret_rejects_missing_in_prod_alias(monkeypatch):
+    monkeypatch.setattr("app.main.settings.APP_ENV", "prod")
     monkeypatch.setattr("app.main.settings.AUTH_SECRET_KEY", "")
     with pytest.raises(RuntimeError, match="AUTH_SECRET_KEY"):
         _validate_auth_secret_for_environment()
+
+
+@pytest.mark.parametrize("app_env", ["production", "prod", "staging"])
+@pytest.mark.parametrize("placeholder", ["replace-me", "change-me", "your-secret-key", "secret"])
+def test_validate_auth_secret_rejects_known_placeholders_in_production_like(monkeypatch, app_env, placeholder):
+    monkeypatch.setattr("app.main.settings.APP_ENV", app_env)
+    monkeypatch.setattr("app.main.settings.AUTH_SECRET_KEY", placeholder)
+    with pytest.raises(RuntimeError, match="AUTH_SECRET_KEY"):
+        _validate_auth_secret_for_environment()
+
+
+@pytest.mark.parametrize("app_env", ["production", "prod", "staging"])
+def test_validate_auth_secret_accepts_strong_non_placeholder_in_production_like(monkeypatch, app_env):
+    monkeypatch.setattr("app.main.settings.APP_ENV", app_env)
+    monkeypatch.setattr("app.main.settings.AUTH_SECRET_KEY", "tB0t-2026-strong-7M7_jwt_signing_key")
+    _validate_auth_secret_for_environment()
 
 
 def test_sanitize_headers_redacts_authorization_token():

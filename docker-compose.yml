@@ -5,15 +5,15 @@ services:
     image: postgres:15-alpine
     container_name: doc-db
     environment:
-      POSTGRES_USER: docuser
-      POSTGRES_PASSWORD: docpass
-      POSTGRES_DB: documents
+      POSTGRES_USER: ${POSTGRES_USER:-docuser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-docpass}
+      POSTGRES_DB: ${POSTGRES_DB:-documents}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
       - "5433:5432" # host:container (5433 avoids common local Postgres 5432 conflicts)
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U docuser -d documents"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-docuser} -d ${POSTGRES_DB:-documents}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -61,10 +61,10 @@ services:
       - .env
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
-      - DATABASE_URL=postgresql://docuser:docpass@db:5432/documents
-      - REDIS_URL=redis://redis:6379/0
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-docuser}:${POSTGRES_PASSWORD:-docpass}@db:5432/${POSTGRES_DB:-documents}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      - CELERY_BROKER_URL=${CELERY_BROKER_URL:-redis://redis:6379/0}
+      - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND:-redis://redis:6379/0}
       - UPLOAD_PATH=/app/data/uploads
       - PROCESSED_PATH=/app/data/processed
       - STORAGE_PATH=/app/data
@@ -74,7 +74,7 @@ services:
       - UPLOAD_DIR=/app/uploads
       - ARTIFACT_DIR=/app/artifacts
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:5174,http://127.0.0.1:5174}
-      - AUTH_SECRET_KEY=${AUTH_SECRET_KEY:-dev-insecure-change-me}
+      - AUTH_SECRET_KEY=${AUTH_SECRET_KEY}
       - INITIAL_ADMIN_EMAIL=${INITIAL_ADMIN_EMAIL:-}
       - INITIAL_ADMIN_PASSWORD=${INITIAL_ADMIN_PASSWORD:-}
       - INITIAL_ADMIN_NAME=${INITIAL_ADMIN_NAME:-Timebot Admin}
@@ -103,10 +103,10 @@ services:
       - .env
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
-      - DATABASE_URL=postgresql://docuser:docpass@db:5432/documents
-      - REDIS_URL=redis://redis:6379/0
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-docuser}:${POSTGRES_PASSWORD:-docpass}@db:5432/${POSTGRES_DB:-documents}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      - CELERY_BROKER_URL=${CELERY_BROKER_URL:-redis://redis:6379/0}
+      - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND:-redis://redis:6379/0}
       - CELERY_WORKER_CONCURRENCY=${CELERY_WORKER_CONCURRENCY:-4}
       - UPLOAD_PATH=/app/data/uploads
       - PROCESSED_PATH=/app/data/processed
@@ -116,7 +116,7 @@ services:
       - QDRANT_PORT=6333
       - UPLOAD_DIR=/app/uploads
       - ARTIFACT_DIR=/app/artifacts
-      - AUTH_SECRET_KEY=${AUTH_SECRET_KEY:-dev-insecure-change-me}
+      - AUTH_SECRET_KEY=${AUTH_SECRET_KEY}
     volumes:
       - timebot_data:/app/data
       - timebot_uploads:/app/uploads
@@ -139,10 +139,10 @@ services:
     container_name: doc-celery-beat
     command: celery -A app.workers.celery_app beat --loglevel=info
     environment:
-      - DATABASE_URL=postgresql://docuser:docpass@db:5432/documents
-      - REDIS_URL=redis://redis:6379/0
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-docuser}:${POSTGRES_PASSWORD:-docpass}@db:5432/${POSTGRES_DB:-documents}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      - CELERY_BROKER_URL=${CELERY_BROKER_URL:-redis://redis:6379/0}
+      - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND:-redis://redis:6379/0}
     depends_on:
       redis:
         condition: service_healthy
@@ -159,8 +159,8 @@ services:
     ports:
       - "5555:5555" # host:container
     environment:
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - CELERY_BROKER_URL=${CELERY_BROKER_URL:-redis://redis:6379/0}
+      - CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND:-redis://redis:6379/0}
     depends_on:
       redis:
         condition: service_healthy
