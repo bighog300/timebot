@@ -16,6 +16,7 @@ from app.services.artifact_lookup import latest_artifact
 from app.services.text_extractor import text_extractor
 from app.services.thumbnail_generator import thumbnail_generator
 from app.services.processing_events import processing_event_service
+from app.services.usage import record_usage
 
 logger = logging.getLogger(__name__)
 
@@ -70,6 +71,19 @@ class DocumentProcessor:
             status="success",
             message="Document upload accepted and queued.",
         )
+        record_usage(
+            db,
+            user_id=user.id,
+            metric="document_upload",
+            metadata={"document_id": str(document.id), "filename": document.filename, "source": source},
+        )
+        record_usage(
+            db,
+            user_id=user.id,
+            metric="storage_bytes",
+            quantity=max(int(file_size), 0),
+            metadata={"document_id": str(document.id), "filename": document.filename, "source": source},
+        )
 
         # Queue background task; fall back to sync if Celery unavailable
         try:
@@ -107,6 +121,13 @@ class DocumentProcessor:
         db.add(document)
         db.commit()
         processing_event_service.update_progress(db, document, stage="extracting", message="Extracting readable text from the document.")
+        if document.user_id is not None:
+            record_usage(
+                db,
+                user_id=document.user_id,
+                metric="document_processing_started",
+                metadata={"document_id": str(document.id)},
+            )
 
         try:
             file_path = Path(document.original_path)
@@ -191,6 +212,13 @@ class DocumentProcessor:
             document.processed_date = datetime.now(timezone.utc)
             processing_event_service.update_progress(db, document, stage="completed", message="Document processing complete.")
             processing_event_service.record_processing_event(db, document=document, stage="completed", event_type="processing_finished", status="success", message="Document processing completed successfully.")
+            if document.user_id is not None:
+                record_usage(
+                    db,
+                    user_id=document.user_id,
+                    metric="document_processing_completed",
+                    metadata={"document_id": str(document.id)},
+                )
             if run_relationship_detection:
                 if document.enrichment_status not in {"degraded", "pending"}:
                     self._set_enrichment_status(document, "complete")
@@ -266,6 +294,18 @@ class DocumentProcessor:
             )
             ai_analysis_duration_ms = int((time.perf_counter() - ai_start) * 1000)
             processing_event_service.record_processing_event(db, document=document, stage="analyzing", event_type="ai_finished", status="success", message="AI analysis completed.", duration_ms=ai_analysis_duration_ms, model=settings.OPENAI_MODEL)
+            if document.user_id is not None:
+                record_usage(
+                    db,
+                    user_id=document.user_id,
+                    metric="ai_call",
+                    quantity=max(int(analysis.get("ai_call_count") or 1), 1),
+                    metadata={
+                        "document_id": str(document.id),
+                        "provider": analysis.get("ai_provider"),
+                        "model": analysis.get("ai_model") or settings.OPENAI_MODEL,
+                    },
+                )
             logger.info("AI analysis completed doc_id=%s ai_analysis_duration_ms=%s", document.id, ai_analysis_duration_ms)
             if run_relationship_detection:
                 processing_event_service.update_progress(db, document, stage="enriching", message="Enriching with relationship detection.")
