@@ -49,3 +49,11 @@ def test_upload_enqueues_expected_task_payload(client):
     doc_id = response.json()['id']
     apply_async.assert_called_once()
     assert apply_async.call_args.kwargs['args'] == [doc_id]
+
+def test_upload_uses_configured_cost_limits(client):
+    with patch('app.api.v1.upload.configured_rate_limit', return_value=7), patch('app.api.v1.upload.hard_daily_caps', return_value={'uploads_daily': 123}), patch('app.api.v1.upload.enforce_rate_limit') as erl, patch('app.api.v1.upload.enforce_daily_cap') as edc, patch('app.services.storage.storage.save_upload', return_value=(Path('/tmp/test.pdf'), 22)), patch('app.workers.tasks.process_document_task.apply_async'):
+        response = _upload(client)
+
+    assert response.status_code == 202
+    assert erl.call_args.kwargs['max_calls'] == 7
+    assert edc.call_args.kwargs['cap'] == 123

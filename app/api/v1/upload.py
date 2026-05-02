@@ -7,7 +7,7 @@ from app.api.deps import get_current_user, get_db
 from app.models.user import User
 from app.schemas.document import DocumentResponse
 from app.services.document_processor import document_processor
-from app.services.cost_protection import enforce_daily_cap, enforce_rate_limit
+from app.services.cost_protection import configured_rate_limit, enforce_daily_cap, enforce_rate_limit, hard_daily_caps
 from app.services.limit_enforcement import enforce_limit
 from app.services.usage import record_usage
 
@@ -24,8 +24,8 @@ async def upload_document(
     current_user: User = Depends(get_current_user),
 ):
     try:
-        enforce_rate_limit(db, user_id=current_user.id, metric="upload_requests_rate", max_calls=10)
-        enforce_daily_cap(db, user_id=current_user.id, metric="uploads_daily", cap=250)
+        enforce_rate_limit(db, user_id=current_user.id, metric="upload_requests_rate", max_calls=configured_rate_limit("upload_requests_rate"))
+        enforce_daily_cap(db, user_id=current_user.id, metric="uploads_daily", cap=hard_daily_caps()["uploads_daily"])
         enforce_limit(db, current_user.id, "documents_per_month", quantity=1)
         document = await document_processor.process_upload(db, file, current_user)
         record_usage(db, user_id=current_user.id, metric="upload_requests_rate", quantity=1)
