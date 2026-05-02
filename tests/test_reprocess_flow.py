@@ -1,5 +1,8 @@
 from pathlib import Path
 import os
+from unittest.mock import Mock
+
+from sqlalchemy import text
 
 from app.models.intelligence import DocumentIntelligence
 from app.services.document_processor import document_processor
@@ -135,3 +138,65 @@ def test_reprocess_sets_enrichment_pending(client, sample_document, db, monkeypa
     db.refresh(sample_document)
     assert sample_document.enrichment_status == "pending"
     assert sample_document.enrichment_pending is True
+
+
+def test_reprocess_initializes_enrichment_tasks_when_metadata_missing(client, sample_document, db, monkeypatch):
+    sample_document.extracted_metadata = None
+    db.add(sample_document)
+    db.commit()
+
+    class _TaskResult:
+        id = "task-rp2"
+
+    monkeypatch.setattr("app.workers.tasks.reprocess_document_task.apply_async", lambda *_, **__: _TaskResult())
+    resp = client.post(f"/api/v1/documents/{sample_document.id}/reprocess")
+    assert resp.status_code == 200
+    db.refresh(sample_document)
+    assert sample_document.extracted_metadata["enrichment_tasks"] == {"relationships": "pending", "embeddings": "pending"}
+
+
+def test_processing_event_recording_tolerates_missing_table(db, sample_document):
+    document_id = sample_document.id
+    user_id = sample_document.user_id
+    db.execute(text("DROP TABLE IF EXISTS document_processing_events"))
+    db.commit()
+
+    from app.services.processing_events import processing_event_service
+    doc_stub = type("DocStub", (), {"id": document_id, "user_id": user_id})()
+    processing_event_service.record_processing_event(
+        db,
+        document=doc_stub,
+        stage="extracting",
+        event_type="extraction_started",
+        status="started",
+        message="Text extraction started.",
+    )
+
+
+def test_reprocess_task_delegates_with_current_process_document_signature(monkeypatch):
+    from app.workers.tasks import reprocess_document_task
+
+    class _Q:
+        def filter(self, *_args, **_kwargs):
+            return self
+
+        def first(self):
+            return None
+
+    class _DB:
+        def query(self, *_args, **_kwargs):
+            return _Q()
+
+        def close(self):
+            return None
+
+    monkeypatch.setattr("app.db.base.SessionLocal", lambda: _DB())
+
+    mocked = Mock()
+    mocked.id = "process-123"
+    mocked_apply_async = Mock(return_value=mocked)
+    monkeypatch.setattr("app.workers.tasks.process_document_task.apply_async", mocked_apply_async)
+
+    out = reprocess_document_task("00000000-0000-0000-0000-000000000001")
+    assert out["process_task_id"] == "process-123"
+    mocked_apply_async.assert_called_once_with(args=["00000000-0000-0000-0000-000000000001"])
