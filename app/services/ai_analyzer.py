@@ -1,6 +1,7 @@
 import json
 import logging
 import re
+import time
 from datetime import date, datetime
 from typing import Any, Dict, List, Optional
 
@@ -39,6 +40,8 @@ class AIAnalyzer:
             raise AIAnalysisError("AI enrichment unavailable: OPENAI_API_KEY is not configured.")
 
         try:
+            analyze_start = time.perf_counter()
+            ai_calls = 0
             categories_str = ", ".join(existing_categories) if existing_categories else "none yet"
             try:
                 prompt = self.get_prompt_template(
@@ -59,6 +62,7 @@ class AIAnalyzer:
                 raise
 
             logger.info("ai_summary_prompt_used prompt_type=%s provider_used=%s", "timeline_extraction", openai_client_service.selected_provider_name)
+            ai_calls += 1
             response = openai_client_service.generate_completion({
                 "model": settings.OPENAI_MODEL,
                 "max_tokens": settings.AI_MAX_TOKENS,
@@ -69,8 +73,18 @@ class AIAnalyzer:
                 ],
             })
             content = openai_client_service.extract_response_text(response)
-            analysis = self._parse_and_normalize(content, filename=filename)
-            logger.info("ai_analysis_complete filename=%s timeline_event_count=%s", filename, len(analysis.get("timeline_events", [])))
+            analysis, parse_retry_used = self._parse_and_normalize(content, filename=filename)
+            if parse_retry_used:
+                ai_calls += 1
+            duration_ms = round((time.perf_counter() - analyze_start) * 1000, 2)
+            logger.info(
+                "ai_analysis_complete filename=%s timeline_event_count=%s ai_call_count=%s duration_ms=%s parse_retry_used=%s",
+                filename,
+                len(analysis.get("timeline_events", [])),
+                ai_calls,
+                duration_ms,
+                parse_retry_used,
+            )
             summary = (analysis.get("summary") or "").strip()
             if not summary:
                 raise AIAnalysisError("AI enrichment failed: summary missing from model response.")
@@ -160,11 +174,11 @@ class AIAnalyzer:
             result = result.replace(token, value)
         return result
 
-    def _parse_and_normalize(self, content: str, *, filename: str) -> Dict[str, Any]:
+    def _parse_and_normalize(self, content: str, *, filename: str) -> tuple[Dict[str, Any], bool]:
         try:
             analysis = self._normalize_analysis(self._parse_json(content))
             logger.info("ai_summary_parse_success filename=%s parse_success=true", filename)
-            return analysis
+            return analysis, False
         except AIAnalysisError:
             logger.warning("ai_summary_parse_failure filename=%s parse_success=false", filename)
             retry_content = self._retry_json_only(content)
@@ -172,12 +186,12 @@ class AIAnalyzer:
                 try:
                     analysis = self._normalize_analysis(self._parse_json(retry_content))
                     logger.info("ai_summary_parse_success filename=%s parse_success=true retry=true", filename)
-                    return analysis
+                    return analysis, True
                 except AIAnalysisError:
                     logger.warning("ai_summary_parse_failure filename=%s parse_success=false retry=true", filename)
 
             fallback_summary = (content or "").strip()[:500]
-            return self._normalize_analysis({"summary": fallback_summary, "timeline_events": [], "relationships": []})
+            return self._normalize_analysis({"summary": fallback_summary, "timeline_events": [], "relationships": []}), True
 
     def _retry_json_only(self, content: str) -> Optional[str]:
         response = openai_client_service.generate_completion({

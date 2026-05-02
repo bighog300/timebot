@@ -1,4 +1,5 @@
 import logging
+import time
 from collections.abc import Iterable
 from typing import Any
 
@@ -63,14 +64,35 @@ class AIClientRouter(AIClient):
         for idx, name in enumerate(order):
             provider = self.get_provider(name)
             fn = getattr(provider, fn_name)
+            start = time.perf_counter()
+            model_name = payload.get("model")
             try:
                 result = fn(payload)
-                logger.info("ai_provider_call success=true selected_provider=%s fallback_provider=%s", self.selected_provider_name, None if idx == 0 else name)
+                elapsed_ms = round((time.perf_counter() - start) * 1000, 2)
+                logger.info(
+                    "ai_provider_call success=true selected_provider=%s provider=%s fallback_provider=%s model=%s fn=%s duration_ms=%s",
+                    self.selected_provider_name,
+                    name,
+                    None if idx == 0 else name,
+                    model_name,
+                    fn_name,
+                    elapsed_ms,
+                )
                 return result
             except InvalidAIPayloadError:
                 raise
             except Exception as exc:
-                logger.warning("ai_provider_call success=false selected_provider=%s fallback_provider=%s error_type=%s", self.selected_provider_name, name, type(exc).__name__)
+                elapsed_ms = round((time.perf_counter() - start) * 1000, 2)
+                logger.warning(
+                    "ai_provider_call success=false selected_provider=%s provider=%s fallback_provider=%s model=%s fn=%s duration_ms=%s error_type=%s",
+                    self.selected_provider_name,
+                    name,
+                    name,
+                    model_name,
+                    fn_name,
+                    elapsed_ms,
+                    type(exc).__name__,
+                )
                 errors.append(f"{name}: {type(exc).__name__}: {exc}")
                 continue
         raise AIProviderExecutionError("All AI providers failed. " + " | ".join(errors))
