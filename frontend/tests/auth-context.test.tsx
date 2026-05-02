@@ -23,3 +23,18 @@ test('hydrates session from stored token', async () => {
   await waitFor(() => expect(screen.getByText('hydrated@example.com')).toBeInTheDocument());
   localStorage.clear();
 });
+
+
+test('clears stored token when /auth/me returns 401', async () => {
+  localStorage.setItem('timebot.auth.token', 'stale-token');
+  getMock.mockRejectedValueOnce(new Error('401'));
+
+  render(
+    <AuthProvider>
+      <Probe />
+    </AuthProvider>,
+  );
+
+  await waitFor(() => expect(screen.getByText('none')).toBeInTheDocument());
+  expect(localStorage.getItem('timebot.auth.token')).toBeNull();
+});
