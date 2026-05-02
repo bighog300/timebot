@@ -28,6 +28,37 @@ def record_usage(
     return event
 
 
+def usage_event_exists(
+    db: Session,
+    *,
+    user_id: UUID,
+    metric: str,
+    idempotency_key: str,
+) -> bool:
+    rows = db.query(UsageEvent.metadata_json).filter(UsageEvent.user_id == user_id, UsageEvent.metric == metric).all()
+    for (metadata,) in rows:
+        if isinstance(metadata, dict) and metadata.get("idempotency_key") == idempotency_key:
+            return True
+    return False
+
+
+def record_usage_once(
+    db: Session,
+    *,
+    user_id: UUID,
+    metric: str,
+    idempotency_key: str,
+    quantity: int = 1,
+    metadata: dict[str, Any] | None = None,
+) -> bool:
+    if usage_event_exists(db, user_id=user_id, metric=metric, idempotency_key=idempotency_key):
+        return False
+    payload = dict(metadata or {})
+    payload["idempotency_key"] = idempotency_key
+    record_usage(db, user_id=user_id, metric=metric, quantity=quantity, metadata=payload)
+    return True
+
+
 def get_usage_total(
     db: Session,
     user_id: UUID,

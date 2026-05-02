@@ -16,6 +16,8 @@ from app.services.category_intelligence import category_intelligence_service
 from app.services.insights_service import insights_service
 from app.services.relationship_detection import relationship_detection_service
 from app.services.limit_enforcement import enforce_feature, enforce_limit
+from app.services.cost_protection import enforce_rate_limit
+from app.services.usage import record_usage
 from app.services.search_service import search_service
 from app.services.timeline_service import timeline_service
 
@@ -46,6 +48,9 @@ async def search_documents(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    enforce_rate_limit(db, user_id=current_user.id, metric="expensive_reads_rate", max_calls=30)
+    record_usage(db, user_id=current_user.id, metric="expensive_reads_rate", quantity=1)
+    db.commit()
     filters = {}
     if categories:
         filters["categories"] = categories
@@ -211,10 +216,14 @@ async def find_similar_documents(document_id: UUID, limit: int = Query(5, ge=1, 
 
 @router.post("/relationships/detect/{document_id}")
 async def detect_relationships(document_id: UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    enforce_rate_limit(db, user_id=current_user.id, metric="relationship_detection_rate", max_calls=12)
     enforce_feature(db, current_user.id, "relationship_detection_enabled")
     enforce_limit(db, current_user.id, "processing_jobs_per_month", quantity=1)
     _require_doc_access_or_admin(db=db, document_id=document_id, current_user=current_user)
-    return relationship_detection_service.detect_for_document(db=db, document_id=document_id)
+    result = relationship_detection_service.detect_for_document(db=db, document_id=document_id)
+    record_usage(db, user_id=current_user.id, metric="relationship_detection_rate", quantity=1)
+    db.commit()
+    return result
 
 
 @router.post("/relationships/backfill")
