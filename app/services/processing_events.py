@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.models.document import Document
 from app.models.processing_event import DocumentProcessingEvent
@@ -70,9 +71,22 @@ class ProcessingEventService:
             error_type=error_type,
             safe_metadata=self.sanitize_event_metadata(safe_metadata),
         )
-        if hasattr(db, "add"):
-            db.add(event)
-        if hasattr(db, "commit"):
-            db.commit()
+        try:
+            if hasattr(db, "add"):
+                db.add(event)
+            if hasattr(db, "commit"):
+                db.commit()
+        except SQLAlchemyError as exc:
+            if hasattr(db, "rollback"):
+                db.rollback()
+            import logging
+            logging.getLogger(__name__).warning(
+                "processing_event_write_failed document_id=%s stage=%s event_type=%s error_type=%s error=%s",
+                getattr(document, "id", None),
+                stage,
+                event_type,
+                type(exc).__name__,
+                sanitize_processing_error(str(exc)),
+            )
 
 processing_event_service = ProcessingEventService()

@@ -198,9 +198,17 @@ class DocumentProcessor:
                 self._set_enrichment_status(document, "pending")
 
         except Exception as e:
-            logger.error("Document processing error for %s: %s", document.id, e)
+            safe_error = sanitize_processing_error(str(e))
+            logger.error(
+                "document_processing_failed document_id=%s stage=%s event_type=%s error_type=%s error=%s",
+                document.id,
+                "failed",
+                "processing_failed",
+                type(e).__name__,
+                safe_error,
+            )
             document.processing_status = "failed"
-            document.processing_error = sanitize_processing_error(str(e))
+            document.processing_error = safe_error
             processing_event_service.update_progress(db, document, stage="failed", message=document.processing_error or "Processing failed.", failed=True)
             processing_event_service.record_processing_event(db, document=document, stage="failed", event_type="processing_failed", status="failed", message=document.processing_error or "Processing failed.", severity="error", error_type=type(e).__name__)
 
