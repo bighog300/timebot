@@ -1,10 +1,13 @@
 import uuid
+from datetime import datetime, timedelta, timezone
 
+import jwt
 import pytest
 from starlette.websockets import WebSocketDisconnect
 
 from app.models.document import Document
 from app.models.user import User
+from app.config import settings
 from app.services.auth import auth_service
 
 
@@ -34,6 +37,33 @@ def test_ws_document_rejects_missing_token(client, sample_document, monkeypatch,
 def test_ws_document_rejects_invalid_token(client, sample_document, monkeypatch, db):
     monkeypatch.setattr("app.api.v1.websocket._get_ws_db", lambda: db)
     _assert_ws_rejected(client, f"/api/v1/ws/documents/{sample_document.id}?token=not-a-token")
+
+
+def test_ws_document_rejects_expired_token(client, sample_document, monkeypatch, db):
+    monkeypatch.setattr("app.api.v1.websocket._get_ws_db", lambda: db)
+    expired_token = jwt.encode(
+        {
+            "sub": str(sample_document.user_id),
+            "email": "expired@example.com",
+            "exp": datetime.now(timezone.utc) - timedelta(minutes=5),
+            "iat": datetime.now(timezone.utc) - timedelta(minutes=10),
+            "jti": "expired-jti",
+        },
+        settings.AUTH_SECRET_KEY,
+        algorithm=settings.AUTH_ALGORITHM,
+    )
+    _assert_ws_rejected(client, f"/api/v1/ws/documents/{sample_document.id}?token={expired_token}")
+
+
+def test_ws_document_rejects_malformed_document_id(client, auth_token, monkeypatch, db):
+    monkeypatch.setattr("app.api.v1.websocket._get_ws_db", lambda: db)
+    _assert_ws_rejected(client, f"/api/v1/ws/documents/not-a-uuid?token={auth_token}")
+
+
+def test_ws_document_rejects_missing_document_for_valid_user(client, auth_token, monkeypatch, db):
+    monkeypatch.setattr("app.api.v1.websocket._get_ws_db", lambda: db)
+    missing_id = uuid.uuid4()
+    _assert_ws_rejected(client, f"/api/v1/ws/documents/{missing_id}?token={auth_token}")
 
 
 def test_ws_document_accepts_valid_token_for_owner(client, sample_document, auth_token, monkeypatch, db):
