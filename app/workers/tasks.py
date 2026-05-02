@@ -8,6 +8,8 @@ from app.workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
 
+_REQUIRED_ENRICHMENT_TASKS = ("relationships", "embeddings")
+
 
 @celery_app.task(
     bind=True,
@@ -128,10 +130,16 @@ def detect_relationships_task(document_id: str):
     db = SessionLocal()
     try:
         result = relationship_detection_service.detect_for_document(db=db, document_id=document_id)
-        _finalize_enrichment_if_ready(db, document_id)
+        _finalize_enrichment_if_ready(db, document_id, task_name="relationships", task_status="complete")
         return result
     except Exception as exc:
-        _set_document_enrichment_status(db, document_id, "degraded", warning=f"Relationship generation failed: {exc}")
+        _finalize_enrichment_if_ready(
+            db,
+            document_id,
+            task_name="relationships",
+            task_status="degraded",
+            warning=f"Relationship generation failed: {exc}",
+        )
         raise
     finally:
         db.close()
@@ -202,9 +210,15 @@ def embed_document_task(document_id: str):
             text=text_to_embed,
             metadata=metadata,
         )
-        _finalize_enrichment_if_ready(db, document_id)
+        _finalize_enrichment_if_ready(db, document_id, task_name="embeddings", task_status="complete")
     except Exception as exc:
-        _set_document_enrichment_status(db, document_id, "degraded", warning=f"Embedding generation failed: {exc}")
+        _finalize_enrichment_if_ready(
+            db,
+            document_id,
+            task_name="embeddings",
+            task_status="degraded",
+            warning=f"Embedding generation failed: {exc}",
+        )
         raise
     finally:
         db.close()
@@ -298,7 +312,13 @@ def _update_queue_entry(
     db.commit()
 
 
-def _set_document_enrichment_status(db, document_id: str, status: str, warning: str | None = None):
+def _set_document_enrichment_status(
+    db,
+    document_id: str,
+    status: str,
+    warning: str | None = None,
+    task_name: str | None = None,
+):
     from app.models.document import Document
     from app.services.error_sanitizer import sanitize_processing_error
     doc = db.query(Document).filter(Document.id == document_id).first()
@@ -306,8 +326,32 @@ def _set_document_enrichment_status(db, document_id: str, status: str, warning: 
         return
     metadata = doc.extracted_metadata if isinstance(doc.extracted_metadata, dict) else {}
     updated = dict(metadata)
-    updated["enrichment_status"] = status
-    updated["enrichment_pending"] = status == "pending"
+    task_state = updated.get("enrichment_tasks") if isinstance(updated.get("enrichment_tasks"), dict) else {}
+
+    if status == "pending":
+        for required in _REQUIRED_ENRICHMENT_TASKS:
+            task_state[required] = "pending"
+    elif task_name in _REQUIRED_ENRICHMENT_TASKS and status in {"complete", "degraded"}:
+        task_state[task_name] = status
+
+    if task_state:
+        updated["enrichment_tasks"] = task_state
+
+    statuses = [task_state.get(required) for required in _REQUIRED_ENRICHMENT_TASKS]
+    has_pending = any(value == "pending" for value in statuses)
+    has_degraded = any(value == "degraded" for value in statuses)
+    all_complete = all(value == "complete" for value in statuses)
+
+    derived_status = status
+    if has_pending:
+        derived_status = "pending"
+    elif all_complete:
+        derived_status = "complete"
+    elif has_degraded:
+        derived_status = "degraded"
+
+    updated["enrichment_status"] = derived_status
+    updated["enrichment_pending"] = derived_status == "pending"
     if warning:
         safe = sanitize_processing_error(warning)
         warnings = updated.get("intelligence_warnings") if isinstance(updated.get("intelligence_warnings"), list) else []
@@ -321,5 +365,13 @@ def _set_document_enrichment_status(db, document_id: str, status: str, warning: 
         db.commit()
 
 
-def _finalize_enrichment_if_ready(db, document_id: str):
-    _set_document_enrichment_status(db, document_id, "complete")
+
+def _finalize_enrichment_if_ready(
+    db,
+    document_id: str,
+    *,
+    task_name: str,
+    task_status: str,
+    warning: str | None = None,
+):
+    _set_document_enrichment_status(db, document_id, task_status, warning=warning, task_name=task_name)
