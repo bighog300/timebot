@@ -16,7 +16,7 @@ from app.services.chat_retrieval import format_chat_context, retrieve_chat_conte
 from app.services.openai_client import APIError, openai_client_service
 from app.config import settings
 from app.services.prompt_templates import get_active_prompt_content
-from app.services.monetization import ActionType, ensure_user_limit, refresh_usage_counters
+from app.services.limit_enforcement import enforce_feature
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
@@ -199,7 +199,7 @@ def get_session(session_id: UUID, db: Session = Depends(get_db), user: User = De
 
 @router.post("/sessions/{session_id}/messages")
 def post_message(session_id: UUID, payload: MessageRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    ensure_user_limit(db, user, ActionType.SEND_CHAT)
+    enforce_feature(db, user.id, "chat")
     s = _get_session_for_user(db, session_id, user.id)
     bot_settings, context, prompt = _build_chat_payload(db, user, payload, s.id)
     prior_messages = _load_recent_session_messages(db, s.id, settings.CHAT_MAX_HISTORY_MESSAGES)
@@ -247,7 +247,6 @@ def post_message(session_id: UUID, payload: MessageRequest, db: Session = Depend
     db.add(user_message)
     db.add(assistant_message)
     db.commit()
-    refresh_usage_counters(db, user)
     db.commit()
     _log_chat_request(session_id=s.id, user_id=user.id, endpoint_type="non_streaming", retrieval_count=len(context.get("source_refs", [])), history_count=len(prior_messages), success=success, latency_ms=(time.perf_counter()-start)*1000)
     return {"message": assistant_message.content, "source_refs": context["source_refs"]}
@@ -255,7 +254,7 @@ def post_message(session_id: UUID, payload: MessageRequest, db: Session = Depend
 
 @router.post("/sessions/{session_id}/messages/stream")
 def stream_message(session_id: UUID, payload: MessageRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    ensure_user_limit(db, user, ActionType.SEND_CHAT)
+    enforce_feature(db, user.id, "chat")
     s = _get_session_for_user(db, session_id, user.id)
     bot_settings, context, prompt = _build_chat_payload(db, user, payload, s.id)
     prior_messages = _load_recent_session_messages(db, s.id, settings.CHAT_MAX_HISTORY_MESSAGES)
@@ -317,8 +316,6 @@ def stream_message(session_id: UUID, payload: MessageRequest, db: Session = Depe
         assistant_text = _append_sources(assistant_text, context["source_refs"])
         assistant_message = ChatMessage(session_id=s.id, role="assistant", content=assistant_text, source_refs=context["source_refs"])
         db.add(assistant_message)
-        db.commit()
-        refresh_usage_counters(db, user)
         db.commit()
         success = True
         _log_chat_request(session_id=s.id, user_id=user.id, endpoint_type="streaming", retrieval_count=len(context.get("source_refs", [])), history_count=len(prior_messages), success=success, latency_ms=(time.perf_counter()-start)*1000)
