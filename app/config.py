@@ -45,6 +45,7 @@ class Settings(BaseSettings):
     AI_PROVIDER_TIMEOUT_SECONDS: int = 60
     CHAT_MAX_HISTORY_MESSAGES: int = 6
     CHAT_RETRIEVAL_CACHE_TTL_SECONDS: int = 120
+    RELATIONSHIP_CANDIDATE_LIMIT: int = 50
 
     DATA_DIR: str = "data"
     UPLOAD_DIR: str = "data/uploads"
