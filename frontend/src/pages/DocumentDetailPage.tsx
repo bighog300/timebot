@@ -135,6 +135,9 @@ export function DocumentDetailPage() {
   const deleteMutation = useMutation({
     mutationFn: () => api.deleteDocument(id),
     onSuccess: () => {
+      refresh();
+      qc.invalidateQueries({ queryKey: ['insights-structured'] });
+      qc.invalidateQueries({ queryKey: ['document-clusters'] });
       pushToast('Document deleted');
       window.location.href = '/documents';
     },
