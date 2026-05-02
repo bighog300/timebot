@@ -18,7 +18,10 @@ class ClaudeProvider(AIClient):
             from anthropic import Anthropic
         except ImportError as exc:
             raise RuntimeError("Anthropic SDK not installed. Install `anthropic` to enable ClaudeProvider.") from exc
-        return Anthropic(api_key=settings.ANTHROPIC_API_KEY)
+        return Anthropic(
+            api_key=settings.ANTHROPIC_API_KEY,
+            timeout=settings.AI_PROVIDER_TIMEOUT_SECONDS,
+        )
 
     def generate_completion(self, payload: dict[str, Any]) -> Any:
         client = self._get_client()

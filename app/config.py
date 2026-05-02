@@ -42,6 +42,7 @@ class Settings(BaseSettings):
     QDRANT_HOST: str = "localhost"
     QDRANT_PORT: int = 6333
     AI_MAX_TOKENS: int = 4096
+    AI_PROVIDER_TIMEOUT_SECONDS: int = 60
     CHAT_MAX_HISTORY_MESSAGES: int = 6
     CHAT_RETRIEVAL_CACHE_TTL_SECONDS: int = 120
 

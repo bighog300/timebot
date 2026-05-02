@@ -7,8 +7,30 @@ import pytest
 from app.services.ai.gemini_provider import GeminiProvider
 from app.services.ai.claude_provider import ClaudeProvider
 from app.services.ai.base import AIClient
+from app.services.ai.openai_provider import OpenAIProvider
 from app.services.openai_client import AIClientRouter, AIProviderExecutionError
 
+
+
+
+def test_openai_provider_passes_timeout_to_client(monkeypatch):
+    provider = OpenAIProvider()
+    monkeypatch.setattr("app.services.ai.openai_provider.settings.OPENAI_API_KEY", "openai-key")
+    monkeypatch.setattr("app.services.ai.openai_provider.settings.AI_PROVIDER_TIMEOUT_SECONDS", 25)
+
+    called = {}
+
+    class DummyOpenAI:
+        def __init__(self, api_key, timeout):
+            called["api_key"] = api_key
+            called["timeout"] = timeout
+            self.chat = types.SimpleNamespace(completions=types.SimpleNamespace(create=lambda **kwargs: {"ok": True}))
+
+    monkeypatch.setattr("app.services.ai.openai_provider.OpenAI", DummyOpenAI)
+
+    provider.generate_completion({"model": "x", "messages": []})
+    assert called["api_key"] == "openai-key"
+    assert called["timeout"] == 25
 
 def test_gemini_provider_builds_completion_request(monkeypatch):
     provider = GeminiProvider()
@@ -37,7 +59,8 @@ def test_gemini_provider_builds_completion_request(monkeypatch):
     assert response == {"ok": True}
     assert called["api_key"] == "test-key"
     assert called["model_name"] == "gemini-test"
-    assert called["kwargs"] == payload
+    assert called["kwargs"]["contents"] == payload["contents"]
+    assert called["kwargs"]["request_options"]["timeout"] == 60
 
 
 def test_gemini_provider_missing_api_key(monkeypatch):
@@ -67,6 +90,54 @@ def test_gemini_provider_stream_completion(monkeypatch):
     assert chunks == ["chunk1", "chunk2"]
 
 
+
+
+def test_gemini_provider_applies_default_timeout(monkeypatch):
+    provider = GeminiProvider()
+    monkeypatch.setattr("app.services.ai.gemini_provider.settings.GEMINI_API_KEY", "test-key")
+    monkeypatch.setattr("app.services.ai.gemini_provider.settings.AI_PROVIDER_TIMEOUT_SECONDS", 42)
+
+    called = {}
+
+    class DummyModel:
+        def __init__(self, model_name):
+            pass
+
+        def generate_content(self, **kwargs):
+            called["kwargs"] = kwargs
+            return {"ok": True}
+
+    fake_genai = types.SimpleNamespace(configure=lambda api_key: None, GenerativeModel=DummyModel)
+    monkeypatch.setitem(__import__("sys").modules, "google.generativeai", fake_genai)
+
+    provider.generate_completion({"contents": "hello"})
+    assert called["kwargs"]["request_options"]["timeout"] == 42
+
+
+def test_claude_provider_passes_timeout_to_client(monkeypatch):
+    provider = ClaudeProvider()
+    monkeypatch.setattr("app.services.ai.claude_provider.settings.ANTHROPIC_API_KEY", "anthropic-key")
+    monkeypatch.setattr("app.services.ai.claude_provider.settings.ANTHROPIC_MODEL", "claude-test")
+    monkeypatch.setattr("app.services.ai.claude_provider.settings.AI_PROVIDER_TIMEOUT_SECONDS", 33)
+
+    called = {}
+
+    class DummyMessages:
+        def create(self, **kwargs):
+            return {"ok": True}
+
+    class DummyAnthropic:
+        def __init__(self, api_key, timeout):
+            called["api_key"] = api_key
+            called["timeout"] = timeout
+            self.messages = DummyMessages()
+
+    monkeypatch.setitem(__import__("sys").modules, "anthropic", types.SimpleNamespace(Anthropic=DummyAnthropic))
+
+    provider.generate_completion({"max_tokens": 10, "messages": [{"role": "user", "content": "Hi"}]})
+    assert called["api_key"] == "anthropic-key"
+    assert called["timeout"] == 33
+
 def test_claude_provider_builds_completion_request(monkeypatch):
     provider = ClaudeProvider()
     monkeypatch.setattr("app.services.ai.claude_provider.settings.ANTHROPIC_API_KEY", "anthropic-key")
@@ -80,8 +151,9 @@ def test_claude_provider_builds_completion_request(monkeypatch):
             return {"ok": True}
 
     class DummyAnthropic:
-        def __init__(self, api_key):
+        def __init__(self, api_key, timeout):
             called["api_key"] = api_key
+            called["timeout"] = timeout
             self.messages = DummyMessages()
 
     monkeypatch.setitem(__import__("sys").modules, "anthropic", types.SimpleNamespace(Anthropic=DummyAnthropic))
@@ -110,7 +182,7 @@ def test_claude_provider_stream_completion(monkeypatch):
             return iter(["a", "b"])
 
     class DummyAnthropic:
-        def __init__(self, api_key):
+        def __init__(self, api_key, timeout):
             self.messages = DummyMessages()
 
     monkeypatch.setitem(__import__("sys").modules, "anthropic", types.SimpleNamespace(Anthropic=DummyAnthropic))
