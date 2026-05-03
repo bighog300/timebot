@@ -644,3 +644,9 @@ export interface EmailTestSendRequest { provider?: 'resend'|'sendgrid'; to_email
 export interface EmailTestSendResult { status: string; provider: string; provider_message_id?: string | null; log_id: string; }
 export interface EmailSendLog { id: string; provider: string; recipient_email: string; from_email: string; from_name?: string | null; reply_to?: string | null; subject: string; status: 'queued'|'sent'|'failed'; provider_message_id?: string | null; error_message_sanitized?: string | null; created_at: string; sent_at?: string | null; failed_at?: string | null; }
 
+
+
+export interface EmailSuppression { id: string; email: string; reason: string; source?: string | null; created_by_admin_id?: string | null; created_at: string }
+export interface CampaignRecipientPreview { total_candidates: number; sendable_count: number; suppressed_count: number; invalid_count: number; duplicate_count: number; sample_recipients: string[]; suppressed_samples: string[]; invalid_samples: string[] }
+export interface CampaignSendRequest { provider?: 'resend'|'sendgrid'; confirmation_text: string; variables_json?: Record<string, unknown> | null }
+export interface CampaignSendResult { total_candidates: number; sendable_count: number; sent_count: number; failed_count: number; skipped_count: number }

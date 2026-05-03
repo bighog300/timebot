@@ -347,6 +347,50 @@ class EmailCampaignPreviewResponse(BaseModel):
     missing_variables: list[str]
 
 
+
+
+class EmailSuppressionCreateRequest(BaseModel):
+    email: str
+    reason: str = Field(pattern="^(unsubscribe|bounce|complaint|manual)$")
+    source: str | None = None
+
+
+class EmailSuppressionResponse(BaseModel):
+    id: UUID
+    email: str
+    reason: str
+    source: str | None
+    created_by_admin_id: UUID | None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class EmailCampaignRecipientPreviewResponse(BaseModel):
+    total_candidates: int
+    sendable_count: int
+    suppressed_count: int
+    invalid_count: int
+    duplicate_count: int
+    sample_recipients: list[str]
+    suppressed_samples: list[str]
+    invalid_samples: list[str]
+
+
+class EmailCampaignSendRequest(BaseModel):
+    provider: str | None = Field(default=None, pattern="^(resend|sendgrid)$")
+    confirmation_text: str
+    variables_json: dict | list | None = None
+
+
+class EmailCampaignSendResponse(BaseModel):
+    total_candidates: int
+    sendable_count: int
+    sent_count: int
+    failed_count: int
+    skipped_count: int
+
+
 class EmailCampaignTestSendRequest(BaseModel):
     to_email: str
     provider: str | None = Field(default=None, pattern="^(resend|sendgrid)$")

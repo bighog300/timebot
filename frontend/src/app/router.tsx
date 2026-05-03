@@ -107,6 +107,7 @@ export const router = createBrowserRouter([
           { path: 'settings/email/campaigns', element: <AdminEmailCampaignsPage /> },
           { path: 'settings/email/campaigns/new', element: <AdminEmailCampaignEditorPage /> },
           { path: 'settings/email/campaigns/:campaignId', element: <AdminEmailCampaignEditorPage /> },
+          { path: 'settings/email/suppressions', element: <AdminEmailSuppressionsPage /> },
           { path: 'messages', element: <AdminMessagesPage /> },
         ],
       },
@@ -126,3 +127,4 @@ import { AdminEmailTemplatesPage } from '@/pages/AdminEmailTemplatesPage';
 import { AdminEmailTemplateEditorPage } from '@/pages/AdminEmailTemplateEditorPage';
 import { AdminEmailCampaignsPage } from '@/pages/AdminEmailCampaignsPage';
 import { AdminEmailCampaignEditorPage } from '@/pages/AdminEmailCampaignEditorPage';
+import { AdminEmailSuppressionsPage } from '@/pages/AdminEmailSuppressionsPage';
