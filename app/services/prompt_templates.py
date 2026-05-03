@@ -155,7 +155,6 @@ def run_prompt_with_fallback(prompt_template: PromptTemplate, user_input: str, d
             "latency_ms": round((time.perf_counter() - started) * 1000),
             "token_usage": getattr(getattr(response, "usage", None), "total_tokens", None),
             "error_message": None,
-            "error_message": None,
         }
         if db is not None:
             usage = getattr(response, "usage", None)
