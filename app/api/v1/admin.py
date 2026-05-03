@@ -1,15 +1,17 @@
 from datetime import datetime, timedelta, timezone
+import hashlib
+import secrets
 import time
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db, get_current_user_role
 from app.models.admin_audit import AdminAuditEvent
 from app.models.document import Document
 from app.models.intelligence import DocumentActionItem, DocumentRelationshipReview, DocumentReviewItem
-from app.models.user import User
+from app.models.user import User, UserInvite
 from app.models.billing import Plan, Subscription
 from app.models.processing_event import DocumentProcessingEvent
 
@@ -23,6 +25,10 @@ from app.schemas.admin import (
     AdminMetricsResponse,
     AdminProcessingSummaryResponse,
     AdminRoleUpdateRequest,
+    AdminUserCreateRequest,
+    AdminDeleteUserRequest,
+    AdminInviteCreateRequest,
+    AdminInviteResponse,
     AdminSubscriptionResponse,
     AdminUsageSummaryResponse,
     AdminPlanUpdateRequest,
@@ -135,13 +141,51 @@ def admin_llm_models(_: str = Depends(require_admin)):
 
 @router.get("/users", response_model=AdminUsersPageResponse)
 def list_users(
+    q: str | None = Query(None),
+    role: str | None = Query(None),
+    is_active: bool | None = Query(None),
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
     _: str = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
-    q = db.query(User).order_by(User.created_at.desc())
-    return AdminUsersPageResponse(items=q.offset(offset).limit(limit).all(), total_count=q.count(), limit=limit, offset=offset)
+    query = db.query(User).order_by(User.created_at.desc())
+    if q:
+        pattern = f"%{q.lower()}%"
+        query = query.filter(or_(func.lower(User.email).like(pattern), func.lower(User.display_name).like(pattern)))
+    if role:
+        query = query.filter(User.role == role.lower())
+    if is_active is not None:
+        query = query.filter(User.is_active.is_(is_active))
+    return AdminUsersPageResponse(items=query.offset(offset).limit(limit).all(), total_count=query.count(), limit=limit, offset=offset)
+
+
+def _admin_count(db: Session) -> int:
+    return db.query(User).filter(User.role == "admin", User.is_active.is_(True)).count()
+
+
+def _audit_user_action(db: Session, actor: User, target: User | None, action: str, details: dict) -> None:
+    db.add(AdminAuditEvent(actor_id=actor.id, entity_type="user", entity_id=str(target.id if target else details.get("email", "")), action=action, details=details))
+
+
+@router.post("/users", response_model=AdminUserResponse, status_code=status.HTTP_201_CREATED)
+def admin_create_user(payload: AdminUserCreateRequest, _: str = Depends(require_admin), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    email = payload.email.lower().strip()
+    if db.query(User).filter(User.email == email).first():
+        raise HTTPException(status_code=400, detail="Email already registered")
+    if not payload.password and not payload.send_invite:
+        raise HTTPException(status_code=400, detail="Password is required unless send_invite=true")
+    if payload.send_invite and not payload.password:
+        token = secrets.token_urlsafe(32)
+        db.add(UserInvite(email=email, role=payload.role, token_hash=hashlib.sha256(token.encode("utf-8")).hexdigest(), invited_by_user_id=current_user.id, expires_at=datetime.now(timezone.utc) + timedelta(days=7)))
+    user = User(email=email, password_hash=auth_service.hash_password(payload.password or secrets.token_urlsafe(32)), display_name=(payload.display_name or email.split("@")[0]).strip(), is_active=True, role=payload.role)
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    ensure_default_free_subscription(db, user.id)
+    _audit_user_action(db, current_user, user, "user_created", {"target_email": user.email, "role": user.role, "send_invite": payload.send_invite})
+    db.commit()
+    return user
 
 
 @router.get("/subscriptions", response_model=list[AdminSubscriptionResponse])
@@ -244,8 +288,9 @@ def update_user_role(
         raise HTTPException(status_code=422, detail="Invalid role")
 
     if user.role == "admin" and next_role != "admin":
-        admin_count = db.query(User).filter(User.role == "admin").count()
-        if admin_count <= 1:
+        if user.id == current_user.id:
+            raise HTTPException(status_code=400, detail="Cannot self-demote admin role")
+        if _admin_count(db) <= 1:
             raise HTTPException(status_code=400, detail="Cannot demote the last admin")
 
     prev = user.role
@@ -262,6 +307,69 @@ def update_user_role(
     db.commit()
     db.refresh(user)
     return user
+
+
+@router.post("/users/{user_id}/deactivate", response_model=AdminUserResponse)
+def deactivate_user(user_id: str, _: str = Depends(require_admin), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user.id == current_user.id:
+        raise HTTPException(status_code=400, detail="Cannot deactivate yourself")
+    if user.role == "admin" and user.is_active and _admin_count(db) <= 1:
+        raise HTTPException(status_code=400, detail="Cannot deactivate the last admin")
+    user.is_active = False
+    _audit_user_action(db, current_user, user, "deactivated", {"target_email": user.email})
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+@router.post("/users/{user_id}/reactivate", response_model=AdminUserResponse)
+def reactivate_user(user_id: str, _: str = Depends(require_admin), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    user.is_active = True
+    _audit_user_action(db, current_user, user, "reactivated", {"target_email": user.email})
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+@router.delete("/users/{user_id}")
+def delete_user(user_id: str, payload: AdminDeleteUserRequest, _: str = Depends(require_admin), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user.id == current_user.id:
+        raise HTTPException(status_code=400, detail="Cannot delete yourself")
+    if user.role == "admin" and user.is_active and _admin_count(db) <= 1:
+        raise HTTPException(status_code=400, detail="Cannot delete the last admin")
+    if payload.confirmation not in {"DELETE", user.email}:
+        raise HTTPException(status_code=400, detail="Confirmation must match user email or DELETE")
+    user.is_active = False
+    _audit_user_action(db, current_user, user, "soft_deleted", {"target_email": user.email})
+    db.commit()
+    return {"ok": True}
+
+
+@router.post("/users/invite")
+def create_invite(payload: AdminInviteCreateRequest, _: str = Depends(require_admin), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    email = payload.email.lower().strip()
+    if db.query(User).filter(User.email == email).first():
+        raise HTTPException(status_code=400, detail="User already exists")
+    token = secrets.token_urlsafe(32)
+    invite = UserInvite(email=email, role=payload.role, token_hash=hashlib.sha256(token.encode("utf-8")).hexdigest(), invited_by_user_id=current_user.id, expires_at=datetime.now(timezone.utc) + timedelta(days=payload.expires_in_days))
+    db.add(invite)
+    _audit_user_action(db, current_user, None, "invite_created", {"email": email, "role": payload.role})
+    db.commit()
+    return {"id": str(invite.id), "invite_link": f"/accept-invite?token={token}"}
+
+
+@router.get("/users/invites", response_model=list[AdminInviteResponse])
+def list_invites(_: str = Depends(require_admin), db: Session = Depends(get_db)):
+    return db.query(UserInvite).order_by(UserInvite.created_at.desc()).all()
 
 
 @router.get("/audit", response_model=AdminAuditPageResponse)
