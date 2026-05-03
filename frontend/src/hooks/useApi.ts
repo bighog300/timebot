@@ -72,6 +72,8 @@ export const keys = {
   plans: ['plans'] as const,
   report: (reportId: string) => ['report', reportId] as const,
   gmailConnections: ['connections'] as const,
+  workspaces: (scope: string) => ['workspaces', scope] as const,
+  workspaceDetail: (workspaceId: string) => ['workspace-detail', workspaceId] as const,
 };
 
 const workspaceScope = () => (typeof window !== 'undefined' ? (localStorage.getItem('activeWorkspaceId') || 'personal') : 'personal');
@@ -245,6 +247,57 @@ export function useAdminPromptExecutionSummary(filters: { provider?: string; mod
 export function useReviewMetrics() {
   const authReady = useAuthReady();
   return useQuery({ queryKey: keys.reviewMetrics, queryFn: api.getReviewMetrics, enabled: authReady });
+}
+
+export function useWorkspaces() {
+  const authReady = useAuthReady();
+  const scope = workspaceScope();
+  return useQuery({ queryKey: keys.workspaces(scope), queryFn: api.listWorkspaces, enabled: authReady });
+}
+
+export function useWorkspaceDetail(workspaceId: string) {
+  const authReady = useAuthReady();
+  return useQuery({ queryKey: keys.workspaceDetail(workspaceId), queryFn: () => api.getWorkspace(workspaceId), enabled: authReady && !!workspaceId });
+}
+
+export function useCreateWorkspace() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: { name: string }) => api.createWorkspace(payload),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['workspaces'] }),
+  });
+}
+
+export function useInviteWorkspaceMember(workspaceId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: { email: string; role: string }) => api.inviteWorkspaceMember(workspaceId, payload),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.workspaceDetail(workspaceId) }),
+  });
+}
+
+export function useAcceptWorkspaceInvite() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ token }: { token: string }) => api.acceptWorkspaceInvite(token),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['workspaces'] }),
+  });
+}
+
+export function useUpdateWorkspaceMemberRole(workspaceId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ userId, role }: { userId: string; role: 'owner' | 'admin' | 'member' }) => api.updateWorkspaceMemberRole(workspaceId, userId, role),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.workspaceDetail(workspaceId) }),
+  });
+}
+
+export function useRemoveWorkspaceMember(workspaceId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (userId: string) => api.removeWorkspaceMember(workspaceId, userId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.workspaceDetail(workspaceId) }),
+  });
 }
 
 export function useRelationshipReviews(status: 'pending' | 'confirmed' | 'dismissed') {

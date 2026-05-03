@@ -60,6 +60,7 @@ import type {
   AdminInvite,
   AdminPlan,
   Workspace,
+  WorkspaceMember,
   NotificationItem,
   MessageThread,
 } from '@/types/api';
@@ -85,6 +86,12 @@ export function getErrorDetail(error: unknown): string {
 
 export const api = {
   listWorkspaces: async (): Promise<Workspace[]> => (await http.get("/workspaces")).data,
+  getWorkspace: async (workspaceId: string): Promise<Workspace> => (await http.get(`/workspaces/${workspaceId}`)).data,
+  createWorkspace: async (payload: { name: string }): Promise<Workspace> => (await http.post('/workspaces', payload)).data,
+  inviteWorkspaceMember: async (workspaceId: string, payload: { email: string; role: string }): Promise<{ invite: { id: string; email: string; role: string }; token?: string | null }> => (await http.post(`/workspaces/${workspaceId}/invites`, payload)).data,
+  acceptWorkspaceInvite: async (token: string): Promise<{ accepted: boolean }> => (await http.post(`/workspaces/invites/${token}/accept`)).data,
+  updateWorkspaceMemberRole: async (workspaceId: string, userId: string, role: WorkspaceMember['role']): Promise<WorkspaceMember> => (await http.patch(`/workspaces/${workspaceId}/members/${userId}`, { role })).data,
+  removeWorkspaceMember: async (workspaceId: string, userId: string): Promise<{ removed: boolean }> => (await http.delete(`/workspaces/${workspaceId}/members/${userId}`)).data,
   listNotifications: async (): Promise<NotificationItem[]> => (await http.get('/notifications')).data,
   markNotificationRead: async (id: string): Promise<void> => { await http.post(`/notifications/${id}/read`); },
   markAllNotificationsRead: async (): Promise<void> => { await http.post('/notifications/read-all'); },

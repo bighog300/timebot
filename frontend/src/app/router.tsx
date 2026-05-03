@@ -28,6 +28,9 @@ import { SettingsUsagePage } from '@/pages/settings/SettingsUsagePage';
 import { MessagesPage } from '@/pages/MessagesPage';
 import { NotificationsPage } from '@/pages/NotificationsPage';
 import { AdminMessagesPage } from '@/pages/AdminMessagesPage';
+import { WorkspacesPage } from '@/pages/WorkspacesPage';
+import { WorkspaceDetailPage } from '@/pages/WorkspaceDetailPage';
+import { WorkspaceInviteAcceptPage } from '@/pages/WorkspaceInviteAcceptPage';
 
 export const router = createBrowserRouter([
   { path: '/login', element: <LoginPage /> },
@@ -59,6 +62,9 @@ export const router = createBrowserRouter([
       { path: 'messages', element: <MessagesPage /> },
       { path: 'notifications', element: <NotificationsPage /> },
       { path: 'pricing', element: <PricingPage /> },
+      { path: 'workspaces', element: <WorkspacesPage /> },
+      { path: 'workspaces/:workspaceId', element: <WorkspaceDetailPage /> },
+      { path: 'workspaces/invites/:token/accept', element: <WorkspaceInviteAcceptPage /> },
       {
         path: 'settings',
         element: <SettingsLayoutPage />,
