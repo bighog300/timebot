@@ -13,11 +13,11 @@ export function AdminPromptTemplatesPage() {
   const activatePrompt = useActivatePromptTemplate();
   const testPrompt = useTestPromptTemplate();
   const { pushToast } = useUIStore();
-  const [createForm, setCreateForm] = useState({ prompt_type: 'chat' as PromptTemplateType, name: '', content: '' });
+  const [createForm, setCreateForm] = useState({ prompt_type: 'chat' as PromptTemplateType, name: '', content: '', provider: 'openai' as const, model: 'gpt-4o-mini', temperature: 0.2, max_tokens: 800, top_p: 1, enabled: true, is_default: false });
   const [selectedId, setSelectedId] = useState<string>('');
   const selectedPrompt = useMemo(() => prompts.data?.find((item) => item.id === selectedId) ?? null, [prompts.data, selectedId]);
   const [editForm, setEditForm] = useState({ name: '', content: '' });
-  const [testForm, setTestForm] = useState({ prompt_type: 'chat' as PromptTemplateType, prompt_content: '', sample_context: '' });
+  const [testForm, setTestForm] = useState({ prompt_type: 'chat' as PromptTemplateType, prompt_content: '', sample_context: '', provider: 'openai' as const, model: 'gpt-4o-mini', temperature: 0.2, max_tokens: 800, top_p: 1 });
   const [preview, setPreview] = useState('');
   const [previewError, setPreviewError] = useState('');
 
@@ -39,8 +39,13 @@ export function AdminPromptTemplatesPage() {
         {promptTypes.map((type) => <option key={type} value={type}>{type}</option>)}
       </select>
       <input placeholder='Template name' value={createForm.name} onChange={(e) => setCreateForm((v) => ({ ...v, name: e.target.value }))} className='w-full rounded border border-slate-700 bg-slate-900 p-2 text-sm' />
+      
+      <div className='grid grid-cols-2 gap-2'>
+      <select value={createForm.provider} onChange={(e) => setCreateForm((v) => ({ ...v, provider: e.target.value as 'openai'|'gemini' }))} className='rounded border border-slate-700 bg-slate-900 p-2 text-sm'><option value='openai'>openai</option><option value='gemini'>gemini</option></select>
+      <input placeholder='Model' value={createForm.model} onChange={(e)=>setCreateForm((v)=>({...v, model:e.target.value}))} className='rounded border border-slate-700 bg-slate-900 p-2 text-sm'/>
+      </div>
       <textarea placeholder='Prompt content' value={createForm.content} onChange={(e) => setCreateForm((v) => ({ ...v, content: e.target.value }))} className='h-40 w-full rounded border border-slate-700 bg-slate-900 p-2 text-sm' />
-      <button className='w-full rounded bg-emerald-700 px-3 py-2 text-sm sm:w-auto' onClick={async () => { try { await createPrompt.mutateAsync(createForm); pushToast('Prompt template created'); setCreateForm({ prompt_type: 'chat', name: '', content: '' }); } catch (e) { pushToast(getErrorDetail(e), 'error'); } }}>Create template</button>
+      <button className='w-full rounded bg-emerald-700 px-3 py-2 text-sm sm:w-auto' onClick={async () => { try { await createPrompt.mutateAsync(createForm); pushToast('Prompt template created'); setCreateForm({ prompt_type: 'chat', name: '', content: '', provider: 'openai', model: 'gpt-4o-mini', temperature: 0.2, max_tokens: 800, top_p: 1, enabled: true, is_default: false }); } catch (e) { pushToast(getErrorDetail(e), 'error'); } }}>Create template</button>
     </div>
 
 
@@ -67,6 +72,7 @@ export function AdminPromptTemplatesPage() {
       }} disabled={testPrompt.isPending || !testForm.prompt_content.trim() || !testForm.sample_context.trim()}>Run preview</button>
       {testPrompt.isPending && <div className='text-sm text-slate-300'>Generating preview...</div>}
       {previewError && <div className='text-sm text-rose-400' role='alert'>{previewError}</div>}
+      {preview && <div className='text-xs text-slate-400'>Latency: {(testPrompt.data as any)?.latency_ms ?? 'n/a'} ms · Tokens: {(testPrompt.data as any)?.usage_tokens ?? 'n/a'}</div>}
       {preview && <pre className='overflow-x-auto whitespace-pre-wrap break-words rounded border border-slate-700 bg-slate-950 p-2 text-sm'>{preview}</pre>}
     </div>
 

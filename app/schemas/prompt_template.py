@@ -10,6 +10,13 @@ class PromptTemplateBase(BaseModel):
     content: str = Field(min_length=1)
     version: int = Field(ge=1, default=1)
     is_active: bool = False
+    provider: str = Field(pattern="^(openai|gemini)$", default="openai")
+    model: str = Field(min_length=1, max_length=120, default="gpt-4o-mini")
+    temperature: float = Field(ge=0, le=2, default=0.2)
+    max_tokens: int = Field(ge=1, le=8192, default=800)
+    top_p: float = Field(ge=0, le=1, default=1.0)
+    enabled: bool = True
+    is_default: bool = False
 
     @field_validator("content")
     @classmethod
@@ -28,6 +35,13 @@ class PromptTemplateUpdate(BaseModel):
     content: str | None = Field(default=None, min_length=1)
     version: int | None = Field(default=None, ge=1)
     is_active: bool | None = None
+    provider: str | None = Field(default=None, pattern="^(openai|gemini)$")
+    model: str | None = Field(default=None, min_length=1, max_length=120)
+    temperature: float | None = Field(default=None, ge=0, le=2)
+    max_tokens: int | None = Field(default=None, ge=1, le=8192)
+    top_p: float | None = Field(default=None, ge=0, le=1)
+    enabled: bool | None = None
+    is_default: bool | None = None
 
     @field_validator("content")
     @classmethod
@@ -50,7 +64,14 @@ class PromptTemplateTestRequest(BaseModel):
     type: str = Field(pattern="^(chat|retrieval|report|timeline_extraction|relationship_detection)$")
     content: str = Field(min_length=1)
     sample_context: str = Field(min_length=1)
+    provider: str = Field(pattern="^(openai|gemini)$", default="openai")
+    model: str = Field(min_length=1, max_length=120, default="gpt-4o-mini")
+    temperature: float = Field(ge=0, le=2, default=0.2)
+    max_tokens: int = Field(ge=1, le=8192, default=800)
+    top_p: float = Field(ge=0, le=1, default=1.0)
 
 
 class PromptTemplateTestResponse(BaseModel):
     preview: str
+    latency_ms: float | None = None
+    usage_tokens: int | None = None

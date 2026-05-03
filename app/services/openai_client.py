@@ -100,6 +100,10 @@ class AIClientRouter(AIClient):
     def generate_completion(self, payload: dict[str, Any]) -> Any:
         return self._execute_with_fallbacks("generate_completion", payload)
 
+    def generate_completion_for_provider(self, provider_name: str, payload: dict[str, Any]) -> Any:
+        provider = self.get_provider(provider_name)
+        return provider.generate_completion(payload)
+
     def stream_completion(self, payload: dict[str, Any]) -> Iterable[Any]:
         return self._execute_with_fallbacks("stream_completion", payload)
 
