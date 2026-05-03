@@ -30,15 +30,22 @@ def test_enqueue_failure_not_reported_as_queued(client,test_user,db,monkeypatch)
 def test_webhook_signature_required_and_valid(client,test_user,db):
     test_user.role='admin'; db.commit()
     secret='whsec123'
-    cfg=EmailProviderConfig(provider='sendgrid',enabled=True,from_email='x@example.com',api_key_encrypted='k',webhook_secret_encrypted=email_secret_crypto.encrypt(secret))
-    db.add(cfg); db.commit()
-    payload=[{'event':'bounce','email':'a@example.com','sg_event_id':'e1','sg_message_id':'m1'}]
-    raw=json.dumps(payload).encode()
-    bad=client.post('/api/v1/email/webhooks/sendgrid',content=raw,headers={'content-type':'application/json'})
-    assert bad.status_code==401
-    db.add(EmailSendLog(provider='sendgrid',recipient_email='a@example.com',from_email='x@example.com',subject='s',status='sent',provider_message_id='m1')); db.commit()
-    from app.api.v1 import email_webhooks
-    email_webhooks._verify = lambda *args, **kwargs: None
-    ok=client.post('/api/v1/email/webhooks/sendgrid',content=raw,headers={'content-type':'application/json','x-twilio-email-event-webhook-signature':'test'})
+    cfg=db.query(EmailProviderConfig).filter(EmailProviderConfig.provider=='resend').first()
+    if not cfg:
+        cfg=EmailProviderConfig(provider='resend',enabled=True,from_email='x@example.com',api_key_encrypted='k',webhook_secret_encrypted=email_secret_crypto.encrypt(secret))
+        db.add(cfg)
+    else:
+        cfg.webhook_secret_encrypted=email_secret_crypto.encrypt(secret)
+    db.commit()
+    payload=[{'id':'e1','type':'email.bounced','data':{'email_id':'m1','to':'a@example.com'}}]
+    raw=json.dumps(payload, separators=(',', ':')).encode()
+    bad=client.post('/api/v1/email/webhooks/resend',content=raw,headers={'content-type':'application/json'})
+    assert bad.status_code==401 and bad.json()['detail']=='Missing webhook signature'
+    db.add(EmailSendLog(provider='resend',recipient_email='a@example.com',from_email='x@example.com',subject='s',status='sent',provider_message_id='m1')); db.commit()
+    sig=hmac.new(secret.encode(), raw, hashlib.sha256).hexdigest()
+    ok=client.post('/api/v1/email/webhooks/resend',content=raw,headers={'content-type':'application/json','x-signature':sig})
     assert ok.status_code==200
     assert db.query(EmailSuppression).filter(EmailSuppression.email=='a@example.com').count()==1
+
+    invalid=client.post('/api/v1/email/webhooks/resend',content=raw,headers={'content-type':'application/json','x-signature':'bad-signature'})
+    assert invalid.status_code==401 and invalid.json()['detail']=='Invalid webhook signature'

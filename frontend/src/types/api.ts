@@ -650,3 +650,19 @@ export interface EmailSuppression { id: string; email: string; reason: string; s
 export interface CampaignRecipientPreview { total_candidates: number; sendable_count: number; suppressed_count: number; invalid_count: number; duplicate_count: number; sample_recipients: string[]; suppressed_samples: string[]; invalid_samples: string[] }
 export interface CampaignSendRequest { provider?: 'resend'|'sendgrid'; confirmation_text: string; variables_json?: Record<string, unknown> | null }
 export interface CampaignSendResult { total_candidates: number; sendable_count: number; sent_count: number; failed_count: number; skipped_count: number }
+export interface CampaignSendStatus {
+  campaign_id: string;
+  status: 'queued'|'sending'|'sent'|'failed'|'ready'|'draft'|'archived';
+  total: number;
+  queued: number;
+  sent: number;
+  delivered: number;
+  bounced: number;
+  complained: number;
+  failed: number;
+  skipped: number;
+  completion_percentage: number;
+  send_started_at?: string | null;
+  send_completed_at?: string | null;
+  send_failed_at?: string | null;
+}
