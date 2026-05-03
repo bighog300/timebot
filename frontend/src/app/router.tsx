@@ -27,6 +27,7 @@ import { SettingsBillingPage } from '@/pages/settings/SettingsBillingPage';
 import { SettingsUsagePage } from '@/pages/settings/SettingsUsagePage';
 import { MessagesPage } from '@/pages/MessagesPage';
 import { NotificationsPage } from '@/pages/NotificationsPage';
+import { AdminMessagesPage } from '@/pages/AdminMessagesPage';
 
 export const router = createBrowserRouter([
   { path: '/login', element: <LoginPage /> },
@@ -93,6 +94,7 @@ export const router = createBrowserRouter([
           { path: 'settings/prompts/audit', element: <AdminPromptAuditPage /> },
           { path: 'settings/prompts/analytics', element: <AdminPromptAnalyticsPage /> },
           { path: 'settings/audit', element: <AdminAuditPage /> },
+          { path: 'messages', element: <AdminMessagesPage /> },
         ],
       },
     ],
