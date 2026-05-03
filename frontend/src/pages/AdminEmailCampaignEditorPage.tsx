@@ -12,7 +12,7 @@ export function AdminEmailCampaignEditorPage(){
   useEffect(()=>{
     if(!campaignId || !sendStatus || !['queued','sending'].includes(sendStatus.status)) return;
     const id=window.setInterval(async()=>{
-      try{ setSendStatus(await api.getCampaignSendStatus(campaignId)); }catch(_err){ /* noop polling failure */ }
+      try{ setSendStatus(await api.getCampaignSendStatus(campaignId)); }catch{ /* noop polling failure */ }
     }, 2000);
     return ()=>window.clearInterval(id);
   }, [campaignId, sendStatus?.status]);

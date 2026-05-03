@@ -20,13 +20,16 @@ def _safe_payload(payload: dict) -> dict:
 def _verify(provider:str, raw:bytes, sig:str|None, cfg:EmailProviderConfig):
     if not cfg or not cfg.webhook_secret_encrypted:
         raise HTTPException(status_code=401, detail='Webhook secret not configured')
-    secret=email_secret_crypto.decrypt(cfg.webhook_secret_encrypted)
+    secret = (email_secret_crypto.decrypt(cfg.webhook_secret_encrypted) or '').strip()
     if not sig:
         raise HTTPException(status_code=401, detail='Missing webhook signature')
     # Current E5 webhook signature contract for both providers:
     # header value must equal hex(HMAC_SHA256(raw_request_body, webhook_secret)).
-    digest=hmac.new(secret.encode(), raw, hashlib.sha256).hexdigest()
-    if not hmac.compare_digest(digest, sig.strip()):
+    digest = hmac.new(secret.encode(), raw, hashlib.sha256).hexdigest()
+    normalized = sig.strip()
+    if normalized.lower().startswith('sha256='):
+        normalized = normalized.split('=', 1)[1].strip()
+    if not hmac.compare_digest(digest, normalized.lower()):
         raise HTTPException(status_code=401, detail='Invalid webhook signature')
 
 def _apply_status(db, send_log, status, event_id):
@@ -50,7 +53,7 @@ def _apply_status(db, send_log, status, event_id):
 @router.post('/resend')
 async def resend_webhook(request:Request, x_signature:str|None=Header(default=None), db:Session=Depends(get_db)):
     raw=await request.body(); payload=await request.json()
-    cfg=db.query(EmailProviderConfig).filter(EmailProviderConfig.provider=='resend').first()
+    cfg = db.query(EmailProviderConfig).filter(EmailProviderConfig.provider == 'resend').order_by(EmailProviderConfig.updated_at.desc()).first()
     _verify('resend',raw,x_signature,cfg)
     events=payload if isinstance(payload,list) else [payload]
     for ev in events:
@@ -71,7 +74,7 @@ async def resend_webhook(request:Request, x_signature:str|None=Header(default=No
 @router.post('/sendgrid')
 async def sendgrid_webhook(request:Request, x_twilio_email_event_webhook_signature:str|None=Header(default=None), db:Session=Depends(get_db)):
     raw=await request.body(); events=await request.json()
-    cfg=db.query(EmailProviderConfig).filter(EmailProviderConfig.provider=='sendgrid').first()
+    cfg = db.query(EmailProviderConfig).filter(EmailProviderConfig.provider == 'sendgrid').order_by(EmailProviderConfig.updated_at.desc()).first()
     _verify('sendgrid',raw,x_twilio_email_event_webhook_signature,cfg)
     if not isinstance(events,list): events=[events]
     for ev in events:
