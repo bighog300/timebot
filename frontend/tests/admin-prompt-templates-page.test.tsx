@@ -5,7 +5,7 @@ import { AdminPromptTemplatesPage } from '@/pages/AdminPromptTemplatesPage';
 const mutateCreate = vi.fn(async () => ({}));
 const mutateUpdate = vi.fn(async () => ({}));
 const mutateActivate = vi.fn(async () => ({}));
-const mutateTest = vi.fn(async () => ({ preview: 'Preview output' }));
+const mutateTest = vi.fn(async () => ({ preview: 'Preview output', fallback_used: true, provider_used: 'gemini', model_used: 'gemini-1.5-flash', primary_error: 'APIError: boom' }));
 
 vi.mock('@/hooks/useApi', () => ({
   useAdminPromptTemplates: () => ({ data: [
@@ -92,6 +92,7 @@ describe('admin prompt templates', () => {
     fireEvent.change(screen.getByPlaceholderText('Sample context/query/document text'), { target: { value: 'Sample question' } });
     fireEvent.click(screen.getByText('Run preview'));
     expect(await screen.findByText('Preview output')).toBeInTheDocument();
+    expect(screen.getByText(/Fallback used: yes/)).toBeInTheDocument();
   });
 
   it('error state renders', async () => {
@@ -103,4 +104,15 @@ describe('admin prompt templates', () => {
     expect(await screen.findByRole('alert')).toBeInTheDocument();
   });
 
+});
+
+
+it('fallback controls render and disable until enabled', () => {
+  render(<AdminPromptTemplatesPage />);
+  const fallbackToggle = screen.getByLabelText('Enable fallback');
+  expect(fallbackToggle).toBeInTheDocument();
+  const selects = screen.getAllByRole('combobox');
+  expect((selects[3] as HTMLSelectElement).disabled).toBe(true);
+  fireEvent.click(fallbackToggle);
+  expect((selects[3] as HTMLSelectElement).disabled).toBe(false);
 });

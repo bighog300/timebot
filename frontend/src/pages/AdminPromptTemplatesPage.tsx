@@ -14,12 +14,13 @@ export function AdminPromptTemplatesPage() {
   const activatePrompt = useActivatePromptTemplate();
   const testPrompt = useTestPromptTemplate();
   const { pushToast } = useUIStore();
-  const [createForm, setCreateForm] = useState<{ prompt_type: PromptTemplateType; name: string; content: string; provider: 'openai' | 'gemini'; model: string; temperature: number; max_tokens: number; top_p: number; enabled: boolean; is_default: boolean }>({ prompt_type: 'chat', name: '', content: '', provider: 'openai', model: 'gpt-4o-mini', temperature: 0.2, max_tokens: 800, top_p: 1, enabled: true, is_default: false });
+  const [createForm, setCreateForm] = useState<{ prompt_type: PromptTemplateType; name: string; content: string; provider: 'openai' | 'gemini'; model: string; temperature: number; max_tokens: number; top_p: number; enabled: boolean; is_default: boolean; fallback_enabled: boolean; fallback_provider: 'openai' | 'gemini' | null; fallback_model: string | null }>({ prompt_type: 'chat', name: '', content: '', provider: 'openai', model: 'gpt-4o-mini', temperature: 0.2, max_tokens: 800, top_p: 1, enabled: true, is_default: false, fallback_enabled: false, fallback_provider: 'openai', fallback_model: 'gpt-4.1-mini' });
   const [selectedId, setSelectedId] = useState<string>('');
   const selectedPrompt = useMemo(() => prompts.data?.find((item) => item.id === selectedId) ?? null, [prompts.data, selectedId]);
   const [editForm, setEditForm] = useState({ name: '', content: '' });
-  const [testForm, setTestForm] = useState<{ prompt_type: PromptTemplateType; prompt_content: string; sample_context: string; provider: 'openai' | 'gemini'; model: string; temperature: number; max_tokens: number; top_p: number }>({ prompt_type: 'chat', prompt_content: '', sample_context: '', provider: 'openai', model: 'gpt-4o-mini', temperature: 0.2, max_tokens: 800, top_p: 1 });
+  const [testForm, setTestForm] = useState<{ prompt_type: PromptTemplateType; prompt_content: string; sample_context: string; provider: 'openai' | 'gemini'; model: string; temperature: number; max_tokens: number; top_p: number; fallback_enabled: boolean; fallback_provider: 'openai' | 'gemini' | null; fallback_model: string | null }>({ prompt_type: 'chat', prompt_content: '', sample_context: '', provider: 'openai', model: 'gpt-4o-mini', temperature: 0.2, max_tokens: 800, top_p: 1, fallback_enabled: false, fallback_provider: 'openai', fallback_model: 'gpt-4.1-mini' });
   const [preview, setPreview] = useState('');
+  const [previewMeta, setPreviewMeta] = useState<any>(null);
   const [previewError, setPreviewError] = useState('');
   const providerCatalog = llmModels.data?.providers ?? [];
   const getModelsForProvider = (providerId: 'openai' | 'gemini') => providerCatalog.find((provider) => provider.id === providerId)?.models ?? [];
@@ -56,8 +57,22 @@ export function AdminPromptTemplatesPage() {
         {getModelsForProvider(createForm.provider).map((model)=> <option key={model.id} value={model.id}>{model.name}</option>)}
       </select>
       </div>
+
+      <label className='flex items-center gap-2 text-sm'><input type='checkbox' checked={createForm.fallback_enabled} onChange={(e)=>setCreateForm((v)=>({...v, fallback_enabled: e.target.checked}))} />Enable fallback</label>
+      <div className='grid grid-cols-2 gap-2'>
+      <select value={createForm.fallback_provider ?? ''} disabled={!createForm.fallback_enabled} onChange={(e) => {
+        const provider = e.target.value as 'openai' | 'gemini';
+        const nextModels = getModelsForProvider(provider);
+        setCreateForm((v) => ({ ...v, fallback_provider: provider, fallback_model: nextModels[0]?.id ?? '' }));
+      }} className='rounded border border-slate-700 bg-slate-900 p-2 text-sm'>
+        {providerCatalog.map((provider) => <option key={provider.id} value={provider.id} disabled={!provider.configured}>{provider.name}{provider.configured ? '' : ' (Unavailable)'}</option>)}
+      </select>
+      <select value={createForm.fallback_model ?? ''} disabled={!createForm.fallback_enabled} onChange={(e)=>setCreateForm((v)=>({...v, fallback_model:e.target.value}))} className='rounded border border-slate-700 bg-slate-900 p-2 text-sm'>
+        {getModelsForProvider((createForm.fallback_provider ?? 'openai') as 'openai'|'gemini').map((model)=> <option key={model.id} value={model.id}>{model.name}</option>)}
+      </select>
+      </div>
       <textarea placeholder='Prompt content' value={createForm.content} onChange={(e) => setCreateForm((v) => ({ ...v, content: e.target.value }))} className='h-40 w-full rounded border border-slate-700 bg-slate-900 p-2 text-sm' />
-      <button className='w-full rounded bg-emerald-700 px-3 py-2 text-sm sm:w-auto' onClick={async () => { try { await createPrompt.mutateAsync(createForm); pushToast('Prompt template created'); setCreateForm({ prompt_type: 'chat', name: '', content: '', provider: 'openai', model: 'gpt-4o-mini', temperature: 0.2, max_tokens: 800, top_p: 1, enabled: true, is_default: false }); } catch (e) { pushToast(getErrorDetail(e), 'error'); } }}>Create template</button>
+      <button className='w-full rounded bg-emerald-700 px-3 py-2 text-sm sm:w-auto' onClick={async () => { try { await createPrompt.mutateAsync(createForm); pushToast('Prompt template created'); setCreateForm({ prompt_type: 'chat', name: '', content: '', provider: 'openai', model: 'gpt-4o-mini', temperature: 0.2, max_tokens: 800, top_p: 1, enabled: true, is_default: false, fallback_enabled: false, fallback_provider: 'openai', fallback_model: 'gpt-4.1-mini' }); } catch (e) { pushToast(getErrorDetail(e), 'error'); } }}>Create template</button>
     </div>
 
 
@@ -69,7 +84,7 @@ export function AdminPromptTemplatesPage() {
       <textarea placeholder='Prompt content for preview' value={testForm.prompt_content} onChange={(e) => setTestForm((v) => ({ ...v, prompt_content: e.target.value }))} className='h-32 w-full min-w-0 rounded border border-slate-700 bg-slate-900 p-2 text-sm' />
       <textarea placeholder='Sample context/query/document text' value={testForm.sample_context} onChange={(e) => setTestForm((v) => ({ ...v, sample_context: e.target.value }))} className='h-32 w-full min-w-0 rounded border border-slate-700 bg-slate-900 p-2 text-sm' />
       <button className='w-full rounded bg-indigo-700 px-3 py-2 text-sm sm:w-auto' onClick={async () => {
-        setPreview(''); setPreviewError('');
+        setPreview(''); setPreviewMeta(null); setPreviewError('');
         if (!testForm.prompt_content.trim() || !testForm.sample_context.trim()) {
           setPreviewError('Prompt content and sample context are required.');
           return;
@@ -77,6 +92,7 @@ export function AdminPromptTemplatesPage() {
         try {
           const resp = await testPrompt.mutateAsync(testForm);
           setPreview(resp.preview);
+          setPreviewMeta(resp);
         } catch (e) {
           console.error('Prompt test request failed', (e as { response?: { data?: unknown } })?.response?.data ?? e);
           setPreviewError(getErrorDetail(e));
@@ -84,7 +100,8 @@ export function AdminPromptTemplatesPage() {
       }} disabled={testPrompt.isPending || !testForm.prompt_content.trim() || !testForm.sample_context.trim()}>Run preview</button>
       {testPrompt.isPending && <div className='text-sm text-slate-300'>Generating preview...</div>}
       {previewError && <div className='text-sm text-rose-400' role='alert'>{previewError}</div>}
-      {preview && <div className='text-xs text-slate-400'>Latency: {(testPrompt.data as any)?.latency_ms ?? 'n/a'} ms · Tokens: {(testPrompt.data as any)?.usage_tokens ?? 'n/a'}</div>}
+      {preview && <div className='text-xs text-slate-400'>Latency: {previewMeta?.latency_ms ?? 'n/a'} ms · Tokens: {previewMeta?.usage_tokens ?? 'n/a'} · Fallback used: {previewMeta?.fallback_used ? 'yes' : 'no'} · Used: {previewMeta?.provider_used ?? ''}/{previewMeta?.model_used ?? ''}</div>}
+      {preview && previewMeta?.primary_error && <div className='text-xs text-amber-400'>Primary error: {previewMeta?.primary_error}</div>}
       {preview && <pre className='overflow-x-auto whitespace-pre-wrap break-words rounded border border-slate-700 bg-slate-950 p-2 text-sm'>{preview}</pre>}
     </div>
 
