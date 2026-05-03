@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+import time
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func
@@ -401,9 +402,12 @@ def test_prompt_template(payload: PromptTemplateTestRequest, _: str = Depends(re
     )
 
     try:
-        response = openai_client_service.generate_completion({
-            "model": "gpt-4.1-mini",
-            "temperature": 0.2,
+        start = time.perf_counter()
+        response = openai_client_service.generate_completion_for_provider(payload.provider, {
+            "model": payload.model,
+            "temperature": payload.temperature,
+            "max_tokens": payload.max_tokens,
+            "top_p": payload.top_p,
             "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
@@ -412,8 +416,11 @@ def test_prompt_template(payload: PromptTemplateTestRequest, _: str = Depends(re
     except APIError as exc:
         raise HTTPException(status_code=502, detail=f"AI request failed: {exc}") from exc
 
-    preview = (response.choices[0].message.content or "").strip() if response.choices else ""
-    return PromptTemplateTestResponse(preview=preview)
+    preview = openai_client_service.extract_response_text(response)
+    elapsed_ms = round((time.perf_counter() - start) * 1000, 2)
+    usage = getattr(response, "usage", None)
+    total_tokens = getattr(usage, "total_tokens", None) if usage is not None else None
+    return PromptTemplateTestResponse(preview=preview, latency_ms=elapsed_ms, usage_tokens=total_tokens)
 
 
 DEFAULT_CHATBOT_SETTINGS = {

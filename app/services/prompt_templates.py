@@ -28,6 +28,21 @@ def get_active_prompt_content(db: Session, prompt_type: str, default_content: st
     return content if content.strip() else default_content
 
 
+def get_active_prompt_template(db: Session, prompt_type: str) -> PromptTemplate | None:
+    if prompt_type not in PROMPT_TYPES:
+        return None
+    return (
+        db.query(PromptTemplate)
+        .filter(
+            PromptTemplate.type == prompt_type,
+            PromptTemplate.is_active.is_(True),
+            PromptTemplate.enabled.is_(True),
+        )
+        .order_by(PromptTemplate.is_default.desc(), PromptTemplate.updated_at.desc())
+        .first()
+    )
+
+
 def activate_prompt_template(db: Session, template: PromptTemplate) -> PromptTemplate:
     (
         db.query(PromptTemplate)
