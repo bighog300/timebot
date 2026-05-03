@@ -79,3 +79,29 @@ class EmailSendLog(Base):
     created_at = Column(TIMESTAMP(timezone=True), nullable=False, default=func.now())
     sent_at = Column(TIMESTAMP(timezone=True), nullable=True)
     failed_at = Column(TIMESTAMP(timezone=True), nullable=True)
+
+
+class EmailSuppression(Base):
+    __tablename__ = "email_suppressions"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    email = Column(String(255), nullable=False, unique=True, index=True)
+    reason = Column(String(32), nullable=False)
+    source = Column(String(255), nullable=True)
+    created_by_admin_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at = Column(TIMESTAMP(timezone=True), nullable=False, default=func.now())
+
+
+class EmailCampaignRecipient(Base):
+    __tablename__ = "email_campaign_recipients"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    campaign_id = Column(UUID(as_uuid=True), ForeignKey("email_campaigns.id", ondelete="CASCADE"), nullable=False, index=True)
+    email = Column(String(255), nullable=False, index=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    status = Column(String(32), nullable=False, default="pending", index=True)
+    skip_reason = Column(String(255), nullable=True)
+    send_log_id = Column(UUID(as_uuid=True), ForeignKey("email_send_logs.id", ondelete="SET NULL"), nullable=True)
+    created_at = Column(TIMESTAMP(timezone=True), nullable=False, default=func.now())
+    sent_at = Column(TIMESTAMP(timezone=True), nullable=True)
+    failed_at = Column(TIMESTAMP(timezone=True), nullable=True)

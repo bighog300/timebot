@@ -76,6 +76,10 @@ import type {
   EmailCampaignPatch,
   EmailCampaignPreviewResponse,
   EmailCampaignTestSendRequest,
+  CampaignRecipientPreview,
+  CampaignSendRequest,
+  CampaignSendResult,
+  EmailSuppression,
 } from '@/types/api';
 
 
@@ -248,9 +252,14 @@ export const api = {
   patchEmailCampaign: async (campaignId: string, payload: EmailCampaignPatch): Promise<EmailCampaign> => (await http.patch(`/admin/email/campaigns/${campaignId}`, payload)).data,
   archiveEmailCampaign: async (campaignId: string): Promise<EmailCampaign> => (await http.delete(`/admin/email/campaigns/${campaignId}`)).data,
   previewEmailCampaign: async (campaignId: string, payload: { variables_json?: Record<string, unknown> | null }): Promise<EmailCampaignPreviewResponse> => (await http.post(`/admin/email/campaigns/${campaignId}/preview`, payload)).data,
+  previewCampaignRecipients: async (campaignId: string): Promise<CampaignRecipientPreview> => (await http.post(`/admin/email/campaigns/${campaignId}/recipients/preview`, {})).data,
+  sendCampaign: async (campaignId: string, payload: CampaignSendRequest): Promise<CampaignSendResult> => (await http.post(`/admin/email/campaigns/${campaignId}/send`, payload)).data,
   testSendCampaign: async (campaignId: string, payload: EmailCampaignTestSendRequest): Promise<EmailTestSendResult> => (await http.post(`/admin/email/campaigns/${campaignId}/test-send`, payload)).data,
   testSendEmail: async (payload: EmailTestSendRequest): Promise<EmailTestSendResult> => (await http.post('/admin/email/test-send', payload)).data,
   getEmailSendLogs: async (): Promise<EmailSendLog[]> => (await http.get('/admin/email/send-logs')).data,
+  listEmailSuppressions: async (): Promise<EmailSuppression[]> => (await http.get('/admin/email/suppressions')).data,
+  addEmailSuppression: async (payload: {email: string; reason: 'unsubscribe'|'bounce'|'complaint'|'manual'; source?: string}): Promise<EmailSuppression> => (await http.post('/admin/email/suppressions', payload)).data,
+  removeEmailSuppression: async (email: string): Promise<void> => { await http.delete(`/admin/email/suppressions/${encodeURIComponent(email)}`); },
   listPromptTemplates: async (): Promise<PromptTemplate[]> => (await http.get('/admin/prompts')).data,
   createPromptTemplate: async (payload: PromptTemplateCreateRequest): Promise<PromptTemplate> => (await http.post('/admin/prompts', payload)).data,
   updatePromptTemplate: async (promptId: string, payload: PromptTemplateUpdateRequest): Promise<PromptTemplate> => (await http.put(`/admin/prompts/${promptId}`, payload)).data,

@@ -18,7 +18,7 @@ from app.models.billing import Plan, Subscription
 from app.models.processing_event import DocumentProcessingEvent
 
 from app.models.chat import ChatbotSettings
-from app.models.email import EmailProviderConfig, EmailTemplate, EmailCampaign, EmailSendLog
+from app.models.email import EmailProviderConfig, EmailTemplate, EmailCampaign, EmailSendLog, EmailSuppression, EmailCampaignRecipient
 from app.models.prompt_template import PromptTemplate
 from app.schemas.chatbot import ChatbotSettingsPayload, ChatbotSettingsResponse
 from app.config import settings
@@ -51,6 +51,11 @@ from app.schemas.admin import (
     EmailCampaignResponse,
     EmailCampaignPreviewRequest,
     EmailCampaignPreviewResponse,
+    EmailCampaignRecipientPreviewResponse,
+    EmailCampaignSendRequest,
+    EmailCampaignSendResponse,
+    EmailSuppressionCreateRequest,
+    EmailSuppressionResponse,
     EmailCampaignTestSendRequest,
     AdminEmailTestSendRequest,
     AdminEmailTestSendResponse,
@@ -252,6 +257,45 @@ def _render_simple_template(content: str | None, variables: dict) -> tuple[str, 
     return rendered, sorted(set(missing))
 
 
+
+
+def _normalize_email(value: str) -> str:
+    return (value or '').strip().lower()
+
+
+def _resolve_campaign_recipients(db: Session, campaign: EmailCampaign) -> dict:
+    max_audience = 500
+    rows = db.query(EmailSuppression.email).all()
+    suppressed = {_normalize_email(r[0]) for r in rows if r[0]}
+    candidates: list[tuple[str, str | None]] = []
+    if campaign.audience_type == 'manual_list':
+        raw = campaign.audience_filters_json if isinstance(campaign.audience_filters_json, dict) else {}
+        emails = raw.get('emails') if isinstance(raw.get('emails'), list) else []
+        if len(emails) > max_audience:
+            raise HTTPException(status_code=400, detail=f'Manual audience exceeds max {max_audience}')
+        candidates = [(_normalize_email(str(e)), None) for e in emails]
+    elif campaign.audience_type == 'all_users':
+        users = db.query(User.id, User.email).filter(User.email.isnot(None)).limit(max_audience + 1).all()
+        if len(users) > max_audience:
+            raise HTTPException(status_code=400, detail=f'Audience exceeds max {max_audience}')
+        candidates = [(_normalize_email(u.email), str(u.id)) for u in users if u.email]
+    else:
+        raise HTTPException(status_code=400, detail='Unsupported audience type for E4')
+
+    import re
+    valid_re = re.compile(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
+    seen=set(); sendable=[]; dup=0; invalid=[]; sup=[]
+    for email, uid in candidates:
+        if not email or not valid_re.match(email):
+            invalid.append(email); continue
+        if email in seen:
+            dup += 1; continue
+        seen.add(email)
+        if email in suppressed:
+            sup.append(email); continue
+        sendable.append((email, uid))
+    return {'total': len(candidates), 'sendable': sendable, 'suppressed': sup, 'invalid': invalid, 'duplicates': dup}
+
 def _render_campaign(c: EmailCampaign, t: EmailTemplate, override_vars: dict | None = None) -> dict:
     merged = {}
     if isinstance(t.variables_json, dict): merged.update(t.variables_json)
@@ -358,6 +402,85 @@ def preview_email_campaign(campaign_id: str, payload: EmailCampaignPreviewReques
     return _render_campaign(c, t, payload.variables_json if isinstance(payload.variables_json, dict) else None)
 
 
+
+
+@router.post('/email/campaigns/{campaign_id}/recipients/preview', response_model=EmailCampaignRecipientPreviewResponse)
+def preview_email_campaign_recipients(campaign_id: str, _: str = Depends(require_admin), db: Session = Depends(get_db)):
+    c = db.query(EmailCampaign).filter(EmailCampaign.id == campaign_id).first()
+    if not c: raise HTTPException(status_code=404, detail='Campaign not found')
+    resolved = _resolve_campaign_recipients(db, c)
+    return EmailCampaignRecipientPreviewResponse(
+        total_candidates=resolved['total'],
+        sendable_count=len(resolved['sendable']),
+        suppressed_count=len(resolved['suppressed']),
+        invalid_count=len(resolved['invalid']),
+        duplicate_count=resolved['duplicates'],
+        sample_recipients=[e for e,_ in resolved['sendable'][:10]],
+        suppressed_samples=resolved['suppressed'][:10],
+        invalid_samples=resolved['invalid'][:10],
+    )
+
+
+@router.post('/email/campaigns/{campaign_id}/send', response_model=EmailCampaignSendResponse)
+def send_email_campaign(campaign_id: str, payload: EmailCampaignSendRequest, _: str = Depends(require_admin), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    c = db.query(EmailCampaign).filter(EmailCampaign.id == campaign_id).first()
+    if not c: raise HTTPException(status_code=404, detail='Campaign not found')
+    if c.status != 'ready': raise HTTPException(status_code=400, detail='Campaign must be ready')
+    if payload.confirmation_text != 'SEND CAMPAIGN': raise HTTPException(status_code=400, detail='Invalid confirmation_text')
+    t = _ensure_active_template(db, str(c.template_id))
+    if t.status != 'active': raise HTTPException(status_code=400, detail='Template must be active')
+    resolved = _resolve_campaign_recipients(db, c)
+    if len(resolved['sendable']) == 0: raise HTTPException(status_code=400, detail='No sendable recipients')
+    if len(resolved['sendable']) > 25: raise HTTPException(status_code=400, detail='Sendable recipients exceed synchronous safety cap of 25')
+    _audit_admin_email_action(db, current_user, 'email_campaign', str(c.id), 'email_campaign_send_started', {'total_candidates': resolved['total'], 'sendable_count': len(resolved['sendable'])})
+    # clear old rows for deterministic reruns in E4
+    db.query(EmailCampaignRecipient).filter(EmailCampaignRecipient.campaign_id == c.id).delete()
+    for e in resolved['suppressed']:
+        db.add(EmailCampaignRecipient(campaign_id=c.id, email=e, status='skipped', skip_reason='suppressed'))
+    for e in resolved['invalid']:
+        db.add(EmailCampaignRecipient(campaign_id=c.id, email=e, status='skipped', skip_reason='invalid'))
+    service = EmailDeliveryService(db)
+    rendered = _render_campaign(c, t, payload.variables_json if isinstance(payload.variables_json, dict) else None)
+    sent=failed=0
+    from datetime import datetime, timezone
+    for email, user_id in resolved['sendable']:
+        recipient = EmailCampaignRecipient(campaign_id=c.id, email=email, user_id=user_id, status='pending')
+        db.add(recipient); db.flush()
+        try:
+            result = service.send_email(provider=payload.provider, to_email=email, subject=rendered['subject'], html_body=rendered['html_body'], text_body=rendered['text_body'], template_id=str(t.id), campaign_id=str(c.id))
+            recipient.status='sent'; recipient.sent_at=datetime.now(timezone.utc); recipient.send_log_id=result['log_id']; sent+=1
+        except HTTPException:
+            recipient.status='failed'; recipient.failed_at=datetime.now(timezone.utc); failed+=1
+    _audit_admin_email_action(db, current_user, 'email_campaign', str(c.id), 'email_campaign_send_completed', {'sent_count': sent, 'failed_count': failed})
+    db.commit()
+    return EmailCampaignSendResponse(total_candidates=resolved['total'], sendable_count=len(resolved['sendable']), sent_count=sent, failed_count=failed, skipped_count=len(resolved['suppressed'])+len(resolved['invalid'])+resolved['duplicates'])
+
+
+@router.get('/email/suppressions', response_model=list[EmailSuppressionResponse])
+def list_email_suppressions(_: str = Depends(require_admin), db: Session = Depends(get_db)):
+    return db.query(EmailSuppression).order_by(EmailSuppression.created_at.desc()).all()
+
+
+@router.post('/email/suppressions', response_model=EmailSuppressionResponse, status_code=201)
+def add_email_suppression(payload: EmailSuppressionCreateRequest, _: str = Depends(require_admin), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    email = _normalize_email(payload.email)
+    row = db.query(EmailSuppression).filter(EmailSuppression.email == email).first()
+    if row: return row
+    row = EmailSuppression(email=email, reason=payload.reason, source=payload.source, created_by_admin_id=current_user.id)
+    db.add(row); db.flush()
+    _audit_admin_email_action(db, current_user, 'email_suppression', str(row.id), 'email_suppression_added', {'email': email, 'reason': payload.reason})
+    db.commit(); db.refresh(row); return row
+
+
+@router.delete('/email/suppressions/{email}')
+def delete_email_suppression(email: str, _: str = Depends(require_admin), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    normalized = _normalize_email(email)
+    row = db.query(EmailSuppression).filter(EmailSuppression.email == normalized).first()
+    if not row: raise HTTPException(status_code=404, detail='Suppression not found')
+    db.delete(row)
+    _audit_admin_email_action(db, current_user, 'email_suppression', normalized, 'email_suppression_removed', {'email': normalized})
+    db.commit()
+    return {'removed': True}
 @router.post('/email/campaigns/{campaign_id}/test-send', response_model=AdminEmailTestSendResponse)
 def test_send_campaign(campaign_id: str, payload: EmailCampaignTestSendRequest, _: str = Depends(require_admin), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     c = db.query(EmailCampaign).filter(EmailCampaign.id == campaign_id).first()
