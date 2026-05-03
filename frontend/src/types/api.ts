@@ -386,7 +386,7 @@ export interface AdminAuditPage { items: AdminAuditEvent[]; total_count: number;
 export interface AdminMetrics { total_users: number; total_documents: number; documents_processed: number; documents_failed: number; pending_review_items: number; open_action_items: number; pending_relationship_reviews: number; }
 export interface AdminProcessingSummary { pending: number; processing: number; completed: number; failed: number; recently_failed: number; }
 export type PromptTemplateType = 'chat' | 'retrieval' | 'report' | 'timeline_extraction' | 'relationship_detection';
-export interface PromptTemplate { id: string; prompt_type: PromptTemplateType; name: string; content: string; version: number; is_active: boolean; provider: "openai"|"gemini"; model: string; temperature: number; max_tokens: number; top_p: number; enabled: boolean; is_default: boolean; fallback_enabled: boolean; fallback_provider: "openai"|"gemini" | null; fallback_model: string | null; created_at: string; updated_at: string; }
+export interface PromptTemplate { id: string; prompt_type: PromptTemplateType; name: string; content: string; version: number; is_active: boolean; provider: "openai"|"gemini"; model: string; temperature: number; max_tokens: number; top_p: number; enabled: boolean; is_default: boolean; fallback_enabled: boolean; fallback_order: 'provider_then_model'|'model_then_provider'; max_fallback_attempts: number; retry_on_provider_errors: boolean; retry_on_rate_limit: boolean; retry_on_validation_error: boolean; fallback_provider: "openai"|"gemini" | null; fallback_model: string | null; created_at: string; updated_at: string; }
 export interface PromptTemplateCreateRequest { prompt_type: PromptTemplateType; name: string; content: string; provider: "openai"|"gemini"; model: string; temperature: number; max_tokens: number; top_p: number; enabled: boolean; is_default: boolean; fallback_enabled: boolean; fallback_provider?: "openai"|"gemini" | null; fallback_model?: string | null; }
 export interface PromptTemplateUpdateRequest { name?: string; content?: string; provider?: "openai"|"gemini"; model?: string; temperature?: number; max_tokens?: number; top_p?: number; enabled?: boolean; is_default?: boolean; fallback_enabled?: boolean; fallback_provider?: "openai"|"gemini" | null; fallback_model?: string | null; }
 export interface PromptTemplateTestRequest { prompt_type: PromptTemplateType; prompt_content: string; sample_context: string; provider: "openai"|"gemini"; model: string; temperature: number; max_tokens: number; top_p: number; fallback_enabled?: boolean; fallback_provider?: "openai"|"gemini" | null; fallback_model?: string | null; }
@@ -407,6 +407,10 @@ export interface ChatbotSettings {
   max_tokens: number;
   max_documents: number;
   allow_full_text_retrieval: boolean;
+  prompt_daily_cost_threshold_usd?: number | null;
+  prompt_monthly_cost_threshold_usd?: number | null;
+  prompt_user_cost_threshold_usd?: number | null;
+  prompt_workspace_cost_threshold_usd?: number | null;
 }
 
 export interface SourceRef {
@@ -580,13 +584,15 @@ export interface AdminPromptExecutionSummaryFilters {
   provider?: string;
   model?: string;
   source?: string;
+  purpose?: string;
+  actor_user_id?: string;
   success?: boolean;
   fallback_used?: boolean;
   created_after?: string;
   created_before?: string;
 }
 
-export interface PromptExecutionLog { id: string; prompt_template_id: string | null; purpose: string | null; actor_user_id: string | null; provider: string; model: string; fallback_used: boolean; primary_error: string | null; latency_ms: number | null; input_tokens: number | null; output_tokens: number | null; total_tokens: number | null; success: boolean; error_message: string | null; source: string | null; estimated_cost_usd: number | null; currency: string | null; pricing_known: boolean; created_at: string; }
+export interface PromptExecutionLog { id: string; prompt_template_id: string | null; purpose: string | null; actor_user_id: string | null; provider: string; model: string; fallback_used: boolean; fallback_reason: string | null; primary_provider: string | null; primary_model: string | null; primary_error: string | null; latency_ms: number | null; input_tokens: number | null; output_tokens: number | null; total_tokens: number | null; success: boolean; error_message: string | null; source: string | null; estimated_cost_usd: number | null; currency: string | null; pricing_known: boolean; created_at: string; }
 
 export interface PromptExecutionSummary {
   total_calls: number;

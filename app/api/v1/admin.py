@@ -746,6 +746,10 @@ DEFAULT_CHATBOT_SETTINGS = {
     "max_tokens": 1200,
     "max_documents": 8,
     "allow_full_text_retrieval": True,
+    "prompt_daily_cost_threshold_usd": None,
+    "prompt_monthly_cost_threshold_usd": None,
+    "prompt_user_cost_threshold_usd": None,
+    "prompt_workspace_cost_threshold_usd": None,
 }
 
 
@@ -798,5 +802,5 @@ def get_prompt_executions(prompt_template_id: str | None = None, provider: str |
 
 
 @router.get("/prompt-executions/summary", response_model=PromptExecutionSummaryResponse)
-def get_prompt_executions_summary(provider: str | None = None, model: str | None = None, source: str | None = None, success: bool | None = None, fallback_used: bool | None = None, created_after: datetime | None = None, created_before: datetime | None = None, _: str = Depends(require_admin), db: Session = Depends(get_db)):
-    return summarize_prompt_executions(db, provider=provider, model=model, source=source, success=success, fallback_used=fallback_used, created_after=created_after, created_before=created_before)
+def get_prompt_executions_summary(provider: str | None = None, model: str | None = None, source: str | None = None, purpose: str | None = None, actor_user_id: str | None = None, success: bool | None = None, fallback_used: bool | None = None, created_after: datetime | None = None, created_before: datetime | None = None, _: str = Depends(require_admin), db: Session = Depends(get_db)):
+    return summarize_prompt_executions(db, provider=provider, model=model, source=source, purpose=purpose, actor_user_id=actor_user_id, success=success, fallback_used=fallback_used, created_after=created_after, created_before=created_before)

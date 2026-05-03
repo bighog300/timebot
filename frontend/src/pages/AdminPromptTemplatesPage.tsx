@@ -14,11 +14,11 @@ export function AdminPromptTemplatesPage() {
   const activatePrompt = useActivatePromptTemplate();
   const testPrompt = useTestPromptTemplate();
   const { pushToast } = useUIStore();
-  const [createForm, setCreateForm] = useState<{ prompt_type: PromptTemplateType; name: string; content: string; provider: 'openai' | 'gemini'; model: string; temperature: number; max_tokens: number; top_p: number; enabled: boolean; is_default: boolean; fallback_enabled: boolean; fallback_provider: 'openai' | 'gemini' | null; fallback_model: string | null }>({ prompt_type: 'chat', name: '', content: '', provider: 'openai', model: 'gpt-4o-mini', temperature: 0.2, max_tokens: 800, top_p: 1, enabled: true, is_default: false, fallback_enabled: false, fallback_provider: 'openai', fallback_model: 'gpt-4.1-mini' });
+  const [createForm, setCreateForm] = useState<{ prompt_type: PromptTemplateType; name: string; content: string; provider: 'openai' | 'gemini'; model: string; temperature: number; max_tokens: number; top_p: number; enabled: boolean; is_default: boolean; fallback_enabled: boolean; fallback_order: 'provider_then_model'|'model_then_provider'; max_fallback_attempts: number; retry_on_provider_errors: boolean; retry_on_rate_limit: boolean; retry_on_validation_error: boolean; fallback_provider: 'openai' | 'gemini' | null; fallback_model: string | null }>({ prompt_type: 'chat', name: '', content: '', provider: 'openai', model: 'gpt-4o-mini', temperature: 0.2, max_tokens: 800, top_p: 1, enabled: true, is_default: false, fallback_enabled: false, fallback_order: 'provider_then_model', max_fallback_attempts: 1, retry_on_provider_errors: true, retry_on_rate_limit: true, retry_on_validation_error: false, fallback_provider: 'openai', fallback_model: 'gpt-4.1-mini' });
   const [selectedId, setSelectedId] = useState<string>('');
   const selectedPrompt = useMemo(() => prompts.data?.find((item) => item.id === selectedId) ?? null, [prompts.data, selectedId]);
   const [editForm, setEditForm] = useState({ name: '', content: '' });
-  const [testForm, setTestForm] = useState<{ prompt_type: PromptTemplateType; prompt_content: string; sample_context: string; provider: 'openai' | 'gemini'; model: string; temperature: number; max_tokens: number; top_p: number; fallback_enabled: boolean; fallback_provider: 'openai' | 'gemini' | null; fallback_model: string | null }>({ prompt_type: 'chat', prompt_content: '', sample_context: '', provider: 'openai', model: 'gpt-4o-mini', temperature: 0.2, max_tokens: 800, top_p: 1, fallback_enabled: false, fallback_provider: 'openai', fallback_model: 'gpt-4.1-mini' });
+  const [testForm, setTestForm] = useState<{ prompt_type: PromptTemplateType; prompt_content: string; sample_context: string; provider: 'openai' | 'gemini'; model: string; temperature: number; max_tokens: number; top_p: number; fallback_enabled: boolean; fallback_order: 'provider_then_model'|'model_then_provider'; max_fallback_attempts: number; retry_on_provider_errors: boolean; retry_on_rate_limit: boolean; retry_on_validation_error: boolean; fallback_provider: 'openai' | 'gemini' | null; fallback_model: string | null }>({ prompt_type: 'chat', prompt_content: '', sample_context: '', provider: 'openai', model: 'gpt-4o-mini', temperature: 0.2, max_tokens: 800, top_p: 1, fallback_enabled: false, fallback_order: 'provider_then_model', max_fallback_attempts: 1, retry_on_provider_errors: true, retry_on_rate_limit: true, retry_on_validation_error: false, fallback_provider: 'openai', fallback_model: 'gpt-4.1-mini' });
   const [preview, setPreview] = useState('');
   const [previewMeta, setPreviewMeta] = useState<PromptTemplateTestResponse | null>(null);
   const [previewError, setPreviewError] = useState('');
@@ -58,6 +58,7 @@ export function AdminPromptTemplatesPage() {
       </select>
       </div>
 
+      <label className='flex items-center gap-2 text-sm'><input type='checkbox' checked={createForm.is_default} onChange={(e)=>setCreateForm((v)=>({...v, is_default: e.target.checked}))} />Set as default (one per purpose)</label>
       <label className='flex items-center gap-2 text-sm'><input type='checkbox' checked={createForm.fallback_enabled} onChange={(e)=>setCreateForm((v)=>({...v, fallback_enabled: e.target.checked}))} />Enable fallback</label>
       <div className='grid grid-cols-2 gap-2'>
       <select value={createForm.fallback_provider ?? ''} disabled={!createForm.fallback_enabled} onChange={(e) => {
@@ -71,8 +72,12 @@ export function AdminPromptTemplatesPage() {
         {getModelsForProvider((createForm.fallback_provider ?? 'openai') as 'openai'|'gemini').map((model)=> <option key={model.id} value={model.id}>{model.name}</option>)}
       </select>
       </div>
+      <div className='grid grid-cols-2 gap-2 text-sm'>
+        <input aria-label='max_fallback_attempts' type='number' min={0} max={5} value={createForm.max_fallback_attempts} onChange={(e)=>setCreateForm((v)=>({...v, max_fallback_attempts:Number(e.target.value)}))} className='rounded border border-slate-700 bg-slate-900 p-2' />
+        <select aria-label='fallback_order' value={createForm.fallback_order} onChange={(e)=>setCreateForm((v)=>({...v, fallback_order:e.target.value as 'provider_then_model'|'model_then_provider'}))} className='rounded border border-slate-700 bg-slate-900 p-2'><option value='provider_then_model'>Provider then model</option><option value='model_then_provider'>Model then provider</option></select>
+      </div>
       <textarea placeholder='Prompt content' value={createForm.content} onChange={(e) => setCreateForm((v) => ({ ...v, content: e.target.value }))} className='h-40 w-full rounded border border-slate-700 bg-slate-900 p-2 text-sm' />
-      <button className='w-full rounded bg-emerald-700 px-3 py-2 text-sm sm:w-auto' onClick={async () => { try { await createPrompt.mutateAsync(createForm); pushToast('Prompt template created'); setCreateForm({ prompt_type: 'chat', name: '', content: '', provider: 'openai', model: 'gpt-4o-mini', temperature: 0.2, max_tokens: 800, top_p: 1, enabled: true, is_default: false, fallback_enabled: false, fallback_provider: 'openai', fallback_model: 'gpt-4.1-mini' }); } catch (e) { pushToast(getErrorDetail(e), 'error'); } }}>Create template</button>
+      <button className='w-full rounded bg-emerald-700 px-3 py-2 text-sm sm:w-auto' onClick={async () => { try { await createPrompt.mutateAsync(createForm); pushToast('Prompt template created'); setCreateForm({ prompt_type: 'chat', name: '', content: '', provider: 'openai', model: 'gpt-4o-mini', temperature: 0.2, max_tokens: 800, top_p: 1, enabled: true, is_default: false, fallback_enabled: false, fallback_order: 'provider_then_model', max_fallback_attempts: 1, retry_on_provider_errors: true, retry_on_rate_limit: true, retry_on_validation_error: false, fallback_provider: 'openai', fallback_model: 'gpt-4.1-mini' }); } catch (e) { pushToast(getErrorDetail(e), 'error'); } }}>Create template</button>
     </div>
 
 

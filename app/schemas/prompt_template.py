@@ -18,6 +18,11 @@ class PromptTemplateBase(BaseModel):
     max_tokens: int = Field(ge=1, le=8192, default=800)
     top_p: float = Field(ge=0, le=1, default=1.0)
     fallback_enabled: bool = False
+    fallback_order: str = Field(default="provider_then_model", pattern="^(provider_then_model|model_then_provider)$")
+    max_fallback_attempts: int = Field(default=1, ge=0, le=5)
+    retry_on_provider_errors: bool = True
+    retry_on_rate_limit: bool = True
+    retry_on_validation_error: bool = False
     fallback_provider: str | None = Field(default=None, pattern="^(openai|gemini)$")
     fallback_model: str | None = Field(default=None, min_length=1, max_length=120)
     enabled: bool = True
@@ -83,6 +88,11 @@ class PromptTemplateTestRequest(BaseModel):
     max_tokens: int = Field(ge=1, le=8192, default=800)
     top_p: float = Field(ge=0, le=1, default=1.0)
     fallback_enabled: bool = False
+    fallback_order: str = Field(default="provider_then_model", pattern="^(provider_then_model|model_then_provider)$")
+    max_fallback_attempts: int = Field(default=1, ge=0, le=5)
+    retry_on_provider_errors: bool = True
+    retry_on_rate_limit: bool = True
+    retry_on_validation_error: bool = False
     fallback_provider: str | None = Field(default=None, pattern="^(openai|gemini)$")
     fallback_model: str | None = Field(default=None, min_length=1, max_length=120)
 
@@ -105,6 +115,9 @@ class PromptExecutionLogResponse(BaseModel):
     provider: str
     model: str
     fallback_used: bool
+    fallback_reason: str | None = None
+    primary_provider: str | None = None
+    primary_model: str | None = None
     primary_error: str | None = None
     latency_ms: int | None = None
     input_tokens: int | None = None

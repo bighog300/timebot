@@ -14,6 +14,10 @@ class ChatbotSettingsPayload(BaseModel):
     max_tokens: int
     max_documents: int
     allow_full_text_retrieval: bool
+    prompt_daily_cost_threshold_usd: float | None = None
+    prompt_monthly_cost_threshold_usd: float | None = None
+    prompt_user_cost_threshold_usd: float | None = None
+    prompt_workspace_cost_threshold_usd: float | None = None
 
 
 class ChatbotSettingsResponse(ChatbotSettingsPayload):
