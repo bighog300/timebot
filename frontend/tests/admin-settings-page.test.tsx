@@ -1,5 +1,5 @@
 import { render, screen, fireEvent } from '@testing-library/react';
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { AdminSubscriptionsPage, AdminBillingPage, AdminLlmProvidersPage, AdminPlansPage } from '@/pages/AdminSettingsPage';
 import { AdminSettingsLayout } from '@/pages/admin/AdminSettingsLayout';
@@ -29,6 +29,10 @@ vi.mock('@/auth/AuthContext', () => ({
   useAuth: () => ({ user: { email: 'admin@example.com', role: 'admin' }, loading: false }),
 }));
 
+
+beforeEach(() => {
+  vi.spyOn(window, 'confirm').mockReturnValue(true);
+});
 describe('admin settings', () => {
   it('admin settings layout and sub-tabs render', () => {
     render(<MemoryRouter initialEntries={['/admin/settings']}><Routes><Route path='/admin/settings' element={<RequireAdmin><AdminSettingsLayout /></RequireAdmin>} /></Routes></MemoryRouter>);

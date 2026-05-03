@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 import logging
 from uuid import UUID
 
+
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -16,6 +17,17 @@ logger = logging.getLogger(__name__)
 UNLIMITED_LIMIT = None
 
 
+
+
+def _subject_user_id(subject) -> UUID | str:
+    if isinstance(subject, UUID):
+        return subject
+    if isinstance(subject, str):
+        try:
+            return UUID(subject)
+        except ValueError:
+            return subject
+    return getattr(subject, "id", subject)
 def _current_month_window() -> tuple[datetime, datetime]:
     now = datetime.now(timezone.utc)
     start = datetime(now.year, now.month, 1, tzinfo=timezone.utc)
@@ -55,7 +67,7 @@ def get_workspace_plan(db: Session, workspace) -> dict:
 
 
 def get_effective_plan(db: Session, subject) -> dict:
-    user_id = subject if isinstance(subject, UUID) else getattr(subject, "id", subject)
+    user_id = _subject_user_id(subject)
     ensure_default_free_subscription(db, user_id)
     subscription = get_user_subscription(db, user_id)
     plan = subscription.plan if subscription else None
@@ -70,19 +82,19 @@ def get_effective_plan(db: Session, subject) -> dict:
 
 
 def check_limit(db: Session, subject, limit_key: str, quantity: int = 1) -> bool:
-    limit = _plan_limit(db, subject if isinstance(subject, UUID) else subject.id, limit_key)
+    limit = _plan_limit(db, _subject_user_id(subject), limit_key)
     if limit is UNLIMITED_LIMIT:
         return True
-    enforce_limit(db, subject if isinstance(subject, UUID) else subject.id, limit_key, quantity=quantity)
+    enforce_limit(db, _subject_user_id(subject), limit_key, quantity=quantity)
     return True
 
 
 def assert_limit(db: Session, subject, limit_key: str, quantity: int = 1) -> None:
-    enforce_limit(db, subject if isinstance(subject, UUID) else subject.id, limit_key, quantity=quantity)
+    enforce_limit(db, _subject_user_id(subject), limit_key, quantity=quantity)
 
 
 def has_feature(db: Session, subject, feature_key: str) -> bool:
-    effective = get_effective_plan(db, subject if isinstance(subject, UUID) else subject.id)
+    effective = get_effective_plan(db, _subject_user_id(subject))
     return bool((effective.get("features") or {}).get(feature_key, False))
 
 
