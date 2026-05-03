@@ -29,6 +29,7 @@ from app.api.v1 import (
     gmail_imports,
     monetization,
     workspaces,
+    messaging,
 )
 
 logger = logging.getLogger(__name__)
@@ -198,3 +199,5 @@ def root():
     }
 
 app.include_router(workspaces.router, prefix="/api/v1")
+app.include_router(messaging.router, prefix="/api/v1")
+app.include_router(messaging.admin_router, prefix="/api/v1")

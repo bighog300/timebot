@@ -10,6 +10,7 @@ from app.models.intelligence import (
     ReviewAuditEvent,
 )
 from app.models.admin_audit import AdminAuditEvent
+from app.models.messaging import Notification, UserMessageThread, UserMessage
 from app.models.processing_event import DocumentProcessingEvent
 from app.models.usage_event import UsageEvent
 from app.models.chat import ChatbotSettings, ChatMessage, ChatSession, GeneratedReport
@@ -34,6 +35,9 @@ __all__ = [
     "WorkspaceMember",
     "WorkspaceInvite",
     "AdminAuditEvent",
+    "Notification",
+    "UserMessageThread",
+    "UserMessage",
     "DocumentProcessingEvent",
     "UsageEvent",
     "ChatbotSettings",

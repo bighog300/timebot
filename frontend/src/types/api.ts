@@ -609,3 +609,8 @@ export interface AdminInvite { id: string; email: string; role: string; status: 
 
 
 export type Workspace = { id: string; name: string; type: "personal" | "team"; owner_user_id?: string | null };
+
+
+export interface NotificationItem { id: string; type: string; title: string; body: string; link_url?: string | null; read_at?: string | null; metadata_json: Record<string, unknown>; created_at: string; }
+export interface MessageItem { id: string; sender_user_id?: string | null; sender_type: "user"|"admin"|"system"; body: string; created_at: string; }
+export interface MessageThread { id: string; user_id: string; workspace_id?: string | null; category: "bug_report"|"feature_request"|"support"; subject: string; status: "open"|"in_progress"|"closed"; created_at: string; updated_at: string; messages?: MessageItem[]; }

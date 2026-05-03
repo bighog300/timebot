@@ -57,6 +57,8 @@ import type {
   AdminInvite,
   AdminPlan,
   Workspace,
+  NotificationItem,
+  MessageThread,
 } from '@/types/api';
 
 
@@ -80,6 +82,17 @@ export function getErrorDetail(error: unknown): string {
 
 export const api = {
   listWorkspaces: async (): Promise<Workspace[]> => (await http.get("/workspaces")).data,
+  listNotifications: async (): Promise<NotificationItem[]> => (await http.get('/notifications')).data,
+  markNotificationRead: async (id: string): Promise<void> => { await http.post(`/notifications/${id}/read`); },
+  markAllNotificationsRead: async (): Promise<void> => { await http.post('/notifications/read-all'); },
+  listMessages: async (): Promise<MessageThread[]> => (await http.get('/messages')).data,
+  createMessageThread: async (payload: { category: string; subject: string; body: string; workspace_id?: string }): Promise<MessageThread> => (await http.post('/messages', payload)).data,
+  getMessageThread: async (threadId: string): Promise<MessageThread> => (await http.get(`/messages/${threadId}`)).data,
+  replyMessageThread: async (threadId: string, body: string): Promise<MessageThread> => (await http.post(`/messages/${threadId}/reply`, { body })).data,
+  adminListMessages: async (params: { status?: string; category?: string } = {}): Promise<MessageThread[]> => (await http.get('/admin/messages', { params })).data,
+  adminGetMessageThread: async (threadId: string): Promise<MessageThread> => (await http.get(`/admin/messages/${threadId}`)).data,
+  adminReplyMessageThread: async (threadId: string, body: string): Promise<MessageThread> => (await http.post(`/admin/messages/${threadId}/reply`, { body })).data,
+  adminPatchMessageThread: async (threadId: string, status: string): Promise<MessageThread> => (await http.patch(`/admin/messages/${threadId}`, { status })).data,
 
   getChatbotSettings: async (): Promise<ChatbotSettings> => (await http.get('/admin/chatbot-settings')).data,
   updateChatbotSettings: async (payload: ChatbotSettings): Promise<ChatbotSettings> => (await http.put('/admin/chatbot-settings', payload)).data,

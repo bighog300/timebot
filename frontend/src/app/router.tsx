@@ -25,6 +25,8 @@ import { SettingsLayoutPage } from '@/pages/settings/SettingsLayoutPage';
 import { SettingsAccountPage } from '@/pages/settings/SettingsAccountPage';
 import { SettingsBillingPage } from '@/pages/settings/SettingsBillingPage';
 import { SettingsUsagePage } from '@/pages/settings/SettingsUsagePage';
+import { MessagesPage } from '@/pages/MessagesPage';
+import { NotificationsPage } from '@/pages/NotificationsPage';
 
 export const router = createBrowserRouter([
   { path: '/login', element: <LoginPage /> },
@@ -53,6 +55,8 @@ export const router = createBrowserRouter([
       { path: 'connections', element: <ConnectionsPage /> },
       { path: 'chat', element: <ChatPage /> },
       { path: 'reports', element: <ReportsPage /> },
+      { path: 'messages', element: <MessagesPage /> },
+      { path: 'notifications', element: <NotificationsPage /> },
       { path: 'pricing', element: <PricingPage /> },
       {
         path: 'settings',
