@@ -91,8 +91,8 @@ describe('TimelinePage', () => {
 
     renderPage();
     expect(await screen.findByText('Board Minutes.pdf')).toBeTruthy();
-    expect(screen.getByText('Type: Governance')).toBeTruthy();
-    expect(screen.getByText('Confidence: 77%')).toBeTruthy();
+    expect(screen.getByTestId('confidence-chip')).toBeTruthy();
+    expect(screen.getByTestId('confidence-chip').textContent).toContain('77%');
   });
 
 
@@ -105,7 +105,19 @@ describe('TimelinePage', () => {
     );
 
     renderPage();
-    expect(await screen.findByText('Signal: medium')).toBeTruthy();
+    const chip = await screen.findByTestId('confidence-chip');
+    expect(chip.textContent).toContain('77%');
+  });
+  it('renders confidence chip with correct tier colour class for strong, medium, weak', async () => {
+    vi.mocked(api.getTimeline).mockResolvedValue(
+      makeTimelineResponse([
+        { title: 'Strong Event', date: '2025-02-01', confidence: 0.9, document_id: 'd1', document_title: 'A.pdf', source_quote: 'q', start_date: null, end_date: null },
+      ]),
+    );
+    renderPage();
+    const chip = await screen.findByTestId('confidence-chip');
+    expect(chip.className).toMatch(/green/);
+    expect(chip.textContent).toContain('90%');
   });
 
   it('handles missing confidence signal strength safely', async () => {
@@ -146,7 +158,7 @@ describe('TimelinePage', () => {
     expect(screen.getAllByText(/Type: Compliance/).length).toBeGreaterThan(0);
     expect(screen.getByText(/Source: internal/)).toBeTruthy();
     expect(screen.getAllByText('Month only').length).toBeGreaterThan(0);
-    expect(screen.getByText('Approximate date')).toBeTruthy();
+    expect(screen.getAllByText('Approximate date').length).toBeGreaterThan(0);
   });
 
 
@@ -247,7 +259,7 @@ describe('TimelinePage', () => {
       ]),
     );
     renderPage();
-    expect(await screen.findByText('Milestone')).toBeTruthy();
+    expect((await screen.findAllByText('Milestone')).length).toBeGreaterThan(0);
     expect(screen.getByTestId('timeline-milestone')).toBeTruthy();
   });
 
@@ -259,8 +271,44 @@ describe('TimelinePage', () => {
     );
     renderPage();
     expect(await screen.findByText('General Update')).toBeTruthy();
-    expect(screen.queryByText('Milestone')).toBeNull();
+    expect(screen.getAllByText('Milestone').length).toBe(1);
     expect(screen.getByTestId('timeline-range-bar')).toBeTruthy();
+  });
+  it('renders approximate bar style for events with uncertain date precision', async () => {
+    vi.mocked(api.getTimeline).mockResolvedValue(
+      makeTimelineResponse([
+        { title: 'Approx Event', date: '2025-03-01', date_precision: 'approximate', confidence: 0.6, document_id: 'd1', document_title: 'Doc.pdf', source_quote: 'q', start_date: null, end_date: null },
+      ]),
+    );
+    renderPage();
+    await screen.findByText('Approx Event');
+    expect(screen.getByTestId('timeline-range-bar-approximate')).toBeTruthy();
+    expect(screen.queryByTestId('timeline-range-bar')).toBeNull();
+  });
+  it('renders solid bar for events with exact date precision', async () => {
+    vi.mocked(api.getTimeline).mockResolvedValue(
+      makeTimelineResponse([
+        { title: 'Exact Event', date: '2025-03-15', date_precision: 'day', confidence: 0.9, document_id: 'd1', document_title: 'Doc.pdf', source_quote: 'q', start_date: null, end_date: null },
+      ]),
+    );
+    renderPage();
+    await screen.findByText('Exact Event');
+    expect(screen.getByTestId('timeline-range-bar')).toBeTruthy();
+    expect(screen.queryByTestId('timeline-range-bar-approximate')).toBeNull();
+  });
+  it('renders a today line when current date falls within the chart range', async () => {
+    const pastDate = new Date();
+    pastDate.setFullYear(pastDate.getFullYear() - 1);
+    const futureDate = new Date();
+    futureDate.setFullYear(futureDate.getFullYear() + 1);
+    vi.mocked(api.getTimeline).mockResolvedValue(
+      makeTimelineResponse([
+        { title: 'Spanning Event', start_date: pastDate.toISOString().slice(0, 10), end_date: futureDate.toISOString().slice(0, 10), confidence: 0.9, document_id: 'd1', document_title: 'Doc.pdf', source_quote: 'q', date: null },
+      ]),
+    );
+    renderPage();
+    await screen.findByText('Spanning Event');
+    expect(screen.getByTestId('timeline-today-line')).toBeTruthy();
   });
 
   it('updates zoom state and width scaling and only shows pan hint when scrollable', async () => {
@@ -273,8 +321,8 @@ describe('TimelinePage', () => {
     expect(screen.queryByText('Drag or scroll inside the chart to pan timeline.')).toBeNull();
     const fitWidth = Number((axis as HTMLElement).style.width.replace('px', ''));
 
-    const controls = screen.getByText('Fit').parentElement as HTMLElement;
-    fireEvent.click(within(controls).getByRole('button', { name: 'Month' }));
+    const toolbar = await screen.findByTestId('timeline-toolbar');
+    fireEvent.click(within(toolbar).getByRole('button', { name: 'Month' }));
     expect(await screen.findByText('Drag or scroll inside the chart to pan timeline.')).toBeTruthy();
 
     const monthWidth = Number((screen.getByTestId('timeline-axis') as HTMLElement).style.width.replace('px', ''));
@@ -287,7 +335,110 @@ describe('TimelinePage', () => {
       gaps: [{ start_date: '2025-01-01', end_date: '2025-03-01', gap_duration_days: 59 }],
     });
     renderPage();
-    expect(await screen.findByText('No activity for 59 days (2025-01-01 → 2025-03-01)')).toBeTruthy();
+    expect(await screen.findByTestId('timeline-gap-banner')).toBeTruthy();
+    expect(screen.getByTestId('timeline-gap-banner').textContent).toContain('59 days');
+    expect(screen.getByTestId('timeline-gap-banner').textContent).toContain('2025-01-01');
+    expect(screen.getByTestId('timeline-gap-banner').textContent).toContain('2025-03-01');
+  });
+  it('gap banner shows the largest gap first and indicates remaining count', async () => {
+    vi.mocked(api.getTimeline).mockResolvedValue({
+      ...makeTimelineResponse([{ title: 'Kickoff', date: '2025-01-01', confidence: 0.9, document_id: 'd1', document_title: 'Doc', source_quote: 'K', start_date: null, end_date: null }]),
+      gaps: [
+        { start_date: '2025-02-01', end_date: '2025-02-10', gap_duration_days: 9 },
+        { start_date: '2025-03-01', end_date: '2025-04-20', gap_duration_days: 50 },
+        { start_date: '2025-05-01', end_date: '2025-05-08', gap_duration_days: 7 },
+      ],
+    });
+    renderPage();
+    const banner = await screen.findByTestId('timeline-gap-banner');
+    expect(banner.textContent).toContain('50 days');
+    expect(banner.textContent).toContain('+2 more');
+  });
+  it('shows event count in the page header', async () => {
+    vi.mocked(api.getTimeline).mockResolvedValue(
+      makeTimelineResponse([
+        { title: 'Event A', date: '2025-01-01', confidence: 0.9, document_id: 'd1', document_title: 'A', source_quote: 'q', start_date: null, end_date: null },
+        { title: 'Event B', date: '2025-02-01', confidence: 0.8, document_id: 'd2', document_title: 'B', source_quote: 'q', start_date: null, end_date: null },
+      ]),
+    );
+    renderPage();
+    const countEl = await screen.findByTestId('timeline-event-count');
+    expect(countEl.textContent).toContain('2 events');
+  });
+  it('renders the chart legend', async () => {
+    vi.mocked(api.getTimeline).mockResolvedValue(
+      makeTimelineResponse([{ title: 'Some Event', date: '2025-01-01', confidence: 0.9, document_id: 'd1', document_title: 'A', source_quote: 'q', start_date: null, end_date: null }]),
+    );
+    renderPage();
+    await screen.findByTestId('timeline-legend');
+    expect(screen.getByTestId('timeline-legend').textContent).toContain('Milestone');
+    expect(screen.getByTestId('timeline-legend').textContent).toContain('Approximate date');
+  });
+  it('filters events by search query matching title', async () => {
+    vi.mocked(api.getTimeline).mockResolvedValue(
+      makeTimelineResponse([
+        { title: 'Contract Signed', date: '2025-01-01', confidence: 0.9, document_id: 'd1', document_title: 'A.pdf', source_quote: 'q', start_date: null, end_date: null },
+        { title: 'Invoice Paid', date: '2025-02-01', confidence: 0.8, document_id: 'd2', document_title: 'B.pdf', source_quote: 'q', start_date: null, end_date: null },
+      ]),
+    );
+    renderPage();
+    const input = await screen.findByTestId('timeline-search-input');
+    fireEvent.change(input, { target: { value: 'contract' } });
+    expect(screen.getByText('Contract Signed')).toBeTruthy();
+    expect(screen.queryByText('Invoice Paid')).toBeNull();
+  });
+  it('filters events by search query matching document title', async () => {
+    vi.mocked(api.getTimeline).mockResolvedValue(
+      makeTimelineResponse([
+        { title: 'Deadline', date: '2025-01-01', confidence: 0.9, document_id: 'd1', document_title: 'Annual_Report.pdf', source_quote: 'q', start_date: null, end_date: null },
+        { title: 'Kickoff', date: '2025-02-01', confidence: 0.8, document_id: 'd2', document_title: 'Project_Plan.pdf', source_quote: 'q', start_date: null, end_date: null },
+      ]),
+    );
+    renderPage();
+    const input = await screen.findByTestId('timeline-search-input');
+    fireEvent.change(input, { target: { value: 'annual' } });
+    expect(screen.getByText('Deadline')).toBeTruthy();
+    expect(screen.queryByText('Kickoff')).toBeNull();
+  });
+  it('filters events by active category', async () => {
+    vi.mocked(api.getTimeline).mockResolvedValue(
+      makeTimelineResponse([
+        { title: 'Agreement', date: '2025-01-01', confidence: 0.9, category: 'contract', document_id: 'd1', document_title: 'A.pdf', source_quote: 'q', start_date: null, end_date: null },
+        { title: 'Payment Due', date: '2025-02-01', confidence: 0.8, category: 'invoice', document_id: 'd2', document_title: 'B.pdf', source_quote: 'q', start_date: null, end_date: null },
+      ]),
+    );
+    renderPage();
+    const contractBtn = await screen.findByTestId('timeline-filter-contract');
+    fireEvent.click(contractBtn);
+    expect(screen.getByText('Agreement')).toBeTruthy();
+    expect(screen.queryByText('Payment Due')).toBeNull();
+  });
+  it('shows All events when All filter is clicked after category filter', async () => {
+    vi.mocked(api.getTimeline).mockResolvedValue(
+      makeTimelineResponse([
+        { title: 'Agreement', date: '2025-01-01', confidence: 0.9, category: 'contract', document_id: 'd1', document_title: 'A.pdf', source_quote: 'q', start_date: null, end_date: null },
+        { title: 'Payment Due', date: '2025-02-01', confidence: 0.8, category: 'invoice', document_id: 'd2', document_title: 'B.pdf', source_quote: 'q', start_date: null, end_date: null },
+      ]),
+    );
+    renderPage();
+    fireEvent.click(await screen.findByTestId('timeline-filter-contract'));
+    expect(screen.queryByText('Payment Due')).toBeNull();
+    fireEvent.click(screen.getByTestId('timeline-filter-all'));
+    expect(screen.getByText('Agreement')).toBeTruthy();
+    expect(screen.getByText('Payment Due')).toBeTruthy();
+  });
+  it('event count in header always reflects total groups, not filtered result', async () => {
+    vi.mocked(api.getTimeline).mockResolvedValue(
+      makeTimelineResponse([
+        { title: 'Agreement', date: '2025-01-01', confidence: 0.9, category: 'contract', document_id: 'd1', document_title: 'A.pdf', source_quote: 'q', start_date: null, end_date: null },
+        { title: 'Payment Due', date: '2025-02-01', confidence: 0.8, category: 'invoice', document_id: 'd2', document_title: 'B.pdf', source_quote: 'q', start_date: null, end_date: null },
+      ]),
+    );
+    renderPage();
+    const countEl = await screen.findByTestId('timeline-event-count');
+    expect(countEl.textContent).toContain('2 events');
+    fireEvent.click(await screen.findByTestId('timeline-filter-contract'));
+    expect(screen.getByTestId('timeline-event-count').textContent).toContain('2 events');
   });
 
   it('does not crash when gaps are missing in timeline response', async () => {
