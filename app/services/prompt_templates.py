@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import time
+from datetime import datetime
 
 from sqlalchemy.exc import OperationalError, ProgrammingError
 from sqlalchemy import func
@@ -222,18 +223,50 @@ def list_prompt_executions(db: Session, *, prompt_template_id=None, provider=Non
     return q.order_by(PromptExecutionLog.created_at.desc()).offset(offset).limit(limit).all()
 
 
-def summarize_prompt_executions(db: Session):
-    total_calls = db.query(func.count(PromptExecutionLog.id)).scalar() or 0
-    success_calls = db.query(func.count(PromptExecutionLog.id)).filter(PromptExecutionLog.success.is_(True)).scalar() or 0
-    fallback_calls = db.query(func.count(PromptExecutionLog.id)).filter(PromptExecutionLog.fallback_used.is_(True)).scalar() or 0
-    avg_latency_ms = db.query(func.avg(PromptExecutionLog.latency_ms)).scalar()
-    total_tokens = db.query(func.coalesce(func.sum(PromptExecutionLog.total_tokens), 0)).scalar() or 0
-    by_provider = dict(db.query(PromptExecutionLog.provider, func.count(PromptExecutionLog.id)).group_by(PromptExecutionLog.provider).all())
-    by_model = dict(db.query(PromptExecutionLog.model, func.count(PromptExecutionLog.id)).group_by(PromptExecutionLog.model).all())
-    total_estimated_cost_usd = db.query(func.coalesce(func.sum(PromptExecutionLog.estimated_cost_usd), 0)).scalar() or 0
-    cost_by_provider_rows = db.query(PromptExecutionLog.provider, func.coalesce(func.sum(PromptExecutionLog.estimated_cost_usd), 0)).group_by(PromptExecutionLog.provider).all()
-    cost_by_model_rows = db.query(PromptExecutionLog.model, func.coalesce(func.sum(PromptExecutionLog.estimated_cost_usd), 0)).group_by(PromptExecutionLog.model).all()
-    pricing_unknown_count = db.query(func.count(PromptExecutionLog.id)).filter(PromptExecutionLog.pricing_known.is_(False)).scalar() or 0
+def _apply_prompt_execution_filters(q, *, provider=None, model=None, source=None, success=None, fallback_used=None, created_after: datetime | None = None, created_before: datetime | None = None):
+    if provider:
+        q = q.filter(PromptExecutionLog.provider == provider)
+    if model:
+        q = q.filter(PromptExecutionLog.model == model)
+    if source:
+        q = q.filter(PromptExecutionLog.source == source)
+    if success is not None:
+        q = q.filter(PromptExecutionLog.success.is_(success))
+    if fallback_used is not None:
+        q = q.filter(PromptExecutionLog.fallback_used.is_(fallback_used))
+    if created_after is not None:
+        q = q.filter(PromptExecutionLog.created_at >= created_after)
+    if created_before is not None:
+        q = q.filter(PromptExecutionLog.created_at <= created_before)
+    return q
+
+
+def summarize_prompt_executions(db: Session, *, provider: str | None = None, model: str | None = None, source: str | None = None, success: bool | None = None, fallback_used: bool | None = None, created_after: datetime | None = None, created_before: datetime | None = None):
+    base = _apply_prompt_execution_filters(
+        db.query(PromptExecutionLog),
+        provider=provider,
+        model=model,
+        source=source,
+        success=success,
+        fallback_used=fallback_used,
+        created_after=created_after,
+        created_before=created_before,
+    )
+    total_calls = base.with_entities(func.count(PromptExecutionLog.id)).scalar() or 0
+    success_calls = base.filter(PromptExecutionLog.success.is_(True)).with_entities(func.count(PromptExecutionLog.id)).scalar() or 0
+    fallback_calls = base.filter(PromptExecutionLog.fallback_used.is_(True)).with_entities(func.count(PromptExecutionLog.id)).scalar() or 0
+    avg_latency_ms = base.with_entities(func.avg(PromptExecutionLog.latency_ms)).scalar()
+    total_tokens = base.with_entities(func.coalesce(func.sum(PromptExecutionLog.total_tokens), 0)).scalar() or 0
+    total_estimated_cost_usd = base.with_entities(func.coalesce(func.sum(PromptExecutionLog.estimated_cost_usd), 0)).scalar() or 0
+    pricing_unknown_count = base.filter(PromptExecutionLog.pricing_known.is_(False)).with_entities(func.count(PromptExecutionLog.id)).scalar() or 0
+
+    by_provider = dict(base.with_entities(PromptExecutionLog.provider, func.count(PromptExecutionLog.id)).group_by(PromptExecutionLog.provider).all())
+    by_model = dict(base.with_entities(PromptExecutionLog.model, func.count(PromptExecutionLog.id)).group_by(PromptExecutionLog.model).all())
+    by_source = dict(base.with_entities(PromptExecutionLog.source, func.count(PromptExecutionLog.id)).group_by(PromptExecutionLog.source).all())
+    failures_by_provider = dict(base.filter(PromptExecutionLog.success.is_(False)).with_entities(PromptExecutionLog.provider, func.count(PromptExecutionLog.id)).group_by(PromptExecutionLog.provider).all())
+    fallback_by_provider = dict(base.filter(PromptExecutionLog.fallback_used.is_(True)).with_entities(PromptExecutionLog.provider, func.count(PromptExecutionLog.id)).group_by(PromptExecutionLog.provider).all())
+    cost_by_provider_rows = base.with_entities(PromptExecutionLog.provider, func.coalesce(func.sum(PromptExecutionLog.estimated_cost_usd), 0)).group_by(PromptExecutionLog.provider).all()
+    cost_by_model_rows = base.with_entities(PromptExecutionLog.model, func.coalesce(func.sum(PromptExecutionLog.estimated_cost_usd), 0)).group_by(PromptExecutionLog.model).all()
     return {
         'total_calls': total_calls,
         'success_rate': (success_calls / total_calls) if total_calls else 0.0,
@@ -246,4 +279,7 @@ def summarize_prompt_executions(db: Session):
         'cost_by_provider': {k: float(v or 0) for k, v in cost_by_provider_rows},
         'cost_by_model': {k: float(v or 0) for k, v in cost_by_model_rows},
         'pricing_unknown_count': int(pricing_unknown_count),
+        'calls_by_source': {(k or 'unknown'): int(v) for k, v in by_source.items()},
+        'failures_by_provider': {k: int(v) for k, v in failures_by_provider.items()},
+        'fallback_by_provider': {k: int(v) for k, v in fallback_by_provider.items()},
     }

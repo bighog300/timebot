@@ -559,5 +559,5 @@ def get_prompt_executions(prompt_template_id: str | None = None, provider: str |
 
 
 @router.get("/prompt-executions/summary", response_model=PromptExecutionSummaryResponse)
-def get_prompt_executions_summary(_: str = Depends(require_admin), db: Session = Depends(get_db)):
-    return summarize_prompt_executions(db)
+def get_prompt_executions_summary(provider: str | None = None, model: str | None = None, source: str | None = None, success: bool | None = None, fallback_used: bool | None = None, created_after: datetime | None = None, created_before: datetime | None = None, _: str = Depends(require_admin), db: Session = Depends(get_db)):
+    return summarize_prompt_executions(db, provider=provider, model=model, source=source, success=success, fallback_used=fallback_used, created_after=created_after, created_before=created_before)
