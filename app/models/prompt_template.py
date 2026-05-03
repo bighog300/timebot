@@ -26,5 +26,8 @@ class PromptTemplate(Base):
     top_p = Column(Float, nullable=False, default=1.0)
     enabled = Column(Boolean, nullable=False, default=True, index=True)
     is_default = Column(Boolean, nullable=False, default=False, index=True)
+    fallback_enabled = Column(Boolean, nullable=False, default=False)
+    fallback_provider = Column(String(32), nullable=True)
+    fallback_model = Column(String(120), nullable=True)
     created_at = Column(TIMESTAMP(timezone=True), nullable=False, default=func.now())
     updated_at = Column(TIMESTAMP(timezone=True), nullable=False, default=func.now(), onupdate=func.now())

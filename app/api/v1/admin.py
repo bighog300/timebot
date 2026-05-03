@@ -73,6 +73,28 @@ _LLM_PROVIDER_CATALOG: list[dict[str, object]] = [
 ]
 
 
+
+
+def _supported_models_by_provider() -> dict[str, set[str]]:
+    return {str(provider["id"]): {str(model["id"]) for model in provider["models"]} for provider in _LLM_PROVIDER_CATALOG}
+
+
+def _validate_provider_model(provider: str, model: str) -> None:
+    catalog = _supported_models_by_provider()
+    if provider not in catalog:
+        raise HTTPException(status_code=422, detail="Unsupported provider")
+    if model not in catalog[provider]:
+        raise HTTPException(status_code=422, detail="Unsupported model for provider")
+
+
+def _validate_fallback_payload(primary_provider: str, primary_model: str, fallback_enabled: bool, fallback_provider: str | None, fallback_model: str | None) -> None:
+    _validate_provider_model(primary_provider, primary_model)
+    if not fallback_enabled:
+        return
+    if not fallback_provider or not fallback_model:
+        raise HTTPException(status_code=422, detail="fallback_provider and fallback_model are required when fallback_enabled is true")
+    _validate_provider_model(fallback_provider, fallback_model)
+
 def _audit_admin_monetization_action(db: Session, *, current_user: User, target_user: User, action: str, details: dict) -> None:
     db.add(
         AdminAuditEvent(
@@ -386,6 +408,7 @@ def list_prompt_templates(_: str = Depends(require_admin), db: Session = Depends
 
 @router.post("/prompts", response_model=PromptTemplateResponse, status_code=201)
 def create_prompt_template(payload: PromptTemplateCreate, _: str = Depends(require_admin), db: Session = Depends(get_db)):
+    _validate_fallback_payload(payload.provider, payload.model, payload.fallback_enabled, payload.fallback_provider, payload.fallback_model)
     prompt = PromptTemplate(**payload.model_dump())
     db.add(prompt)
     if prompt.is_default:
@@ -404,6 +427,8 @@ def update_prompt_template(prompt_id: str, payload: PromptTemplateUpdate, _: str
     if not prompt:
         raise HTTPException(status_code=404, detail="Prompt template not found")
     changes = payload.model_dump(exclude_unset=True)
+    merged = {"provider": prompt.provider, "model": prompt.model, "fallback_enabled": prompt.fallback_enabled, "fallback_provider": prompt.fallback_provider, "fallback_model": prompt.fallback_model, **changes}
+    _validate_fallback_payload(merged["provider"], merged["model"], merged["fallback_enabled"], merged.get("fallback_provider"), merged.get("fallback_model"))
     for k, v in changes.items():
         setattr(prompt, k, v)
     if changes.get("is_default") is True:
@@ -447,26 +472,43 @@ def test_prompt_template(payload: PromptTemplateTestRequest, _: str = Depends(re
         "Return the assistant response preview only."
     )
 
+    _validate_fallback_payload(payload.provider, payload.model, payload.fallback_enabled, payload.fallback_provider, payload.fallback_model)
+    request_payload = {
+        "model": payload.model,
+        "temperature": payload.temperature,
+        "max_tokens": payload.max_tokens,
+        "top_p": payload.top_p,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
+    }
+    primary_error = None
+    fallback_used = False
+    provider_used = payload.provider
+    model_used = payload.model
     try:
         start = time.perf_counter()
-        response = openai_client_service.generate_completion_for_provider(payload.provider, {
-            "model": payload.model,
-            "temperature": payload.temperature,
-            "max_tokens": payload.max_tokens,
-            "top_p": payload.top_p,
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
-        })
-    except APIError as exc:
-        raise HTTPException(status_code=502, detail=f"AI request failed: {exc}") from exc
+        response = openai_client_service.generate_completion_for_provider(payload.provider, request_payload)
+    except Exception as exc:
+        primary_error = f"{type(exc).__name__}: {exc}"
+        if not payload.fallback_enabled:
+            raise HTTPException(status_code=502, detail=f"AI request failed: {exc}") from exc
+        try:
+            fallback_used = True
+            provider_used = payload.fallback_provider or payload.provider
+            model_used = payload.fallback_model or payload.model
+            fallback_payload = {**request_payload, "model": model_used}
+            start = time.perf_counter()
+            response = openai_client_service.generate_completion_for_provider(provider_used, fallback_payload)
+        except Exception as fallback_exc:
+            raise HTTPException(status_code=502, detail=f"AI primary and fallback failed: primary={type(exc).__name__}, fallback={type(fallback_exc).__name__}") from fallback_exc
 
     preview = openai_client_service.extract_response_text(response)
     elapsed_ms = round((time.perf_counter() - start) * 1000, 2)
     usage = getattr(response, "usage", None)
     total_tokens = getattr(usage, "total_tokens", None) if usage is not None else None
-    return PromptTemplateTestResponse(preview=preview, latency_ms=elapsed_ms, usage_tokens=total_tokens)
+    return PromptTemplateTestResponse(preview=preview, latency_ms=elapsed_ms, usage_tokens=total_tokens, fallback_used=fallback_used, provider_used=provider_used, model_used=model_used, primary_error=primary_error)
 
 
 DEFAULT_CHATBOT_SETTINGS = {

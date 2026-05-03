@@ -289,3 +289,49 @@ def test_different_purposes_can_each_have_default(client, test_user, db):
     report_defaults = db.query(PromptTemplate).filter(PromptTemplate.type == 'report', PromptTemplate.is_default.is_(True)).count()
     assert chat_defaults == 1
     assert report_defaults == 1
+
+
+def test_admin_create_prompt_with_fallback_fields(client, test_user, db):
+    test_user.role = "admin"
+    db.commit()
+    r = client.post("/api/v1/admin/prompts", json={"type":"chat","name":"fb","content":"c","version":1,"provider":"openai","model":"gpt-4o-mini","fallback_enabled":True,"fallback_provider":"gemini","fallback_model":"gemini-1.5-flash"})
+    assert r.status_code == 201
+    assert r.json()["fallback_enabled"] is True
+
+
+def test_admin_create_prompt_invalid_fallback_model_fails(client, test_user, db):
+    test_user.role = "admin"
+    db.commit()
+    r = client.post("/api/v1/admin/prompts", json={"type":"chat","name":"fb","content":"c","version":1,"provider":"openai","model":"gpt-4o-mini","fallback_enabled":True,"fallback_provider":"gemini","fallback_model":"bad-model"})
+    assert r.status_code == 422
+
+
+def test_prompt_test_uses_fallback_on_primary_failure(client, test_user, db, monkeypatch):
+    test_user.role = "admin"
+    db.commit()
+    monkeypatch.setattr("app.config.settings.OPENAI_API_KEY", "test-key")
+    calls = []
+
+    def fake(provider, payload):
+        calls.append(provider)
+        if provider == "openai":
+            from app.services.openai_client import APIError
+            raise APIError("primary fail")
+        return type("R", (), {"choices": [type("C", (), {"message": type("M", (), {"content": "ok via fallback"})()})()]})()
+
+    monkeypatch.setattr("app.api.v1.admin.openai_client_service.generate_completion_for_provider", fake)
+    r = client.post('/api/v1/admin/prompts/test', json={"type": "chat", "content": "x", "sample_context": "y", "provider": "openai", "model": "gpt-4o-mini", "fallback_enabled": True, "fallback_provider": "gemini", "fallback_model": "gemini-1.5-flash"})
+    assert r.status_code == 200
+    assert r.json()["fallback_used"] is True
+    assert calls == ["openai", "gemini"]
+
+
+def test_prompt_test_primary_failure_without_fallback_returns_error(client, test_user, db, monkeypatch):
+    test_user.role = "admin"
+    db.commit()
+    monkeypatch.setattr("app.config.settings.OPENAI_API_KEY", "test-key")
+    from app.services.openai_client import APIError
+    monkeypatch.setattr("app.api.v1.admin.openai_client_service.generate_completion_for_provider", lambda *_: (_ for _ in ()).throw(APIError("boom")))
+    r = client.post('/api/v1/admin/prompts/test', json={"type":"chat","content":"x","sample_context":"y","provider":"openai","model":"gpt-4o-mini"})
+    assert r.status_code == 502
+
