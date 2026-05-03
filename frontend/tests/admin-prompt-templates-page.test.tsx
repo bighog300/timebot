@@ -49,10 +49,18 @@ describe('admin prompt templates', () => {
     expect(mutateUpdate).toHaveBeenCalled();
   });
 
-  it('activate action calls activate hook', async () => {
+  it('active row has disabled Active button and does not activate', async () => {
     render(<AdminPromptTemplatesPage />);
-    fireEvent.click(screen.getAllByText('Activate')[0]);
-    expect(mutateActivate).toHaveBeenCalledWith('p1');
+    const activeButton = screen.getByRole('button', { name: 'Active' });
+    expect(activeButton).toBeDisabled();
+    fireEvent.click(activeButton);
+    expect(mutateActivate).not.toHaveBeenCalled();
+  });
+
+  it('inactive row activate action calls activate hook', async () => {
+    render(<AdminPromptTemplatesPage />);
+    fireEvent.click(screen.getByRole('button', { name: 'Activate' }));
+    expect(mutateActivate).toHaveBeenCalledWith('p2');
   });
 
   it('sandbox form renders', () => {
