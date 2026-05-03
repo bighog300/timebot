@@ -52,6 +52,8 @@ export const keys = {
   adminMetrics: ['admin-metrics'] as const,
   adminProcessingSummary: ['admin-processing-summary'] as const,
   adminAudit: (page:number,limit:number)=>['admin-audit',page,limit] as const,
+  adminSubscriptions: ['admin-subscriptions'] as const,
+  adminUsageSummary: (userId: string) => ['admin-usage-summary', userId] as const,
   adminPrompts: ['admin-prompts'] as const,
   chatbotSettings: ['chatbot-settings'] as const,
   chatSessions: ['chat-sessions'] as const,
@@ -511,6 +513,22 @@ export function useAdminUsers(page=0, limit=20) { const authReady = useAuthReady
 export function useAdminMetrics() { const authReady = useAuthReady(); return useQuery({queryKey: keys.adminMetrics, queryFn: api.getAdminMetrics, enabled: authReady}); }
 export function useAdminProcessingSummary() { const authReady = useAuthReady(); return useQuery({queryKey: keys.adminProcessingSummary, queryFn: api.getAdminProcessingSummary, enabled: authReady}); }
 export function useAdminAudit(page=0, limit=20) { const authReady = useAuthReady(); return useQuery({queryKey: keys.adminAudit(page, limit), queryFn: () => api.listAdminAudit(limit, page*limit), enabled: authReady}); }
+
+export function useAdminSubscriptions() { const authReady = useAuthReady(); return useQuery({ queryKey: keys.adminSubscriptions, queryFn: api.listAdminSubscriptions, enabled: authReady }); }
+export function useAdminUsageSummary(userId: string) { const authReady = useAuthReady(); return useQuery({ queryKey: keys.adminUsageSummary(userId), queryFn: () => api.getAdminUsageSummary(userId), enabled: authReady && Boolean(userId) }); }
+export function useAdminUpdateUserPlan() {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: ({ userId, plan_slug }: { userId: string; plan_slug: string }) => api.updateAdminUserPlan(userId, plan_slug), onSuccess: () => { qc.invalidateQueries({ queryKey: keys.adminSubscriptions }); qc.invalidateQueries({ queryKey: ['admin-audit'] }); } });
+}
+export function useAdminUpdateUsageControls() {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: ({ userId, usage_credits, limit_overrides }: { userId: string; usage_credits: Record<string, number>; limit_overrides: Record<string, number | null> }) => api.updateAdminUsageControls(userId, usage_credits, limit_overrides), onSuccess: () => qc.invalidateQueries({ queryKey: keys.adminSubscriptions }) });
+}
+export function useAdminCancelOrDowngrade() {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: ({ userId, downgrade_to_plan_slug }: { userId: string; downgrade_to_plan_slug: string }) => api.cancelOrDowngradeAdminSubscription(userId, downgrade_to_plan_slug), onSuccess: () => qc.invalidateQueries({ queryKey: keys.adminSubscriptions }) });
+}
+
 export function useUpdateUserRole() {
   const qc = useQueryClient();
   return useMutation({

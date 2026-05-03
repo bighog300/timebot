@@ -18,11 +18,8 @@ import { ActionItemsPage } from '@/pages/ActionItemsPage';
 import { RelationshipReviewPage } from '@/pages/RelationshipReviewPage';
 import { Navigate } from 'react-router-dom';
 import { RequireAdmin } from '@/components/auth/RequireAdmin';
-import { AdminPage } from '@/pages/AdminPage';
-import { AdminChatbotSettingsPage } from '@/pages/AdminChatbotSettingsPage';
 import { ReportsPage } from '@/pages/ReportsPage';
 import { ChatPage } from '@/pages/ChatPage';
-import { AdminPromptTemplatesPage } from '@/pages/AdminPromptTemplatesPage';
 import { PricingPage } from '@/pages/PricingPage';
 import { SettingsLayoutPage } from '@/pages/settings/SettingsLayoutPage';
 import { SettingsAccountPage } from '@/pages/settings/SettingsAccountPage';
@@ -68,9 +65,23 @@ export const router = createBrowserRouter([
         ],
       },
       { path: 'connections/callback', element: <ConnectionCallbackPage /> },
-      { path: 'admin', element: <RequireAdmin><AdminPage /></RequireAdmin> },
-      { path: 'admin/chatbot-settings', element: <RequireAdmin><AdminChatbotSettingsPage /></RequireAdmin> },
-      { path: 'admin/prompts', element: <RequireAdmin><AdminPromptTemplatesPage /></RequireAdmin> },
+      {
+        path: 'admin',
+        element: <RequireAdmin><AdminSettingsPage /></RequireAdmin>,
+        children: [
+          { index: true, element: <Navigate to='/admin/subscriptions' replace /> },
+          { path: 'subscriptions', element: <AdminSubscriptionsPage /> },
+          { path: 'users/:userId/usage', element: <AdminUserUsagePage /> },
+          { path: 'billing', element: <AdminBillingPage /> },
+          { path: 'audit', element: <AdminAuditPage /> },
+          { path: 'chatbot-settings', element: <AdminChatbotSettingsPage /> },
+          { path: 'prompts', element: <AdminPromptTemplatesPage /> },
+        ],
+      },
     ],
   },
 ]);
+
+import { AdminSettingsPage, AdminSubscriptionsPage, AdminUserUsagePage, AdminBillingPage, AdminAuditPage } from '@/pages/AdminSettingsPage';
+import { AdminPromptTemplatesPage } from '@/pages/AdminPromptTemplatesPage';
+import { AdminChatbotSettingsPage } from '@/pages/AdminChatbotSettingsPage';
