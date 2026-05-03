@@ -85,7 +85,7 @@ def get_review_queue(
 
 
 @router.get("/{document_id}", response_model=DocumentResponse)
-def get_document(document_id: UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def get_document(document_id: UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user), active_workspace: Workspace = Depends(get_active_workspace)):
     document = crud_document.get_document(db, id=document_id, user=current_user, workspace_id=active_workspace.id)
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
@@ -138,7 +138,7 @@ def list_document_relationships(
 
 @router.put("/{document_id}", response_model=DocumentResponse)
 def update_document(
-    document_id: UUID, document_in: DocumentUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+    document_id: UUID, document_in: DocumentUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user), active_workspace: Workspace = Depends(get_active_workspace)
 ):
     document = crud_document.get_document(db, id=document_id, user=current_user, workspace_id=active_workspace.id)
     if not document:
@@ -147,7 +147,7 @@ def update_document(
 
 
 @router.delete("/{document_id}")
-def delete_document(document_id: UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def delete_document(document_id: UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user), active_workspace: Workspace = Depends(get_active_workspace)):
     document = crud_document.get_document(db, id=document_id, user=current_user, workspace_id=active_workspace.id)
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
@@ -159,7 +159,7 @@ def delete_document(document_id: UUID, db: Session = Depends(get_db), current_us
 
 
 @router.post("/{document_id}/reprocess")
-def reprocess_document(document_id: UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def reprocess_document(document_id: UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user), active_workspace: Workspace = Depends(get_active_workspace)):
     document = crud_document.get_document(db, id=document_id, user=current_user, workspace_id=active_workspace.id)
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
@@ -221,7 +221,7 @@ def review_document(
 
 
 @router.get("/{document_id}/intelligence", response_model=DocumentIntelligenceResponse | None)
-def get_document_intelligence(document_id: UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def get_document_intelligence(document_id: UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user), active_workspace: Workspace = Depends(get_active_workspace)):
     document = crud_document.get_document(db, id=document_id, user=current_user, workspace_id=active_workspace.id)
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
@@ -230,7 +230,7 @@ def get_document_intelligence(document_id: UUID, db: Session = Depends(get_db), 
 
 
 @router.post("/{document_id}/intelligence/regenerate", response_model=DocumentIntelligenceResponse)
-def regenerate_document_intelligence(document_id: UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def regenerate_document_intelligence(document_id: UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user), active_workspace: Workspace = Depends(get_active_workspace)):
     document = crud_document.get_document(db, id=document_id, user=current_user, workspace_id=active_workspace.id)
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
@@ -278,7 +278,7 @@ def patch_document_intelligence(
 
 
 @router.post("/{document_id}/category/approve", response_model=DocumentResponse)
-def approve_document_category(document_id: UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def approve_document_category(document_id: UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user), active_workspace: Workspace = Depends(get_active_workspace)):
     document = crud_document.get_document(db, id=document_id, user=current_user, workspace_id=active_workspace.id)
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")

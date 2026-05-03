@@ -71,6 +71,8 @@ export const keys = {
   gmailConnections: ['connections'] as const,
 };
 
+const workspaceScope = () => (typeof window !== 'undefined' ? (localStorage.getItem('activeWorkspaceId') || 'personal') : 'personal');
+
 function useAuthReady() {
   const { token, loading } = useAuth();
   return Boolean(token) && !loading;
@@ -79,7 +81,7 @@ function useAuthReady() {
 export function useDocuments() {
   const authReady = useAuthReady();
   return useQuery({
-    queryKey: keys.documents,
+    queryKey: [...keys.documents, workspaceScope()],
     queryFn: () => api.listDocuments(false),
     enabled: authReady,
     refetchInterval: (query) => {
@@ -93,7 +95,7 @@ export function useDocuments() {
 export function useDocumentClusters() {
   const authReady = useAuthReady();
   return useQuery({
-    queryKey: keys.documentClusters,
+    queryKey: [...keys.documentClusters, workspaceScope()],
     queryFn: api.listDocumentClusters,
     enabled: authReady,
   });
@@ -120,7 +122,7 @@ export function useUploadDocument() {
       qc.invalidateQueries({ queryKey: keys.timeline });
       qc.invalidateQueries({ queryKey: keys.insightsOverview });
       qc.invalidateQueries({ queryKey: keys.insightsStructured });
-      qc.invalidateQueries({ queryKey: keys.categories });
+      qc.invalidateQueries({ queryKey: [...keys.categories, workspaceScope()] });
       qc.invalidateQueries({ queryKey: ['relationship-reviews'] });
     },
   });
@@ -128,17 +130,17 @@ export function useUploadDocument() {
 
 export function useQueueStats() {
   const authReady = useAuthReady();
-  return useQuery({ queryKey: keys.queueStats, queryFn: api.getQueueStats, refetchInterval: 5000, enabled: authReady });
+  return useQuery({ queryKey: [...keys.queueStats, workspaceScope()], queryFn: api.getQueueStats, refetchInterval: 5000, enabled: authReady });
 }
 
 export function useQueueItems() {
   const authReady = useAuthReady();
-  return useQuery({ queryKey: keys.queueItems, queryFn: api.getQueueItems, refetchInterval: 5000, enabled: authReady });
+  return useQuery({ queryKey: [...keys.queueItems, workspaceScope()], queryFn: api.getQueueItems, refetchInterval: 5000, enabled: authReady });
 }
 
 export function useReviewQueue() {
   const authReady = useAuthReady();
-  return useQuery({ queryKey: keys.reviewQueue, queryFn: api.getReviewQueue, refetchInterval: 5000, enabled: authReady });
+  return useQuery({ queryKey: [...keys.reviewQueue, workspaceScope()], queryFn: api.getReviewQueue, refetchInterval: 5000, enabled: authReady });
 }
 
 export function useReviewDocument() {
@@ -147,8 +149,8 @@ export function useReviewDocument() {
     mutationFn: ({ id, action, overrideSummary, overrideTags }: { id: string; action: 'approve' | 'reject' | 'edit'; overrideSummary?: string; overrideTags?: string[] }) =>
       api.reviewDocument(id, action, overrideSummary, overrideTags),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: keys.reviewQueue });
-      qc.invalidateQueries({ queryKey: keys.queueStats });
+      qc.invalidateQueries({ queryKey: [...keys.reviewQueue, workspaceScope()] });
+      qc.invalidateQueries({ queryKey: [...keys.queueStats, workspaceScope()] });
       qc.invalidateQueries({ queryKey: keys.documents });
       qc.invalidateQueries({ queryKey: keys.search });
       qc.invalidateQueries({ queryKey: keys.suggestions });
@@ -156,7 +158,7 @@ export function useReviewDocument() {
       qc.invalidateQueries({ queryKey: keys.timeline });
       qc.invalidateQueries({ queryKey: keys.insightsOverview });
       qc.invalidateQueries({ queryKey: keys.insightsStructured });
-      qc.invalidateQueries({ queryKey: keys.categories });
+      qc.invalidateQueries({ queryKey: [...keys.categories, workspaceScope()] });
       qc.invalidateQueries({ queryKey: ['relationship-reviews'] });
     },
   });
@@ -164,7 +166,7 @@ export function useReviewDocument() {
 
 export function useCategories() {
   const authReady = useAuthReady();
-  return useQuery({ queryKey: keys.categories, queryFn: api.listCategories, enabled: authReady });
+  return useQuery({ queryKey: [...keys.categories, workspaceScope()], queryFn: api.listCategories, enabled: authReady });
 }
 
 export function useReviewItems(status: 'open' | 'resolved' | 'dismissed', page = 0, limit = 20) {
@@ -448,7 +450,7 @@ export function useApproveDocumentCategory(documentId: string) {
       qc.invalidateQueries({ queryKey: keys.timeline });
       qc.invalidateQueries({ queryKey: keys.insightsOverview });
       qc.invalidateQueries({ queryKey: keys.insightsStructured });
-      qc.invalidateQueries({ queryKey: keys.categories });
+      qc.invalidateQueries({ queryKey: [...keys.categories, workspaceScope()] });
       qc.invalidateQueries({ queryKey: ['relationship-reviews'] });
       qc.invalidateQueries({ queryKey: keys.documentIntelligence(documentId) });
     },
@@ -468,7 +470,7 @@ export function useOverrideDocumentCategory(documentId: string) {
       qc.invalidateQueries({ queryKey: keys.timeline });
       qc.invalidateQueries({ queryKey: keys.insightsOverview });
       qc.invalidateQueries({ queryKey: keys.insightsStructured });
-      qc.invalidateQueries({ queryKey: keys.categories });
+      qc.invalidateQueries({ queryKey: [...keys.categories, workspaceScope()] });
       qc.invalidateQueries({ queryKey: ['relationship-reviews'] });
       qc.invalidateQueries({ queryKey: keys.documentIntelligence(documentId) });
     },
@@ -630,7 +632,7 @@ export function useGmailImport() {
       qc.invalidateQueries({ queryKey: keys.timeline });
       qc.invalidateQueries({ queryKey: keys.insightsOverview });
       qc.invalidateQueries({ queryKey: keys.insightsStructured });
-      qc.invalidateQueries({ queryKey: keys.categories });
+      qc.invalidateQueries({ queryKey: [...keys.categories, workspaceScope()] });
       qc.invalidateQueries({ queryKey: ['relationship-reviews'] });
     },
   });
