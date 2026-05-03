@@ -48,7 +48,7 @@ from app.schemas.prompt_template import (
     PromptTemplateUpdate,
 )
 from app.services.openai_client import APIError, openai_client_service
-from app.services.prompt_templates import activate_prompt_template, clear_default_for_purpose
+from app.services.prompt_templates import activate_prompt_template, clear_default_for_purpose, run_prompt_with_fallback
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -473,42 +473,25 @@ def test_prompt_template(payload: PromptTemplateTestRequest, _: str = Depends(re
     )
 
     _validate_fallback_payload(payload.provider, payload.model, payload.fallback_enabled, payload.fallback_provider, payload.fallback_model)
-    request_payload = {
-        "model": payload.model,
-        "temperature": payload.temperature,
-        "max_tokens": payload.max_tokens,
-        "top_p": payload.top_p,
-        "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ],
-    }
-    primary_error = None
-    fallback_used = False
-    provider_used = payload.provider
-    model_used = payload.model
+    from app.models.prompt_template import PromptTemplate
+    template = PromptTemplate(
+        type=payload.type,
+        name="admin-test",
+        content=payload.content,
+        provider=payload.provider,
+        model=payload.model,
+        temperature=payload.temperature,
+        max_tokens=payload.max_tokens,
+        top_p=payload.top_p,
+        fallback_enabled=payload.fallback_enabled,
+        fallback_provider=payload.fallback_provider,
+        fallback_model=payload.fallback_model,
+    )
     try:
-        start = time.perf_counter()
-        response = openai_client_service.generate_completion_for_provider(payload.provider, request_payload)
-    except Exception as exc:
-        primary_error = f"{type(exc).__name__}: {exc}"
-        if not payload.fallback_enabled:
-            raise HTTPException(status_code=502, detail=f"AI request failed: {exc}") from exc
-        try:
-            fallback_used = True
-            provider_used = payload.fallback_provider or payload.provider
-            model_used = payload.fallback_model or payload.model
-            fallback_payload = {**request_payload, "model": model_used}
-            start = time.perf_counter()
-            response = openai_client_service.generate_completion_for_provider(provider_used, fallback_payload)
-        except Exception as fallback_exc:
-            raise HTTPException(status_code=502, detail=f"AI primary and fallback failed: primary={type(exc).__name__}, fallback={type(fallback_exc).__name__}") from fallback_exc
-
-    preview = openai_client_service.extract_response_text(response)
-    elapsed_ms = round((time.perf_counter() - start) * 1000, 2)
-    usage = getattr(response, "usage", None)
-    total_tokens = getattr(usage, "total_tokens", None) if usage is not None else None
-    return PromptTemplateTestResponse(preview=preview, latency_ms=elapsed_ms, usage_tokens=total_tokens, fallback_used=fallback_used, provider_used=provider_used, model_used=model_used, primary_error=primary_error)
+        result = run_prompt_with_fallback(template, f"{system_prompt}\n\n{user_prompt}", db=None, user_id=None)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail=f"AI request failed: {exc}") from exc
+    return PromptTemplateTestResponse(preview=result["output"], latency_ms=result["latency_ms"], usage_tokens=result["token_usage"], fallback_used=result["fallback_used"], provider_used=result["provider_used"], model_used=result["model_used"], primary_error=result["primary_error"])
 
 
 DEFAULT_CHATBOT_SETTINGS = {

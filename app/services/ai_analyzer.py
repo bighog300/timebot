@@ -14,7 +14,7 @@ from app.prompts.document_analysis import (
     build_default_summary_prompt,
 )
 from app.services.openai_client import APIError, openai_client_service
-from app.services.prompt_templates import get_active_prompt_content
+from app.services.prompt_templates import get_active_prompt_content, get_prompt_for_purpose, run_prompt_with_fallback
 
 logger = logging.getLogger(__name__)
 
@@ -72,16 +72,21 @@ class AIAnalyzer:
                 len(prompt),
             )
             ai_calls += 1
-            response = openai_client_service.generate_completion({
-                "model": settings.OPENAI_MODEL,
-                "max_tokens": settings.AI_MAX_TOKENS,
-                "response_format": {"type": "json_object"},
-                "messages": [
-                    {"role": "system", "content": DOCUMENT_ANALYSIS_SYSTEM},
-                    {"role": "user", "content": prompt},
-                ],
-            })
-            content = openai_client_service.extract_response_text(response)
+            active_template = get_prompt_for_purpose(db, "timeline_extraction") if db is not None else None
+            if active_template is not None and prompt_source == "admin":
+                result = run_prompt_with_fallback(active_template, f"{DOCUMENT_ANALYSIS_SYSTEM}\n\n{prompt}", db, None)
+                content = result["output"]
+            else:
+                response = openai_client_service.generate_completion({
+                    "model": settings.OPENAI_MODEL,
+                    "max_tokens": settings.AI_MAX_TOKENS,
+                    "response_format": {"type": "json_object"},
+                    "messages": [
+                        {"role": "system", "content": DOCUMENT_ANALYSIS_SYSTEM},
+                        {"role": "user", "content": prompt},
+                    ],
+                })
+                content = openai_client_service.extract_response_text(response)
             analysis, parse_retry_used, degraded_output = self._parse_and_normalize(content, filename=filename)
             if parse_retry_used:
                 ai_calls += 1

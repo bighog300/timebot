@@ -315,11 +315,10 @@ def test_prompt_test_uses_fallback_on_primary_failure(client, test_user, db, mon
     def fake(provider, payload):
         calls.append(provider)
         if provider == "openai":
-            from app.services.openai_client import APIError
-            raise APIError("primary fail")
+                        raise Exception("mock failure")
         return type("R", (), {"choices": [type("C", (), {"message": type("M", (), {"content": "ok via fallback"})()})()]})()
 
-    monkeypatch.setattr("app.api.v1.admin.openai_client_service.generate_completion_for_provider", fake)
+    monkeypatch.setattr("app.services.openai_client.openai_client_service.generate_completion_for_provider", fake)
     r = client.post('/api/v1/admin/prompts/test', json={"type": "chat", "content": "x", "sample_context": "y", "provider": "openai", "model": "gpt-4o-mini", "fallback_enabled": True, "fallback_provider": "gemini", "fallback_model": "gemini-1.5-flash"})
     assert r.status_code == 200
     assert r.json()["fallback_used"] is True
@@ -330,8 +329,7 @@ def test_prompt_test_primary_failure_without_fallback_returns_error(client, test
     test_user.role = "admin"
     db.commit()
     monkeypatch.setattr("app.config.settings.OPENAI_API_KEY", "test-key")
-    from app.services.openai_client import APIError
-    monkeypatch.setattr("app.api.v1.admin.openai_client_service.generate_completion_for_provider", lambda *_: (_ for _ in ()).throw(APIError("boom")))
+    monkeypatch.setattr("app.services.openai_client.openai_client_service.generate_completion_for_provider", lambda *_: (_ for _ in ()).throw(Exception("mock failure")))
     r = client.post('/api/v1/admin/prompts/test', json={"type":"chat","content":"x","sample_context":"y","provider":"openai","model":"gpt-4o-mini"})
     assert r.status_code == 502
 
