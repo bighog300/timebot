@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import Boolean, Column, Integer, String, TIMESTAMP
+from sqlalchemy import Boolean, Column, ForeignKey, Integer, String, TIMESTAMP
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -29,6 +29,23 @@ class User(Base):
     documents = relationship("Document", back_populates="owner")
     connections = relationship("Connection", back_populates="owner")
     subscriptions = relationship("Subscription", back_populates="user", cascade="all, delete-orphan")
+    invites_sent = relationship("UserInvite", back_populates="invited_by_user")
 
     def __repr__(self):
         return f"<User(email='{self.email}', active={self.is_active})>"
+
+
+class UserInvite(Base):
+    __tablename__ = "user_invites"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    email = Column(String(255), nullable=False, index=True)
+    role = Column(String(20), nullable=False, default="viewer")
+    token_hash = Column(String(128), nullable=False, unique=True, index=True)
+    invited_by_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    expires_at = Column(TIMESTAMP(timezone=True), nullable=False)
+    accepted_at = Column(TIMESTAMP(timezone=True), nullable=True)
+    canceled_at = Column(TIMESTAMP(timezone=True), nullable=True)
+    created_at = Column(TIMESTAMP(timezone=True), nullable=False, default=func.now())
+
+    invited_by_user = relationship("User", back_populates="invites_sent")

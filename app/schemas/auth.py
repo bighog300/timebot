@@ -35,3 +35,9 @@ class AuthResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     user: UserResponse
+
+
+class InviteAcceptRequest(BaseModel):
+    token: str = Field(min_length=8, max_length=512)
+    password: str = Field(min_length=8, max_length=128)
+    display_name: str | None = Field(default=None, max_length=255)

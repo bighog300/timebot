@@ -9,6 +9,7 @@ class AdminUserResponse(BaseModel):
     email: str
     display_name: str
     role: str
+    is_active: bool
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -143,3 +144,33 @@ class LlmProviderCatalogResponse(BaseModel):
 
 class AdminLlmModelsResponse(BaseModel):
     providers: list[LlmProviderCatalogResponse]
+
+
+class AdminUserCreateRequest(BaseModel):
+    email: str
+    password: str | None = Field(default=None, min_length=8, max_length=128)
+    role: str = Field(default="viewer", pattern="^(viewer|editor|admin)$")
+    display_name: str | None = None
+    send_invite: bool = False
+
+
+class AdminDeleteUserRequest(BaseModel):
+    confirmation: str
+
+
+class AdminInviteCreateRequest(BaseModel):
+    email: str
+    role: str = Field(default="viewer", pattern="^(viewer|editor|admin)$")
+    expires_in_days: int = Field(default=7, ge=1, le=30)
+
+
+class AdminInviteResponse(BaseModel):
+    id: UUID
+    email: str
+    role: str
+    expires_at: datetime
+    accepted_at: datetime | None
+    canceled_at: datetime | None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
