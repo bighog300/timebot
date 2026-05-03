@@ -95,3 +95,9 @@ def test_ws_all_accepts_admin(client, db, test_user, monkeypatch):
     admin_token = auth_service.create_access_token(test_user)
     with client.websocket_connect(f"/api/v1/ws/all?token={admin_token}") as websocket:
         websocket.send_text("ping")
+
+
+def test_ws_all_http_route_returns_upgrade_hint(client):
+    response = client.get("/api/v1/ws/all")
+    assert response.status_code == 200
+    assert "WebSocket-only" in response.json()["detail"]
