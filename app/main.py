@@ -30,6 +30,7 @@ from app.api.v1 import (
     monetization,
     workspaces,
     messaging,
+    email_webhooks,
 )
 
 logger = logging.getLogger(__name__)
@@ -168,6 +169,7 @@ app.include_router(chat.router, prefix="/api/v1")
 app.include_router(reports.router, prefix="/api/v1")
 app.include_router(gmail_imports.router, prefix="/api/v1")
 app.include_router(monetization.router, prefix="/api/v1")
+app.include_router(email_webhooks.router, prefix="/api/v1")
 
 
 @app.get("/health", tags=["health"])

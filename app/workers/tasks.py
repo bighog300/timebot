@@ -14,6 +14,38 @@ logger = logging.getLogger(__name__)
 _REQUIRED_ENRICHMENT_TASKS = ("relationships", "embeddings")
 
 
+@celery_app.task(name="app.workers.tasks.send_campaign_recipient_email")
+def send_campaign_recipient_email(recipient_id: str):
+    from datetime import datetime, timezone
+    from app.db.base import SessionLocal
+    from app.models.email import EmailCampaignRecipient, EmailCampaign, EmailTemplate, EmailSuppression
+    from app.services.email_delivery import EmailDeliveryService, sanitize_provider_error
+
+    db = SessionLocal()
+    try:
+        r = db.query(EmailCampaignRecipient).filter(EmailCampaignRecipient.id == recipient_id).first()
+        if not r or r.status in ("sent", "delivered", "bounced", "complained", "failed", "skipped"):
+            return {"status": "ignored"}
+        if db.query(EmailSuppression).filter(EmailSuppression.email == r.email.lower().strip()).first():
+            r.status = "skipped"; r.skip_reason = "suppressed"; db.commit(); return {"status": "skipped"}
+        c = db.query(EmailCampaign).filter(EmailCampaign.id == r.campaign_id).first()
+        t = db.query(EmailTemplate).filter(EmailTemplate.id == c.template_id).first()
+        svc = EmailDeliveryService(db)
+        try:
+            result = svc.send_email(provider=None, to_email=r.email, subject=(c.subject_override or t.subject), html_body=t.html_body, text_body=t.text_body, template_id=str(t.id), campaign_id=str(c.id))
+            r.status = "sent"; r.sent_at = datetime.now(timezone.utc); r.send_log_id = result["log_id"]
+        except Exception as exc:
+            r.status = "failed"; r.failed_at = datetime.now(timezone.utc); c.send_error_sanitized = sanitize_provider_error(str(exc))
+        terminals = ("sent", "delivered", "bounced", "complained", "failed", "skipped")
+        pending = db.query(EmailCampaignRecipient).filter(EmailCampaignRecipient.campaign_id == c.id, EmailCampaignRecipient.status.notin_(terminals)).count()
+        if pending == 0:
+            c.status = "sent"; c.send_completed_at = datetime.now(timezone.utc)
+        db.commit()
+        return {"status": r.status}
+    finally:
+        db.close()
+
+
 @celery_app.task(
     bind=True,
     name="app.workers.tasks.process_document_task",

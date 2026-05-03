@@ -18,6 +18,7 @@ class EmailProviderConfig(Base):
     from_name = Column(String(255), nullable=True)
     reply_to = Column(String(255), nullable=True)
     api_key_encrypted = Column(Text, nullable=True)
+    webhook_secret_encrypted = Column(Text, nullable=True)
     created_at = Column(TIMESTAMP(timezone=True), nullable=False, default=func.now())
     updated_at = Column(TIMESTAMP(timezone=True), nullable=False, default=func.now(), onupdate=func.now())
 
@@ -58,6 +59,10 @@ class EmailCampaign(Base):
     updated_by_admin_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at = Column(TIMESTAMP(timezone=True), nullable=False, default=func.now())
     updated_at = Column(TIMESTAMP(timezone=True), nullable=False, default=func.now(), onupdate=func.now())
+    send_started_at = Column(TIMESTAMP(timezone=True), nullable=True)
+    send_completed_at = Column(TIMESTAMP(timezone=True), nullable=True)
+    send_failed_at = Column(TIMESTAMP(timezone=True), nullable=True)
+    send_error_sanitized = Column(Text, nullable=True)
 
 
 class EmailSendLog(Base):
@@ -103,5 +108,27 @@ class EmailCampaignRecipient(Base):
     skip_reason = Column(String(255), nullable=True)
     send_log_id = Column(UUID(as_uuid=True), ForeignKey("email_send_logs.id", ondelete="SET NULL"), nullable=True)
     created_at = Column(TIMESTAMP(timezone=True), nullable=False, default=func.now())
+    queued_at = Column(TIMESTAMP(timezone=True), nullable=True)
     sent_at = Column(TIMESTAMP(timezone=True), nullable=True)
     failed_at = Column(TIMESTAMP(timezone=True), nullable=True)
+    delivered_at = Column(TIMESTAMP(timezone=True), nullable=True)
+    bounced_at = Column(TIMESTAMP(timezone=True), nullable=True)
+    complained_at = Column(TIMESTAMP(timezone=True), nullable=True)
+    provider_event_id = Column(String(255), nullable=True)
+    last_event_at = Column(TIMESTAMP(timezone=True), nullable=True)
+
+
+class EmailProviderEvent(Base):
+    __tablename__ = "email_provider_events"
+    __table_args__ = (UniqueConstraint("provider", "provider_event_id", name="uq_email_provider_event_provider_event_id"),)
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    provider = Column(String(32), nullable=False, index=True)
+    event_type = Column(String(64), nullable=False)
+    provider_event_id = Column(String(255), nullable=True, index=True)
+    provider_message_id = Column(String(255), nullable=True, index=True)
+    recipient_email = Column(String(255), nullable=True, index=True)
+    campaign_id = Column(UUID(as_uuid=True), nullable=True, index=True)
+    send_log_id = Column(UUID(as_uuid=True), ForeignKey("email_send_logs.id", ondelete="SET NULL"), nullable=True)
+    payload_json_sanitized = Column(JSONB, nullable=False, default=dict)
+    created_at = Column(TIMESTAMP(timezone=True), nullable=False, default=func.now())

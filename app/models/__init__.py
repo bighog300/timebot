@@ -17,7 +17,7 @@ from app.models.chat import ChatbotSettings, ChatMessage, ChatSession, Generated
 from app.models.prompt_template import PromptTemplate
 from app.models.prompt_execution_log import PromptExecutionLog
 from app.models.billing import Plan, Subscription
-from app.models.email import EmailProviderConfig, EmailTemplate, EmailCampaign, EmailSendLog, EmailSuppression, EmailCampaignRecipient
+from app.models.email import EmailProviderConfig, EmailTemplate, EmailCampaign, EmailSendLog, EmailSuppression, EmailCampaignRecipient, EmailProviderEvent
 from app.models.relationships import (
     Connection,
     DocumentRelationship,
@@ -56,6 +56,7 @@ __all__ = [
     "EmailSendLog",
     "EmailSuppression",
     "EmailCampaignRecipient",
+    "EmailProviderEvent",
     "Connection",
     "Document",
     "DocumentActionItem",
