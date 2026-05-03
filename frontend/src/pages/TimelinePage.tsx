@@ -82,7 +82,9 @@ export function TimelinePage() {
   const { authReady, insightsEnabled } = useInsightsAccess();
   const insightsQuery = useQuery({ queryKey: ['insights-structured'], queryFn: api.getStructuredInsights, enabled: authReady && insightsEnabled });
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const chartCardRef = useRef<HTMLDivElement | null>(null);
   const [containerWidth, setContainerWidth] = useState<number>(0);
+  const [chartTopOffset, setChartTopOffset] = useState<number>(280);
   const [zoomMode, setZoomMode] = useState<TimelineZoom>('fit');
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
   const [searchQuery, setSearchQuery] = useState('');
@@ -104,14 +106,24 @@ export function TimelinePage() {
 
   useEffect(() => {
     const container = scrollContainerRef.current;
+    const card = chartCardRef.current;
     if (!container) return;
 
-    const updateWidth = () => setContainerWidth(container.clientWidth);
-    updateWidth();
+    const updateMeasurements = () => {
+      setContainerWidth(container.clientWidth);
+      if (card) {
+        setChartTopOffset(card.getBoundingClientRect().top + window.scrollY);
+      }
+    };
 
-    const observer = new ResizeObserver(updateWidth);
+    updateMeasurements();
+    window.addEventListener('resize', updateMeasurements);
+    const observer = new ResizeObserver(updateMeasurements);
     observer.observe(container);
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', updateMeasurements);
+    };
   }, []);
 
   const normalizedEvents = useMemo(() => {
@@ -425,11 +437,11 @@ export function TimelinePage() {
         const remaining = sorted.length - 1;
         return <div className="flex items-center gap-2 rounded-md border border-amber-600/50 bg-amber-500/10 px-3 py-2" data-testid="timeline-gap-banner"><span className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" aria-hidden="true" /><p className="text-xs text-amber-200">Gap: {primary.gap_duration_days} days with no activity — {primary.start_date} → {primary.end_date}</p>{remaining > 0 && <span className="ml-auto shrink-0 text-xs text-amber-400">+{remaining} more</span>}</div>;
       })() : null}
-      <div className="hidden w-full max-w-full min-w-0 overflow-hidden rounded-2xl border border-slate-700 bg-slate-900 shadow-sm md:block" data-testid="timeline-card">
+      <div ref={chartCardRef} className="hidden w-full max-w-full min-w-0 overflow-hidden rounded-2xl border border-slate-700 bg-slate-900 shadow-sm md:block" data-testid="timeline-card">
         <div
           ref={scrollContainerRef}
-          className="timeline-scroll w-full max-w-full min-w-0 max-h-[calc(100vh-240px)] overflow-auto overscroll-contain"
-          style={{ WebkitOverflowScrolling: 'touch', touchAction: 'pan-x pan-y' }}
+          className="timeline-scroll w-full max-w-full min-w-0 overflow-auto overscroll-contain"
+          style={{ maxHeight: `calc(100vh - ${chartTopOffset + 24}px)`, WebkitOverflowScrolling: 'touch', touchAction: 'pan-x pan-y' }}
           data-testid="timeline-scroll-container"
         >
           <div className="relative" style={{ width: LABEL_WIDTH + chart.width, maxWidth: 'none' }} data-testid="timeline-inner-content">
