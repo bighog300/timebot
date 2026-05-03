@@ -8,13 +8,10 @@ class EmailSecretCrypto:
     def decrypt(self, value: str | None) -> str | None:
         if value is None:
             return None
-        try:
-            return connector_token_crypto.decrypt(value)
-        except Exception:
-            if value.startswith("enc:fallback:"):
-                key = base64.urlsafe_b64encode(hashlib.sha256(settings.AUTH_SECRET_KEY.encode('utf-8')).digest())
-                return Fernet(key).decrypt(value.split("enc:fallback:",1)[1].encode()).decode()
-            raise
+        if value.startswith("enc:fallback:"):
+            key = base64.urlsafe_b64encode(hashlib.sha256(settings.AUTH_SECRET_KEY.encode('utf-8')).digest())
+            return Fernet(key).decrypt(value.split("enc:fallback:",1)[1].encode()).decode()
+        return connector_token_crypto.decrypt(value)
 
     def encrypt(self, value: str | None) -> str | None:
         if value is None:
