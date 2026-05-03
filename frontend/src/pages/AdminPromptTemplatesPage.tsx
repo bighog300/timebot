@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useActivatePromptTemplate, useAdminLlmModels, useAdminPromptTemplates, useCreatePromptTemplate, useTestPromptTemplate, useUpdatePromptTemplate } from '@/hooks/useApi';
 import { getErrorDetail } from '@/services/api';
 import { useUIStore } from '@/store/uiStore';
@@ -22,6 +22,11 @@ export function AdminPromptTemplatesPage() {
   const [selectedId, setSelectedId] = useState<string>('');
   const selectedPrompt = useMemo(() => prompts.data?.find((item) => item.id === selectedId) ?? null, [prompts.data, selectedId]);
   const [editForm, setEditForm] = useState<PromptFormState>({ ...EMPTY_CREATE_FORM });
+
+  useEffect(() => {
+    if (!selectedPrompt) return;
+    setEditForm(toEditForm(selectedPrompt));
+  }, [selectedPrompt]);
   const [testForm, setTestForm] = useState<{ prompt_type: PromptTemplateType; prompt_content: string; sample_context: string; provider: 'openai' | 'gemini'; model: string; temperature: number; max_tokens: number; top_p: number; fallback_enabled: boolean; fallback_order: 'provider_then_model'|'model_then_provider'; max_fallback_attempts: number; retry_on_provider_errors: boolean; retry_on_rate_limit: boolean; retry_on_validation_error: boolean; fallback_provider: 'openai' | 'gemini' | null; fallback_model: string | null }>({ prompt_type: 'chat', prompt_content: '', sample_context: '', provider: 'openai', model: 'gpt-4o-mini', temperature: 0.2, max_tokens: 800, top_p: 1, fallback_enabled: false, fallback_order: 'provider_then_model', max_fallback_attempts: 1, retry_on_provider_errors: true, retry_on_rate_limit: true, retry_on_validation_error: false, fallback_provider: 'openai', fallback_model: 'gpt-4.1-mini' });
   const [preview, setPreview] = useState('');
   const [previewMeta, setPreviewMeta] = useState<PromptTemplateTestResponse | null>(null);
@@ -120,12 +125,33 @@ export function AdminPromptTemplatesPage() {
       <input value={editForm.name} onChange={(e) => setEditForm((v) => ({ ...v, name: e.target.value }))} className='w-full rounded border border-slate-700 bg-slate-900 p-2 text-sm' />
       <textarea value={editForm.content} onChange={(e) => setEditForm((v) => ({ ...v, content: e.target.value }))} className='h-48 w-full rounded border border-slate-700 bg-slate-900 p-2 text-sm' />
       <div className='grid grid-cols-2 gap-2'>
-      <select value={editForm.provider} onChange={(e)=>setEditForm((v)=>({...v, provider:e.target.value as 'openai'|'gemini'}))} className='rounded border border-slate-700 bg-slate-900 p-2 text-sm'>{providerCatalog.map((provider) => <option key={provider.id} value={provider.id}>{provider.name}</option>)}</select>
-      <input value={editForm.model} onChange={(e)=>setEditForm((v)=>({...v, model:e.target.value}))} className='rounded border border-slate-700 bg-slate-900 p-2 text-sm' />
+      <select aria-label='edit-provider' value={editForm.provider} onChange={(e) => {
+        const provider = e.target.value as 'openai' | 'gemini';
+        const nextModels = getModelsForProvider(provider);
+        setEditForm((v) => ({ ...v, provider, model: nextModels[0]?.id ?? '' }));
+      }} className='rounded border border-slate-700 bg-slate-900 p-2 text-sm'>{providerCatalog.map((provider) => <option key={provider.id} value={provider.id}>{provider.name}</option>)}</select>
+      <select aria-label='edit-model' value={editForm.model} onChange={(e)=>setEditForm((v)=>({...v, model:e.target.value}))} className='rounded border border-slate-700 bg-slate-900 p-2 text-sm'>
+        {getModelsForProvider(editForm.provider).map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}
+      </select>
       <input aria-label='edit-temperature' type='number' step='0.1' value={editForm.temperature} onChange={(e)=>setEditForm((v)=>({...v, temperature:Number(e.target.value)}))} className='rounded border border-slate-700 bg-slate-900 p-2 text-sm' />
       <input aria-label='edit-max_tokens' type='number' value={editForm.max_tokens} onChange={(e)=>setEditForm((v)=>({...v, max_tokens:Number(e.target.value)}))} className='rounded border border-slate-700 bg-slate-900 p-2 text-sm' />
+      <input aria-label='edit-top_p' type='number' step='0.1' min={0} max={1} value={editForm.top_p} onChange={(e)=>setEditForm((v)=>({...v, top_p:Number(e.target.value)}))} className='rounded border border-slate-700 bg-slate-900 p-2 text-sm' />
       </div>
+      <label className='flex items-center gap-2 text-sm'><input aria-label='edit-enabled' type='checkbox' checked={editForm.enabled} onChange={(e)=>setEditForm((v)=>({...v, enabled:e.target.checked}))} />Enabled</label>
+      <label className='flex items-center gap-2 text-sm'><input aria-label='edit-is_default' type='checkbox' checked={editForm.is_default} onChange={(e)=>setEditForm((v)=>({...v, is_default:e.target.checked}))} />Set as default (one per purpose)</label>
       <label className='flex items-center gap-2 text-sm'><input type='checkbox' checked={editForm.fallback_enabled} onChange={(e)=>setEditForm((v)=>({...v, fallback_enabled:e.target.checked}))}/>Enable fallback</label>
+      <div className='grid grid-cols-2 gap-2'>
+      <select aria-label='edit-fallback_provider' value={editForm.fallback_provider ?? ''} disabled={!editForm.fallback_enabled} onChange={(e) => {
+        const provider = e.target.value as 'openai' | 'gemini';
+        const nextModels = getModelsForProvider(provider);
+        setEditForm((v) => ({ ...v, fallback_provider: provider, fallback_model: nextModels[0]?.id ?? '' }));
+      }} className='rounded border border-slate-700 bg-slate-900 p-2 text-sm'>
+        {providerCatalog.map((provider) => <option key={provider.id} value={provider.id}>{provider.name}</option>)}
+      </select>
+      <select aria-label='edit-fallback_model' value={editForm.fallback_model ?? ''} disabled={!editForm.fallback_enabled} onChange={(e)=>setEditForm((v)=>({...v, fallback_model:e.target.value}))} className='rounded border border-slate-700 bg-slate-900 p-2 text-sm'>
+        {getModelsForProvider((editForm.fallback_provider ?? 'openai') as 'openai'|'gemini').map((model)=> <option key={model.id} value={model.id}>{model.name}</option>)}
+      </select>
+      </div>
       <select aria-label='edit-fallback_order' value={editForm.fallback_order} onChange={(e)=>setEditForm((v)=>({...v, fallback_order:e.target.value as 'provider_then_model'|'model_then_provider'}))} className='rounded border border-slate-700 bg-slate-900 p-2 text-sm'><option value='provider_then_model'>Provider then model</option><option value='model_then_provider'>Model then provider</option></select>
       <button className='w-full rounded bg-indigo-700 px-3 py-2 text-sm sm:w-auto' onClick={async () => { try { const payload = { ...editForm }; delete (payload as { prompt_type?: PromptTemplateType }).prompt_type; await updatePrompt.mutateAsync({ promptId: selectedPrompt.id, payload }); pushToast('Prompt template saved'); } catch (e) { pushToast(getErrorDetail(e), 'error'); } }}>Save changes</button>
     </div>}

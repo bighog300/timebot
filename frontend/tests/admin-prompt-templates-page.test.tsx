@@ -9,8 +9,8 @@ const mutateTest = vi.fn(async () => ({ preview: 'Preview output', fallback_used
 
 vi.mock('@/hooks/useApi', () => ({
   useAdminPromptTemplates: () => ({ data: [
-    { id: 'p1', prompt_type: 'chat', name: 'Chat v1', content: 'Prompt A', version: 1, is_active: true, created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-02T00:00:00Z' },
-    { id: 'p2', prompt_type: 'report', name: 'Report v1', content: 'Prompt B', version: 1, is_active: false, created_at: '2026-01-03T00:00:00Z', updated_at: '2026-01-04T00:00:00Z' },
+    { id: 'p1', prompt_type: 'chat', name: 'Chat v1', content: 'Prompt A', version: 1, is_active: true, created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-02T00:00:00Z', top_p: 0.4, enabled: false, is_default: false, fallback_enabled: true, fallback_provider: 'openai', fallback_model: 'gpt-4.1-mini' },
+    { id: 'p2', prompt_type: 'report', name: 'Report v1', content: 'Prompt B', version: 1, is_active: false, created_at: '2026-01-03T00:00:00Z', updated_at: '2026-01-04T00:00:00Z', top_p: 1, enabled: true, is_default: false, fallback_enabled: false, fallback_provider: 'openai', fallback_model: 'gpt-4.1-mini' },
   ], isLoading: false, isError: false }),
   useAdminLlmModels: () => ({ data: { providers: [
     { id: 'openai', name: 'OpenAI', configured: true, models: [{ id: 'gpt-4.1-mini', name: 'GPT-4.1 Mini' }, { id: 'gpt-4o-mini', name: 'GPT-4o Mini' }] },
@@ -101,6 +101,40 @@ describe('admin prompt templates', () => {
     fireEvent.click(screen.getByText('Run preview'));
     expect(await screen.findByText('Preview output')).toBeInTheDocument();
     expect(screen.getByText(/Fallback used: yes/)).toBeInTheDocument();
+  });
+
+
+
+  it('edit panel shows execution and fallback controls', () => {
+    render(<AdminPromptTemplatesPage />);
+    fireEvent.click(screen.getAllByText('Edit')[0]);
+    expect(screen.getByLabelText('edit-top_p')).toBeInTheDocument();
+    expect(screen.getByLabelText('edit-enabled')).toBeInTheDocument();
+    expect(screen.getByLabelText('edit-is_default')).toBeInTheDocument();
+    expect(screen.getByLabelText('edit-fallback_provider')).toBeInTheDocument();
+    expect(screen.getByLabelText('edit-fallback_model')).toBeInTheDocument();
+  });
+
+  it('edit save includes updated top_p, booleans, and fallback provider/model', async () => {
+    render(<AdminPromptTemplatesPage />);
+    fireEvent.click(screen.getAllByText('Edit')[0]);
+    fireEvent.change(screen.getByLabelText('edit-top_p'), { target: { value: '0.7' } });
+    fireEvent.click(screen.getByLabelText('edit-enabled'));
+    fireEvent.click(screen.getByLabelText('edit-is_default'));
+    fireEvent.change(screen.getByLabelText('edit-fallback_provider'), { target: { value: 'gemini' } });
+    fireEvent.change(screen.getByLabelText('edit-fallback_model'), { target: { value: 'gemini-1.5-flash' } });
+    fireEvent.click(screen.getByText('Save changes'));
+
+    expect(mutateUpdate).toHaveBeenCalledWith(expect.objectContaining({
+      promptId: 'p1',
+      payload: expect.objectContaining({
+        top_p: 0.7,
+        enabled: true,
+        is_default: true,
+        fallback_provider: 'gemini',
+        fallback_model: 'gemini-1.5-flash',
+      }),
+    }));
   });
 
   it('error state renders', async () => {
