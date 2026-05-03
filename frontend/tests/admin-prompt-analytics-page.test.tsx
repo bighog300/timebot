@@ -53,4 +53,8 @@ test('filters update hook args', () => {
   render(<AdminPromptAnalyticsPage />);
   fireEvent.change(screen.getAllByLabelText('provider')[0], { target: { value: 'openai' } });
   expect(summaryMock).toHaveBeenLastCalledWith(expect.objectContaining({ provider: 'openai' }));
+  fireEvent.change(screen.getAllByLabelText('purpose')[0], { target: { value: 'chat' } });
+  expect(summaryMock).toHaveBeenLastCalledWith(expect.objectContaining({ purpose: 'chat' }));
+  fireEvent.change(screen.getAllByLabelText('actor_user_id')[0], { target: { value: 'u1' } });
+  expect(summaryMock).toHaveBeenLastCalledWith(expect.objectContaining({ actor_user_id: 'u1' }));
 });
