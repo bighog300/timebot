@@ -48,7 +48,8 @@ export const keys = {
   suggestions: ['suggestions'] as const,
   facets: ['facets'] as const,
   connections: ['connections'] as const,
-  adminUsers: (page:number,limit:number)=>['admin-users',page,limit] as const,
+  adminUsers: (page:number,limit:number,filters?:Record<string, unknown>)=>['admin-users',page,limit,filters ?? {}] as const,
+  adminInvites: ['admin-invites'] as const,
   adminMetrics: ['admin-metrics'] as const,
   adminProcessingSummary: ['admin-processing-summary'] as const,
   adminAudit: (page:number,limit:number)=>['admin-audit',page,limit] as const,
@@ -517,7 +518,7 @@ export function useConnections() {
 }
 
 
-export function useAdminUsers(page=0, limit=20) { const authReady = useAuthReady(); return useQuery({queryKey: keys.adminUsers(page, limit), queryFn: () => api.listAdminUsers(limit, page*limit), enabled: authReady}); }
+export function useAdminUsers(page=0, limit=20, filters: { q?: string; role?: string; status?: string } = {}) { const authReady = useAuthReady(); return useQuery({queryKey: keys.adminUsers(page, limit, filters), queryFn: () => api.listAdminUsers(limit, page*limit, filters), enabled: authReady}); }
 export function useAdminMetrics() { const authReady = useAuthReady(); return useQuery({queryKey: keys.adminMetrics, queryFn: api.getAdminMetrics, enabled: authReady}); }
 export function useAdminProcessingSummary() { const authReady = useAuthReady(); return useQuery({queryKey: keys.adminProcessingSummary, queryFn: api.getAdminProcessingSummary, enabled: authReady}); }
 export function useAdminAudit(page=0, limit=20) { const authReady = useAuthReady(); return useQuery({queryKey: keys.adminAudit(page, limit), queryFn: () => api.listAdminAudit(limit, page*limit), enabled: authReady}); }
@@ -564,6 +565,15 @@ export function useUpdateUserRole() {
 }
 
 
+
+export function useCreateAdminUser() { const qc = useQueryClient(); return useMutation({ mutationFn: api.createAdminUser, onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-users'] }) }); }
+export function useAdminInvites() { const authReady = useAuthReady(); return useQuery({ queryKey: keys.adminInvites, queryFn: api.listAdminInvites, enabled: authReady }); }
+export function useInviteAdminUser() { const qc = useQueryClient(); return useMutation({ mutationFn: api.inviteAdminUser, onSuccess: () => { qc.invalidateQueries({ queryKey: keys.adminInvites }); qc.invalidateQueries({ queryKey: ['admin-audit'] }); } }); }
+export function useDeactivateAdminUser() { const qc = useQueryClient(); return useMutation({ mutationFn: api.deactivateAdminUser, onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-users'] }) }); }
+export function useReactivateAdminUser() { const qc = useQueryClient(); return useMutation({ mutationFn: api.reactivateAdminUser, onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-users'] }) }); }
+export function useDeleteAdminUser() { const qc = useQueryClient(); return useMutation({ mutationFn: api.deleteAdminUser, onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-users'] }); qc.invalidateQueries({ queryKey: ['admin-audit'] }); } }); }
+export function useResendAdminInvite() { const qc = useQueryClient(); return useMutation({ mutationFn: api.resendAdminInvite, onSuccess: () => qc.invalidateQueries({ queryKey: keys.adminInvites }) }); }
+export function useCancelAdminInvite() { const qc = useQueryClient(); return useMutation({ mutationFn: api.cancelAdminInvite, onSuccess: () => qc.invalidateQueries({ queryKey: keys.adminInvites }) }); }
 export function useChatbotSettings() { const authReady = useAuthReady(); return useQuery({ queryKey: keys.chatbotSettings, queryFn: api.getChatbotSettings, enabled: authReady }); }
 export function useUpdateChatbotSettings() { const qc = useQueryClient(); return useMutation({ mutationFn: api.updateChatbotSettings, onSuccess: () => qc.invalidateQueries({ queryKey: keys.chatbotSettings }) }); }
 export function useResetChatbotSettings() { const qc = useQueryClient(); return useMutation({ mutationFn: api.resetChatbotSettings, onSuccess: () => qc.invalidateQueries({ queryKey: keys.chatbotSettings }) }); }

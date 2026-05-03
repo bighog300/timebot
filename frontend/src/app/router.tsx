@@ -71,6 +71,7 @@ export const router = createBrowserRouter([
         children: [
           { index: true, element: <Navigate to='/admin/subscriptions' replace /> },
           { path: 'subscriptions', element: <AdminSubscriptionsPage /> },
+          { path: 'users', element: <AdminUsersPage /> },
           { path: 'users/:userId/usage', element: <AdminUserUsagePage /> },
           { path: 'billing', element: <AdminBillingPage /> },
           { path: 'audit', element: <AdminAuditPage /> },
@@ -89,3 +90,4 @@ import { AdminPromptTemplatesPage } from '@/pages/AdminPromptTemplatesPage';
 import { AdminPromptAuditPage } from '@/pages/AdminPromptAuditPage';
 import { AdminPromptAnalyticsPage } from '@/pages/AdminPromptAnalyticsPage';
 import { AdminChatbotSettingsPage } from '@/pages/AdminChatbotSettingsPage';
+import { AdminUsersPage } from '@/pages/AdminUsersPage';

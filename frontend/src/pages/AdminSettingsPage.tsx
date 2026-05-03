@@ -16,6 +16,7 @@ export function AdminSettingsPage() {
     <h1 className='text-xl font-semibold'>Admin Settings</h1>
     <div className='flex flex-wrap gap-2 text-sm'>
       <NavLink to='/admin/subscriptions' className='rounded border border-slate-700 px-3 py-1.5'>Subscriptions</NavLink>
+      <NavLink to='/admin/users' className='rounded border border-slate-700 px-3 py-1.5'>Users</NavLink>
       <NavLink to='/admin/billing' className='rounded border border-slate-700 px-3 py-1.5'>Billing/System</NavLink>
       <NavLink to='/admin/audit' className='rounded border border-slate-700 px-3 py-1.5'>Audit</NavLink>
     </div>

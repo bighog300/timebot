@@ -24,6 +24,7 @@ import type {
   SyncRunResponse,
   TimelineResponse,
   AdminUsersPage,
+  AdminUser,
   AdminMetrics,
   AdminProcessingSummary,
   AdminAuditPage,
@@ -53,6 +54,7 @@ import type {
   AdminUsageSummary,
   AdminSystemStatus,
   AdminLlmModelsResponse,
+  AdminInvite,
 } from '@/types/api';
 
 
@@ -162,8 +164,18 @@ export const api = {
   getReportDownloadUrl: (reportId: string, format: 'md' | 'pdf' = 'md'): string =>
     `${http.defaults.baseURL}/reports/${reportId}/download?format=${format}`,
 
-  listAdminUsers: async (limit = 20, offset = 0): Promise<AdminUsersPage> => (await http.get('/admin/users', { params: { limit, offset } })).data,
+  listAdminUsers: async (limit = 20, offset = 0, filters: { q?: string; role?: string; status?: string } = {}): Promise<AdminUsersPage> => (await http.get('/admin/users', { params: { limit, offset, ...filters } })).data,
   updateAdminUserRole: async (userId: string, role: string) => (await http.patch(`/admin/users/${userId}/role`, { role })).data,
+
+  createAdminUser: async (payload: { email: string; display_name: string; role: string }): Promise<AdminUser> => (await http.post('/admin/users', payload)).data,
+  deactivateAdminUser: async (userId: string): Promise<void> => { await http.post(`/admin/users/${userId}/deactivate`); },
+  reactivateAdminUser: async (userId: string): Promise<void> => { await http.post(`/admin/users/${userId}/reactivate`); },
+  deleteAdminUser: async (userId: string): Promise<void> => { await http.delete(`/admin/users/${userId}`); },
+  listAdminInvites: async (): Promise<AdminInvite[]> => (await http.get('/admin/users/invites')).data,
+  inviteAdminUser: async (payload: { email: string; display_name: string; role: string }): Promise<AdminInvite> => (await http.post('/admin/users/invite', payload)).data,
+  resendAdminInvite: async (inviteId: string): Promise<void> => { await http.post(`/admin/users/invites/${inviteId}/resend`); },
+  cancelAdminInvite: async (inviteId: string): Promise<void> => { await http.post(`/admin/users/invites/${inviteId}/cancel`); },
+
   getAdminMetrics: async (): Promise<AdminMetrics> => (await http.get('/admin/metrics')).data,
   getAdminProcessingSummary: async (): Promise<AdminProcessingSummary> => (await http.get('/admin/processing-summary')).data,
   listAdminAudit: async (limit = 20, offset = 0): Promise<AdminAuditPage> => (await http.get('/admin/audit', { params: { limit, offset } })).data,
