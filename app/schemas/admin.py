@@ -160,6 +160,7 @@ class LlmProviderCatalogResponse(BaseModel):
     id: str
     name: str
     configured: bool
+    webhook_configured: bool = False
     models: list[LlmModelOptionResponse]
 
 
@@ -239,6 +240,7 @@ class EmailProviderConfigResponse(BaseModel):
     from_name: str | None
     reply_to: str | None
     configured: bool
+    webhook_configured: bool = False
     created_at: datetime
     updated_at: datetime
 
@@ -251,6 +253,8 @@ class EmailProviderConfigPatchRequest(BaseModel):
     from_name: str | None = None
     reply_to: str | None = None
     api_key: str | None = None
+    webhook_secret: str | None = None
+    clear_webhook_secret: bool | None = None
 
 
 class EmailTemplateCreateRequest(BaseModel):
@@ -389,6 +393,9 @@ class EmailCampaignSendResponse(BaseModel):
     sent_count: int
     failed_count: int
     skipped_count: int
+    status: str | None = None
+    campaign_id: str | None = None
+    recipient_count: int | None = None
 
 
 class EmailCampaignTestSendRequest(BaseModel):

@@ -90,6 +90,7 @@ class Settings(BaseSettings):
     PUBLIC_STRIPE_PUBLISHABLE_KEY: str = ""
     PUBLIC_APP_URL: str = "http://localhost:5174"
     SEED_DEFAULT_PROMPTS: bool = True
+    EMAIL_CAMPAIGN_MAX_SEND_CAP: int = 25
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 

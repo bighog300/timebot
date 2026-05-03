@@ -88,6 +88,7 @@ from app.services.openai_client import APIError, openai_client_service
 from app.services.prompt_templates import activate_prompt_template, clear_default_for_purpose, run_prompt_with_fallback, list_prompt_executions, summarize_prompt_executions
 from app.services.error_sanitizer import sanitize_processing_error
 from app.services.email_secrets import email_secret_crypto
+from app.workers.tasks import send_campaign_recipient_email
 from app.services.email_delivery import EmailDeliveryService
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -163,6 +164,7 @@ def _safe_email_provider_response(cfg: EmailProviderConfig) -> EmailProviderConf
         from_name=cfg.from_name,
         reply_to=cfg.reply_to,
         configured=bool(cfg.api_key_encrypted),
+        webhook_configured=bool(cfg.webhook_secret_encrypted),
         created_at=cfg.created_at,
         updated_at=cfg.updated_at,
     )
@@ -191,7 +193,7 @@ def list_email_provider_configs(_: str = Depends(require_admin), db: Session = D
         if cfg:
             out.append(_safe_email_provider_response(cfg))
         else:
-            out.append(EmailProviderConfigResponse(provider=provider, enabled=False, from_email='', from_name=None, reply_to=None, configured=False, created_at=now, updated_at=now))
+            out.append(EmailProviderConfigResponse(provider=provider, enabled=False, from_email='', from_name=None, reply_to=None, configured=False, webhook_configured=False, created_at=now, updated_at=now))
     return out
 
 
@@ -202,7 +204,7 @@ def get_email_provider_config(provider: str, _: str = Depends(require_admin), db
     cfg = db.query(EmailProviderConfig).filter(EmailProviderConfig.provider == provider).first()
     if not cfg:
         now = datetime.now(timezone.utc)
-        return EmailProviderConfigResponse(provider=provider, enabled=False, from_email='', from_name=None, reply_to=None, configured=False, created_at=now, updated_at=now)
+        return EmailProviderConfigResponse(provider=provider, enabled=False, from_email='', from_name=None, reply_to=None, configured=False, webhook_configured=False, created_at=now, updated_at=now)
     return _safe_email_provider_response(cfg)
 
 
@@ -221,6 +223,11 @@ def patch_email_provider_config(provider: str, payload: EmailProviderConfigPatch
     if payload.api_key is not None:
         val = payload.api_key.strip()
         cfg.api_key_encrypted = email_secret_crypto.encrypt(val) if val else None
+    if payload.webhook_secret is not None:
+        ws = payload.webhook_secret.strip()
+        cfg.webhook_secret_encrypted = email_secret_crypto.encrypt(ws) if ws else None
+    if payload.clear_webhook_secret:
+        cfg.webhook_secret_encrypted = None
     db.flush()
     _audit_admin_email_action(db, current_user, 'email_provider_config', provider, 'email_provider_config_updated', {'provider': provider, 'enabled': cfg.enabled, 'configured': bool(cfg.api_key_encrypted)})
     db.commit(); db.refresh(cfg)
@@ -423,15 +430,18 @@ def preview_email_campaign_recipients(campaign_id: str, _: str = Depends(require
 
 @router.post('/email/campaigns/{campaign_id}/send', response_model=EmailCampaignSendResponse)
 def send_email_campaign(campaign_id: str, payload: EmailCampaignSendRequest, _: str = Depends(require_admin), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    from datetime import datetime, timezone
     c = db.query(EmailCampaign).filter(EmailCampaign.id == campaign_id).first()
     if not c: raise HTTPException(status_code=404, detail='Campaign not found')
+    if c.status in ('sending','sent'): raise HTTPException(status_code=409, detail='Campaign already queued/sent')
     if c.status != 'ready': raise HTTPException(status_code=400, detail='Campaign must be ready')
     if payload.confirmation_text != 'SEND CAMPAIGN': raise HTTPException(status_code=400, detail='Invalid confirmation_text')
     t = _ensure_active_template(db, str(c.template_id))
     if t.status != 'active': raise HTTPException(status_code=400, detail='Template must be active')
     resolved = _resolve_campaign_recipients(db, c)
     if len(resolved['sendable']) == 0: raise HTTPException(status_code=400, detail='No sendable recipients')
-    if len(resolved['sendable']) > 25: raise HTTPException(status_code=400, detail='Sendable recipients exceed synchronous safety cap of 25')
+    max_cap = int(getattr(settings, 'EMAIL_CAMPAIGN_MAX_SEND_CAP', 5000))
+    if len(resolved['sendable']) > max_cap: raise HTTPException(status_code=400, detail=f'Sendable recipients exceed safety cap of {max_cap}')
     _audit_admin_email_action(db, current_user, 'email_campaign', str(c.id), 'email_campaign_send_started', {'total_candidates': resolved['total'], 'sendable_count': len(resolved['sendable'])})
     # clear old rows for deterministic reruns in E4
     db.query(EmailCampaignRecipient).filter(EmailCampaignRecipient.campaign_id == c.id).delete()
@@ -439,22 +449,33 @@ def send_email_campaign(campaign_id: str, payload: EmailCampaignSendRequest, _: 
         db.add(EmailCampaignRecipient(campaign_id=c.id, email=e, status='skipped', skip_reason='suppressed'))
     for e in resolved['invalid']:
         db.add(EmailCampaignRecipient(campaign_id=c.id, email=e, status='skipped', skip_reason='invalid'))
-    service = EmailDeliveryService(db)
-    rendered = _render_campaign(c, t, payload.variables_json if isinstance(payload.variables_json, dict) else None)
-    sent=failed=0
-    from datetime import datetime, timezone
+    queued_count=0
     for email, user_id in resolved['sendable']:
-        recipient = EmailCampaignRecipient(campaign_id=c.id, email=email, user_id=user_id, status='pending')
+        recipient = EmailCampaignRecipient(campaign_id=c.id, email=email, user_id=user_id, status='queued', queued_at=datetime.now(timezone.utc))
         db.add(recipient); db.flush()
         try:
-            result = service.send_email(provider=payload.provider, to_email=email, subject=rendered['subject'], html_body=rendered['html_body'], text_body=rendered['text_body'], template_id=str(t.id), campaign_id=str(c.id))
-            recipient.status='sent'; recipient.sent_at=datetime.now(timezone.utc); recipient.send_log_id=result['log_id']; sent+=1
-        except HTTPException:
-            recipient.status='failed'; recipient.failed_at=datetime.now(timezone.utc); failed+=1
-    _audit_admin_email_action(db, current_user, 'email_campaign', str(c.id), 'email_campaign_send_completed', {'sent_count': sent, 'failed_count': failed})
+            send_campaign_recipient_email.delay(str(recipient.id))
+        except Exception:
+            pass
+        queued_count+=1
+    c.status='sending'; c.send_started_at=datetime.now(timezone.utc); c.send_failed_at=None; c.send_error_sanitized=None
+    _audit_admin_email_action(db, current_user, 'email_campaign', str(c.id), 'email_campaign_queued', {'queued_count': queued_count})
     db.commit()
-    return EmailCampaignSendResponse(total_candidates=resolved['total'], sendable_count=len(resolved['sendable']), sent_count=sent, failed_count=failed, skipped_count=len(resolved['suppressed'])+len(resolved['invalid'])+resolved['duplicates'])
+    return EmailCampaignSendResponse(total_candidates=resolved['total'], sendable_count=len(resolved['sendable']), sent_count=0, failed_count=0, skipped_count=len(resolved['suppressed'])+len(resolved['invalid'])+resolved['duplicates'], status='sending', campaign_id=str(c.id), recipient_count=queued_count)
 
+
+
+@router.get('/email/campaigns/{campaign_id}/send-status')
+def email_campaign_send_status(campaign_id: str, _: str = Depends(require_admin), db: Session = Depends(get_db)):
+    c = db.query(EmailCampaign).filter(EmailCampaign.id == campaign_id).first()
+    if not c: raise HTTPException(status_code=404, detail='Campaign not found')
+    rows = db.query(EmailCampaignRecipient.status).filter(EmailCampaignRecipient.campaign_id == c.id).all()
+    total=len(rows)
+    counts={k:0 for k in ['queued','sent','delivered','bounced','complained','failed','skipped']}
+    for (st,) in rows:
+        if st in counts: counts[st]+=1
+    done=counts['sent']+counts['delivered']+counts['bounced']+counts['complained']+counts['failed']+counts['skipped']
+    return {'campaign_id': str(c.id), 'status': c.status, 'total': total, **counts, 'completion_percentage': (0 if total==0 else round(done*100/total,2)), 'send_started_at': c.send_started_at, 'send_completed_at': c.send_completed_at, 'send_failed_at': c.send_failed_at}
 
 @router.get('/email/suppressions', response_model=list[EmailSuppressionResponse])
 def list_email_suppressions(_: str = Depends(require_admin), db: Session = Depends(get_db)):
