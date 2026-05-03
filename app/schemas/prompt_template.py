@@ -20,9 +20,6 @@ class PromptTemplateBase(BaseModel):
     fallback_model: str | None = Field(default=None, min_length=1, max_length=120)
     enabled: bool = True
     is_default: bool = False
-    fallback_enabled: bool = False
-    fallback_provider: str | None = Field(default=None, pattern="^(openai|gemini)$")
-    fallback_model: str | None = Field(default=None, min_length=1, max_length=120)
 
     @field_validator("content")
     @classmethod
