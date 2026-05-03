@@ -15,6 +15,7 @@ from app.models.processing_event import DocumentProcessingEvent
 from app.models.chat import ChatbotSettings
 from app.models.prompt_template import PromptTemplate
 from app.schemas.chatbot import ChatbotSettingsPayload, ChatbotSettingsResponse
+from app.config import settings
 from app.schemas.admin import (
     AdminAuditEventResponse,
     AdminAuditPageResponse,
@@ -29,6 +30,8 @@ from app.schemas.admin import (
     AdminUserResponse,
     AdminUsersPageResponse,
     ProcessingEventResponse,
+    AdminSystemStatusFeaturesResponse,
+    AdminSystemStatusResponse,
 )
 from app.services.limit_enforcement import _current_period_window
 from app.services.subscriptions import ensure_default_free_subscription, seed_default_plans
@@ -218,6 +221,35 @@ def list_admin_audit(
         for i in items
     ]
     return AdminAuditPageResponse(items=mapped, total_count=q.count(), limit=limit, offset=offset)
+
+
+@router.get("/system-status", response_model=AdminSystemStatusResponse)
+def admin_system_status(_: str = Depends(require_admin)):
+    stripe_configured = bool(settings.STRIPE_SECRET_KEY.strip())
+    stripe_prices_configured = bool(settings.STRIPE_PRICE_PRO_MONTHLY.strip()) and bool(settings.STRIPE_PRICE_TEAM_MONTHLY.strip())
+    billing_configured = stripe_configured and stripe_prices_configured
+    limits_configured = all([
+        settings.RATE_LIMIT_UPLOADS_PER_MINUTE > 0,
+        settings.RATE_LIMIT_PROCESSING_PER_MINUTE > 0,
+        settings.RATE_LIMIT_EXPENSIVE_READS_PER_MINUTE > 0,
+        settings.RATE_LIMIT_RELATIONSHIP_DETECTION_PER_MINUTE > 0,
+        settings.HARD_DAILY_MAX_UPLOADS > 0,
+        settings.HARD_DAILY_MAX_PROCESSING_JOBS > 0,
+        settings.HARD_DAILY_MAX_FAILED_PROCESSING_RETRIES > 0,
+    ])
+    environment = settings.APP_ENV if settings.APP_ENV in {"development", "staging", "production"} else "development"
+    return AdminSystemStatusResponse(
+        billing_configured=billing_configured,
+        stripe_configured=stripe_configured,
+        stripe_prices_configured=stripe_prices_configured,
+        environment=environment,
+        limits_configured=limits_configured,
+        features=AdminSystemStatusFeaturesResponse(
+            insights_enabled=settings.ENABLE_ENTITY_EXTRACTION,
+            category_intelligence_enabled=settings.ENABLE_AUTO_CATEGORIZATION,
+            relationship_detection_enabled=settings.RATE_LIMIT_RELATIONSHIP_DETECTION_PER_MINUTE > 0,
+        ),
+    )
 
 
 @router.get("/metrics", response_model=AdminMetricsResponse)

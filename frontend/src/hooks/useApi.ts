@@ -54,6 +54,7 @@ export const keys = {
   adminAudit: (page:number,limit:number)=>['admin-audit',page,limit] as const,
   adminSubscriptions: ['admin-subscriptions'] as const,
   adminUsageSummary: (userId: string) => ['admin-usage-summary', userId] as const,
+  adminSystemStatus: ['admin-system-status'] as const,
   adminPrompts: ['admin-prompts'] as const,
   chatbotSettings: ['chatbot-settings'] as const,
   chatSessions: ['chat-sessions'] as const,
@@ -516,6 +517,7 @@ export function useAdminAudit(page=0, limit=20) { const authReady = useAuthReady
 
 export function useAdminSubscriptions() { const authReady = useAuthReady(); return useQuery({ queryKey: keys.adminSubscriptions, queryFn: api.listAdminSubscriptions, enabled: authReady }); }
 export function useAdminUsageSummary(userId: string) { const authReady = useAuthReady(); return useQuery({ queryKey: keys.adminUsageSummary(userId), queryFn: () => api.getAdminUsageSummary(userId), enabled: authReady && Boolean(userId) }); }
+export function useAdminSystemStatus() { const authReady = useAuthReady(); return useQuery({ queryKey: keys.adminSystemStatus, queryFn: api.getAdminSystemStatus, enabled: authReady }); }
 export function useAdminUpdateUserPlan() {
   const qc = useQueryClient();
   return useMutation({ mutationFn: ({ userId, plan_slug }: { userId: string; plan_slug: string }) => api.updateAdminUserPlan(userId, plan_slug), onSuccess: () => { qc.invalidateQueries({ queryKey: keys.adminSubscriptions }); qc.invalidateQueries({ queryKey: ['admin-audit'] }); } });

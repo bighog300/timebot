@@ -48,6 +48,7 @@ import type {
   PlanSummary,
   AdminSubscription,
   AdminUsageSummary,
+  AdminSystemStatus,
 } from '@/types/api';
 
 
@@ -165,6 +166,7 @@ export const api = {
 
   listAdminSubscriptions: async (): Promise<AdminSubscription[]> => (await http.get('/admin/subscriptions')).data,
   getAdminUsageSummary: async (userId: string): Promise<AdminUsageSummary> => (await http.get(`/admin/users/${userId}/usage-summary`)).data,
+  getAdminSystemStatus: async (): Promise<AdminSystemStatus> => (await http.get('/admin/system-status')).data,
   updateAdminUserPlan: async (userId: string, planSlug: string): Promise<AdminSubscription> => (await http.patch(`/admin/users/${userId}/plan`, { plan_slug: planSlug })).data,
   updateAdminUsageControls: async (userId: string, usageCredits: Record<string, number>, limitOverrides: Record<string, number | null>): Promise<AdminSubscription> => (await http.patch(`/admin/users/${userId}/usage-controls`, { usage_credits: usageCredits, limit_overrides: limitOverrides })).data,
   cancelOrDowngradeAdminSubscription: async (userId: string, downgradeToPlanSlug: string): Promise<AdminSubscription> => (await http.post(`/admin/users/${userId}/cancel-or-downgrade`, { downgrade_to_plan_slug: downgradeToPlanSlug })).data,
