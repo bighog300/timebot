@@ -294,3 +294,35 @@ class EmailTemplateResponse(BaseModel):
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+class AdminEmailTestSendRequest(BaseModel):
+    provider: str | None = Field(default=None, pattern="^(resend|sendgrid)$")
+    to_email: str
+    subject: str | None = None
+    html_body: str | None = None
+    text_body: str | None = None
+
+
+class AdminEmailTestSendResponse(BaseModel):
+    status: str
+    provider: str
+    provider_message_id: str | None
+    log_id: UUID
+
+
+class EmailSendLogResponse(BaseModel):
+    id: UUID
+    provider: str
+    recipient_email: str
+    from_email: str
+    from_name: str | None
+    reply_to: str | None
+    subject: str
+    status: str
+    provider_message_id: str | None
+    error_message_sanitized: str | None
+    created_at: datetime
+    sent_at: datetime | None
+    failed_at: datetime | None
+
+    model_config = {"from_attributes": True}

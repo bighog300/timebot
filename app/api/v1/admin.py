@@ -18,7 +18,7 @@ from app.models.billing import Plan, Subscription
 from app.models.processing_event import DocumentProcessingEvent
 
 from app.models.chat import ChatbotSettings
-from app.models.email import EmailProviderConfig, EmailTemplate
+from app.models.email import EmailProviderConfig, EmailTemplate, EmailSendLog
 from app.models.prompt_template import PromptTemplate
 from app.schemas.chatbot import ChatbotSettingsPayload, ChatbotSettingsResponse
 from app.config import settings
@@ -46,6 +46,9 @@ from app.schemas.admin import (
     EmailTemplateCreateRequest,
     EmailTemplatePatchRequest,
     EmailTemplateResponse,
+    AdminEmailTestSendRequest,
+    AdminEmailTestSendResponse,
+    EmailSendLogResponse,
     ProcessingEventResponse,
     AdminSystemStatusFeaturesResponse,
     AdminSystemStatusResponse,
@@ -74,6 +77,7 @@ from app.services.openai_client import APIError, openai_client_service
 from app.services.prompt_templates import activate_prompt_template, clear_default_for_purpose, run_prompt_with_fallback, list_prompt_executions, summarize_prompt_executions
 from app.services.error_sanitizer import sanitize_processing_error
 from app.services.email_secrets import email_secret_crypto
+from app.services.email_delivery import EmailDeliveryService
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -1015,3 +1019,17 @@ def get_prompt_executions(prompt_template_id: str | None = None, provider: str |
 @router.get("/prompt-executions/summary", response_model=PromptExecutionSummaryResponse)
 def get_prompt_executions_summary(provider: str | None = None, model: str | None = None, source: str | None = None, purpose: str | None = None, actor_user_id: str | None = None, success: bool | None = None, fallback_used: bool | None = None, created_after: datetime | None = None, created_before: datetime | None = None, _: str = Depends(require_admin), db: Session = Depends(get_db)):
     return summarize_prompt_executions(db, provider=provider, model=model, source=source, purpose=purpose, actor_user_id=actor_user_id, success=success, fallback_used=fallback_used, created_after=created_after, created_before=created_before)
+
+
+@router.post('/email/test-send', response_model=AdminEmailTestSendResponse)
+def admin_test_send_email(payload: AdminEmailTestSendRequest, _: str = Depends(require_admin), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    service = EmailDeliveryService(db)
+    result = service.send_email(provider=payload.provider, to_email=payload.to_email, subject=payload.subject or 'Timebot Test Email', html_body=payload.html_body or '<p>This is a Timebot test email.</p>', text_body=payload.text_body)
+    _audit_admin_email_action(db, current_user, 'email_test_send', result['log_id'], 'email_test_send', {'provider': result['provider'], 'status': result['status'], 'to_email': payload.to_email})
+    db.commit()
+    return result
+
+
+@router.get('/email/send-logs', response_model=list[EmailSendLogResponse])
+def list_email_send_logs(limit: int = Query(50, ge=1, le=200), _: str = Depends(require_admin), db: Session = Depends(get_db)):
+    return db.query(EmailSendLog).order_by(EmailSendLog.created_at.desc()).limit(limit).all()

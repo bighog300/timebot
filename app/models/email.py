@@ -40,3 +40,24 @@ class EmailTemplate(Base):
     updated_by_admin_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at = Column(TIMESTAMP(timezone=True), nullable=False, default=func.now())
     updated_at = Column(TIMESTAMP(timezone=True), nullable=False, default=func.now(), onupdate=func.now())
+
+
+class EmailSendLog(Base):
+    __tablename__ = "email_send_logs"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    provider = Column(String(32), nullable=False, index=True)
+    recipient_email = Column(String(255), nullable=False, index=True)
+    from_email = Column(String(255), nullable=False)
+    from_name = Column(String(255), nullable=True)
+    reply_to = Column(String(255), nullable=True)
+    subject = Column(String(500), nullable=False)
+    template_id = Column(UUID(as_uuid=True), ForeignKey("email_templates.id", ondelete="SET NULL"), nullable=True)
+    campaign_id = Column(UUID(as_uuid=True), nullable=True)
+    status = Column(String(16), nullable=False, default="queued", index=True)
+    provider_message_id = Column(String(255), nullable=True)
+    error_message_sanitized = Column(Text, nullable=True)
+    metadata_json = Column(JSONB, nullable=True)
+    created_at = Column(TIMESTAMP(timezone=True), nullable=False, default=func.now())
+    sent_at = Column(TIMESTAMP(timezone=True), nullable=True)
+    failed_at = Column(TIMESTAMP(timezone=True), nullable=True)
