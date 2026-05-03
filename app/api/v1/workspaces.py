@@ -57,7 +57,10 @@ def accept_workspace_invite(token: str, db: Session = Depends(get_db), current_u
     token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
     invite = db.query(WorkspaceInvite).filter(WorkspaceInvite.token_hash == token_hash).first()
     now = datetime.now(timezone.utc)
-    if not invite or invite.accepted_at or invite.expires_at <= now:
+    expires_at = invite.expires_at if invite else None
+    if expires_at and expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    if not invite or invite.accepted_at or (expires_at is not None and expires_at <= now):
         raise HTTPException(status_code=400, detail="Invalid invite")
     exists = db.query(WorkspaceMember).filter(WorkspaceMember.workspace_id == invite.workspace_id, WorkspaceMember.user_id == current_user.id).first()
     if not exists:

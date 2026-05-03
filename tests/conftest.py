@@ -147,6 +147,8 @@ def client(db, test_user):
 def sample_document(db, test_user):
     from app.models.document import Document
 
+    from app.services.workspaces import workspace_service
+    personal_ws = workspace_service.ensure_personal_workspace(db, test_user)
     doc = Document(
         id=uuid.uuid4(),
         filename="test.pdf",
@@ -162,6 +164,7 @@ def sample_document(db, test_user):
         entities={"people": [], "orgs": []},
         action_items=[],
         user_id=test_user.id,
+        workspace_id=personal_ws.id,
     )
     db.add(doc)
     db.commit()
