@@ -14,6 +14,7 @@ def _make_doc(db, sample_document, *, filename: str, user_id):
         processing_status="completed",
         source="upload",
         user_id=user_id,
+        workspace_id=sample_document.workspace_id if user_id == sample_document.user_id else None,
     )
     db.add(doc)
     db.flush()
