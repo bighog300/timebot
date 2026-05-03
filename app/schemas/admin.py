@@ -231,3 +231,66 @@ class AdminInviteResponse(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+class EmailProviderConfigResponse(BaseModel):
+    provider: str
+    enabled: bool
+    from_email: str
+    from_name: str | None
+    reply_to: str | None
+    configured: bool
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class EmailProviderConfigPatchRequest(BaseModel):
+    enabled: bool | None = None
+    from_email: str | None = None
+    from_name: str | None = None
+    reply_to: str | None = None
+    api_key: str | None = None
+
+
+class EmailTemplateCreateRequest(BaseModel):
+    name: str
+    slug: str
+    category: str = Field(pattern="^(transactional|campaign|system)$")
+    status: str = Field(default="draft", pattern="^(draft|active|archived)$")
+    subject: str
+    preheader: str | None = None
+    html_body: str
+    text_body: str | None = None
+    variables_json: dict | list = Field(default_factory=dict)
+
+
+class EmailTemplatePatchRequest(BaseModel):
+    name: str | None = None
+    slug: str | None = None
+    category: str | None = Field(default=None, pattern="^(transactional|campaign|system)$")
+    status: str | None = Field(default=None, pattern="^(draft|active|archived)$")
+    subject: str | None = None
+    preheader: str | None = None
+    html_body: str | None = None
+    text_body: str | None = None
+    variables_json: dict | list | None = None
+
+
+class EmailTemplateResponse(BaseModel):
+    id: UUID
+    name: str
+    slug: str
+    category: str
+    status: str
+    subject: str
+    preheader: str | None
+    html_body: str
+    text_body: str | None
+    variables_json: dict | list
+    created_by_admin_id: UUID | None
+    updated_by_admin_id: UUID | None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}

@@ -63,6 +63,11 @@ import type {
   WorkspaceMember,
   NotificationItem,
   MessageThread,
+  EmailProviderConfig,
+  EmailProviderConfigPatch,
+  EmailTemplate,
+  EmailTemplateCreate,
+  EmailTemplatePatch,
 } from '@/types/api';
 
 
@@ -220,6 +225,15 @@ export const api = {
   updateAdminUsageControls: async (userId: string, usageCredits: Record<string, number>, limitOverrides: Record<string, number | null>): Promise<AdminSubscription> => (await http.patch(`/admin/users/${userId}/usage-controls`, { usage_credits: usageCredits, limit_overrides: limitOverrides })).data,
   cancelOrDowngradeAdminSubscription: async (userId: string, downgradeToPlanSlug: string): Promise<AdminSubscription> => (await http.post(`/admin/users/${userId}/cancel-or-downgrade`, { downgrade_to_plan_slug: downgradeToPlanSlug })).data,
 
+
+  listEmailProviderConfigs: async (): Promise<EmailProviderConfig[]> => (await http.get('/admin/email/providers')).data,
+  getEmailProviderConfig: async (provider: 'resend'|'sendgrid'): Promise<EmailProviderConfig> => (await http.get(`/admin/email/providers/${provider}`)).data,
+  patchEmailProviderConfig: async (provider: 'resend'|'sendgrid', payload: EmailProviderConfigPatch): Promise<EmailProviderConfig> => (await http.patch(`/admin/email/providers/${provider}`, payload)).data,
+  listEmailTemplates: async (): Promise<EmailTemplate[]> => (await http.get('/admin/email/templates')).data,
+  createEmailTemplate: async (payload: EmailTemplateCreate): Promise<EmailTemplate> => (await http.post('/admin/email/templates', payload)).data,
+  getEmailTemplate: async (templateId: string): Promise<EmailTemplate> => (await http.get(`/admin/email/templates/${templateId}`)).data,
+  patchEmailTemplate: async (templateId: string, payload: EmailTemplatePatch): Promise<EmailTemplate> => (await http.patch(`/admin/email/templates/${templateId}`, payload)).data,
+  archiveEmailTemplate: async (templateId: string): Promise<EmailTemplate> => (await http.delete(`/admin/email/templates/${templateId}`)).data,
   listPromptTemplates: async (): Promise<PromptTemplate[]> => (await http.get('/admin/prompts')).data,
   createPromptTemplate: async (payload: PromptTemplateCreateRequest): Promise<PromptTemplate> => (await http.post('/admin/prompts', payload)).data,
   updatePromptTemplate: async (promptId: string, payload: PromptTemplateUpdateRequest): Promise<PromptTemplate> => (await http.put(`/admin/prompts/${promptId}`, payload)).data,
