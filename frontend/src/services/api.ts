@@ -68,6 +68,9 @@ import type {
   EmailTemplate,
   EmailTemplateCreate,
   EmailTemplatePatch,
+  EmailTestSendRequest,
+  EmailTestSendResult,
+  EmailSendLog,
 } from '@/types/api';
 
 
@@ -234,6 +237,8 @@ export const api = {
   getEmailTemplate: async (templateId: string): Promise<EmailTemplate> => (await http.get(`/admin/email/templates/${templateId}`)).data,
   patchEmailTemplate: async (templateId: string, payload: EmailTemplatePatch): Promise<EmailTemplate> => (await http.patch(`/admin/email/templates/${templateId}`, payload)).data,
   archiveEmailTemplate: async (templateId: string): Promise<EmailTemplate> => (await http.delete(`/admin/email/templates/${templateId}`)).data,
+  testSendEmail: async (payload: EmailTestSendRequest): Promise<EmailTestSendResult> => (await http.post('/admin/email/test-send', payload)).data,
+  getEmailSendLogs: async (): Promise<EmailSendLog[]> => (await http.get('/admin/email/send-logs')).data,
   listPromptTemplates: async (): Promise<PromptTemplate[]> => (await http.get('/admin/prompts')).data,
   createPromptTemplate: async (payload: PromptTemplateCreateRequest): Promise<PromptTemplate> => (await http.post('/admin/prompts', payload)).data,
   updatePromptTemplate: async (promptId: string, payload: PromptTemplateUpdateRequest): Promise<PromptTemplate> => (await http.put(`/admin/prompts/${promptId}`, payload)).data,

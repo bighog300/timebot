@@ -632,3 +632,8 @@ export interface EmailProviderConfigPatch { enabled?: boolean; from_email?: stri
 export interface EmailTemplate { id: string; name: string; slug: string; category: 'transactional'|'campaign'|'system'; status: 'draft'|'active'|'archived'; subject: string; preheader?: string | null; html_body: string; text_body?: string | null; variables_json: Record<string, unknown> | unknown[]; created_by_admin_id?: string | null; updated_by_admin_id?: string | null; created_at: string; updated_at: string; }
 export type EmailTemplateCreate = Omit<EmailTemplate,'id'|'created_by_admin_id'|'updated_by_admin_id'|'created_at'|'updated_at'>;
 export type EmailTemplatePatch = Partial<EmailTemplateCreate>;
+
+export interface EmailTestSendRequest { provider?: 'resend'|'sendgrid'; to_email: string; subject?: string; html_body?: string; text_body?: string; }
+export interface EmailTestSendResult { status: string; provider: string; provider_message_id?: string | null; log_id: string; }
+export interface EmailSendLog { id: string; provider: string; recipient_email: string; from_email: string; from_name?: string | null; reply_to?: string | null; subject: string; status: 'queued'|'sent'|'failed'; provider_message_id?: string | null; error_message_sanitized?: string | null; created_at: string; sent_at?: string | null; failed_at?: string | null; }
+
