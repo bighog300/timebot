@@ -339,8 +339,18 @@ def test_admin_prompt_test_creates_execution_log(client, test_user, db, monkeypa
     from app.models.prompt_execution_log import PromptExecutionLog
     test_user.role = 'admin'; db.commit()
     monkeypatch.setattr('app.config.settings.OPENAI_API_KEY', 'test-key')
-    monkeypatch.setattr('app.services.openai_client.openai_client_service.generate_completion_for_provider', lambda *_: type('R', (), {'text':'ok','usage':type('U',(),{'total_tokens':11})()})())
+    monkeypatch.setattr('app.services.openai_client.openai_client_service.generate_completion_for_provider', lambda *_: type('R', (), {'text':'ok','usage':type('U',(),{'prompt_tokens':7,'completion_tokens':4,'total_tokens':11})()})())
     r = client.post('/api/v1/admin/prompts/test', json={'type':'chat','content':'c','sample_context':'s','provider':'openai','model':'gpt-4o-mini','temperature':0.2,'max_tokens':100,'top_p':1})
     assert r.status_code == 200
     row = db.query(PromptExecutionLog).order_by(PromptExecutionLog.created_at.desc()).first()
     assert row is not None and row.source == 'admin_test' and row.success is True
+    assert row.pricing_known is True
+    assert row.estimated_cost_usd is not None
+
+
+def test_record_prompt_execution_unknown_pricing_does_not_fail(db):
+    from app.services.prompt_templates import record_prompt_execution
+
+    row = record_prompt_execution(db, provider='openai', model='missing-model', fallback_used=False, success=True, source='test', input_tokens=10, output_tokens=10)
+    assert row.id is not None
+    assert row.pricing_known is False

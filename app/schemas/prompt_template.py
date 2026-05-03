@@ -1,6 +1,8 @@
 from datetime import datetime
 from uuid import UUID
 
+from decimal import Decimal
+
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 
@@ -111,6 +113,9 @@ class PromptExecutionLogResponse(BaseModel):
     success: bool
     error_message: str | None = None
     source: str | None = None
+    estimated_cost_usd: Decimal | None = None
+    currency: str | None = None
+    pricing_known: bool = False
     created_at: datetime
     class Config:
         from_attributes = True
@@ -124,3 +129,7 @@ class PromptExecutionSummaryResponse(BaseModel):
     total_tokens: int
     calls_by_provider: dict[str, int]
     calls_by_model: dict[str, int]
+    total_estimated_cost_usd: float
+    cost_by_provider: dict[str, float]
+    cost_by_model: dict[str, float]
+    pricing_unknown_count: int

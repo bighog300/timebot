@@ -44,6 +44,7 @@ import type {
   PromptTemplateTestRequest,
   PromptTemplateTestResponse,
   PromptExecutionLog,
+  PromptExecutionSummary,
   UsageSummary,
   SubscriptionSummary,
   PlanSummary,
@@ -180,6 +181,7 @@ export const api = {
   activatePromptTemplate: async (promptId: string): Promise<PromptTemplate> => (await http.post(`/admin/prompts/${promptId}/activate`)).data,
   testPromptTemplate: async (payload: PromptTemplateTestRequest): Promise<PromptTemplateTestResponse> => (await http.post(`/admin/prompts/test`, { type: payload.prompt_type, content: payload.prompt_content, sample_context: payload.sample_context, provider: payload.provider, model: payload.model, temperature: payload.temperature, max_tokens: payload.max_tokens, top_p: payload.top_p, fallback_enabled: payload.fallback_enabled, fallback_provider: payload.fallback_provider, fallback_model: payload.fallback_model })).data,
   listPromptExecutions: async (): Promise<PromptExecutionLog[]> => (await http.get('/admin/prompt-executions')).data,
+  getPromptExecutionSummary: async (): Promise<PromptExecutionSummary> => (await http.get('/admin/prompt-executions/summary')).data,
   listDocuments: async (includeArchived = false): Promise<Document[]> =>
     (await http.get('/documents/', { params: { include_archived: includeArchived } })).data,
   getDocument: async (id: string): Promise<Document> => (await http.get(`/documents/${id}`)).data,

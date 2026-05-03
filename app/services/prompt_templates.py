@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.models.prompt_template import PromptTemplate
 from app.models.prompt_execution_log import PromptExecutionLog
 from app.services.default_prompt_templates import DEFAULT_PROMPT_TEMPLATES
+from app.services.llm_pricing import estimate_llm_cost
 
 PROMPT_TYPES = {"chat", "retrieval", "report", "timeline_extraction", "relationship_detection"}
 
@@ -193,6 +194,10 @@ def run_prompt_with_fallback(prompt_template: PromptTemplate, user_input: str, d
 
 
 def record_prompt_execution(db: Session, **kwargs) -> PromptExecutionLog:
+    pricing = estimate_llm_cost(kwargs.get("provider"), kwargs.get("model"), kwargs.get("input_tokens"), kwargs.get("output_tokens"))
+    kwargs.setdefault("estimated_cost_usd", pricing["estimated_cost_usd"])
+    kwargs.setdefault("currency", pricing["currency"])
+    kwargs.setdefault("pricing_known", pricing["pricing_known"])
     row = PromptExecutionLog(**kwargs)
     db.add(row)
     db.commit()
@@ -225,6 +230,10 @@ def summarize_prompt_executions(db: Session):
     total_tokens = db.query(func.coalesce(func.sum(PromptExecutionLog.total_tokens), 0)).scalar() or 0
     by_provider = dict(db.query(PromptExecutionLog.provider, func.count(PromptExecutionLog.id)).group_by(PromptExecutionLog.provider).all())
     by_model = dict(db.query(PromptExecutionLog.model, func.count(PromptExecutionLog.id)).group_by(PromptExecutionLog.model).all())
+    total_estimated_cost_usd = db.query(func.coalesce(func.sum(PromptExecutionLog.estimated_cost_usd), 0)).scalar() or 0
+    cost_by_provider_rows = db.query(PromptExecutionLog.provider, func.coalesce(func.sum(PromptExecutionLog.estimated_cost_usd), 0)).group_by(PromptExecutionLog.provider).all()
+    cost_by_model_rows = db.query(PromptExecutionLog.model, func.coalesce(func.sum(PromptExecutionLog.estimated_cost_usd), 0)).group_by(PromptExecutionLog.model).all()
+    pricing_unknown_count = db.query(func.count(PromptExecutionLog.id)).filter(PromptExecutionLog.pricing_known.is_(False)).scalar() or 0
     return {
         'total_calls': total_calls,
         'success_rate': (success_calls / total_calls) if total_calls else 0.0,
@@ -233,4 +242,8 @@ def summarize_prompt_executions(db: Session):
         'total_tokens': int(total_tokens),
         'calls_by_provider': by_provider,
         'calls_by_model': by_model,
+        'total_estimated_cost_usd': float(total_estimated_cost_usd),
+        'cost_by_provider': {k: float(v or 0) for k, v in cost_by_provider_rows},
+        'cost_by_model': {k: float(v or 0) for k, v in cost_by_model_rows},
+        'pricing_unknown_count': int(pricing_unknown_count),
     }

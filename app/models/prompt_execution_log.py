@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import Boolean, Column, Integer, String, Text, TIMESTAMP
+from sqlalchemy import Boolean, Column, Integer, Numeric, String, Text, TIMESTAMP
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 
@@ -25,4 +25,7 @@ class PromptExecutionLog(Base):
     success = Column(Boolean, nullable=False, default=True, index=True)
     error_message = Column(Text, nullable=True)
     source = Column(String(128), nullable=True, index=True)
+    estimated_cost_usd = Column(Numeric(12, 6), nullable=True)
+    currency = Column(String(8), nullable=True)
+    pricing_known = Column(Boolean, nullable=False, default=False, server_default="false", index=True)
     created_at = Column(TIMESTAMP(timezone=True), nullable=False, default=func.now(), index=True)

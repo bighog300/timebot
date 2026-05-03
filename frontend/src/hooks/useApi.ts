@@ -230,6 +230,11 @@ export function useBulkDismissReviewItems() {
   });
 }
 
+export function useAdminPromptExecutionSummary() {
+  const authReady = useAuthReady();
+  return useQuery({ queryKey: [...keys.adminPromptExecutions, "summary"], queryFn: api.getPromptExecutionSummary, enabled: authReady });
+}
+
 export function useReviewMetrics() {
   const authReady = useAuthReady();
   return useQuery({ queryKey: keys.reviewMetrics, queryFn: api.getReviewMetrics, enabled: authReady });

@@ -67,3 +67,20 @@ def test_runtime_path_uses_fallback_template_provider(db, monkeypatch):
     monkeypatch.setattr("app.services.openai_client.openai_client_service.generate_completion_for_provider", fake)
     analysis = analyzer.analyze_document("sample", filename="f.txt", file_type="txt", db=db)
     assert analysis["summary"] == "ok"
+
+
+
+def test_estimate_llm_cost_known_model():
+    from app.services.llm_pricing import estimate_llm_cost
+
+    result = estimate_llm_cost('openai', 'gpt-4o-mini', 1000000, 1000000)
+    assert result['pricing_known'] is True
+    assert float(result['estimated_cost_usd']) == 0.75
+
+
+def test_estimate_llm_cost_unknown_model():
+    from app.services.llm_pricing import estimate_llm_cost
+
+    result = estimate_llm_cost('openai', 'unknown-model', 100, 100)
+    assert result['pricing_known'] is False
+    assert result['estimated_cost_usd'] is None
