@@ -10,6 +10,6 @@ vi.mock('@/store/uiStore', () => ({ useUIStore: () => ({ toasts: [], dismissToas
 describe('admin nav', () => {
   it('appears for admin', () => {
     render(<MemoryRouter><AppShell /></MemoryRouter>);
-    expect(screen.getAllByRole('link', { name: 'Admin' }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('link', { name: 'Admin Overview' }).length).toBeGreaterThan(0);
   });
 });

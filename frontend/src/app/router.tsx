@@ -67,25 +67,36 @@ export const router = createBrowserRouter([
       { path: 'connections/callback', element: <ConnectionCallbackPage /> },
       {
         path: 'admin',
-        element: <RequireAdmin><AdminSettingsPage /></RequireAdmin>,
+        element: <RequireAdmin><AdminSettingsLayout /></RequireAdmin>,
         children: [
-          { index: true, element: <Navigate to='/admin/subscriptions' replace /> },
-          { path: 'subscriptions', element: <AdminSubscriptionsPage /> },
+          { index: true, element: <Navigate to='/admin/settings' replace /> },
           { path: 'users', element: <AdminUsersPage /> },
           { path: 'users/:userId/usage', element: <AdminUserUsagePage /> },
-          { path: 'billing', element: <AdminBillingPage /> },
-          { path: 'audit', element: <AdminAuditPage /> },
-          { path: 'chatbot-settings', element: <AdminChatbotSettingsPage /> },
-          { path: 'prompts', element: <AdminPromptTemplatesPage /> },
-          { path: 'prompts/audit', element: <AdminPromptAuditPage /> },
-          { path: 'prompts/analytics', element: <AdminPromptAnalyticsPage /> },
+          { path: 'subscriptions', element: <Navigate to='/admin/settings/plans' replace /> },
+          { path: 'billing', element: <Navigate to='/admin/settings/billing' replace /> },
+          { path: 'audit', element: <Navigate to='/admin/settings/audit' replace /> },
+          { path: 'chatbot-settings', element: <Navigate to='/admin/settings/chatbot' replace /> },
+          { path: 'prompts', element: <Navigate to='/admin/settings/prompts' replace /> },
+          { path: 'prompts/audit', element: <Navigate to='/admin/settings/prompts/audit' replace /> },
+          { path: 'prompts/analytics', element: <Navigate to='/admin/settings/prompts/analytics' replace /> },
+          { path: 'settings', element: <Navigate to='/admin/settings/system' replace /> },
+          { path: 'settings/system', element: <AdminSystemPage /> },
+          { path: 'settings/billing', element: <AdminBillingPage /> },
+          { path: 'settings/plans', element: <AdminPlansPage /> },
+          { path: 'settings/llm', element: <AdminLlmProvidersPage /> },
+          { path: 'settings/chatbot', element: <AdminChatbotSettingsPage /> },
+          { path: 'settings/prompts', element: <AdminPromptTemplatesPage /> },
+          { path: 'settings/prompts/audit', element: <AdminPromptAuditPage /> },
+          { path: 'settings/prompts/analytics', element: <AdminPromptAnalyticsPage /> },
+          { path: 'settings/audit', element: <AdminAuditPage /> },
         ],
       },
     ],
   },
 ]);
 
-import { AdminSettingsPage, AdminSubscriptionsPage, AdminUserUsagePage, AdminBillingPage, AdminAuditPage } from '@/pages/AdminSettingsPage';
+import { AdminUserUsagePage, AdminBillingPage, AdminAuditPage, AdminSystemPage, AdminPlansPage, AdminLlmProvidersPage } from '@/pages/AdminSettingsPage';
+import { AdminSettingsLayout } from '@/pages/admin/AdminSettingsLayout';
 import { AdminPromptTemplatesPage } from '@/pages/AdminPromptTemplatesPage';
 import { AdminPromptAuditPage } from '@/pages/AdminPromptAuditPage';
 import { AdminPromptAnalyticsPage } from '@/pages/AdminPromptAnalyticsPage';
