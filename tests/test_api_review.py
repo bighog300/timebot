@@ -5,7 +5,7 @@ from uuid import uuid4
 from fastapi.testclient import TestClient
 
 from app.main import app
-from app.api.deps import get_current_user
+from app.api.deps import get_active_workspace, get_current_user
 from app.api.v1.queue import queue_stats
 from app.schemas.document import DocumentResponse
 from app.services.document_processor import DocumentProcessor
@@ -50,7 +50,8 @@ def test_get_review_queue_returns_pending_only(monkeypatch):
     docs = [_doc(review_status="pending", ai_confidence=0.2)]
 
     app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(id=uuid4(), email="reviewer@example.com")
-    monkeypatch.setattr("app.api.v1.documents.crud_document.get_review_queue", lambda db, user, status, skip, limit: docs)
+    app.dependency_overrides[get_active_workspace] = lambda: SimpleNamespace(id=uuid4())
+    monkeypatch.setattr("app.api.v1.documents.crud_document.get_review_queue", lambda *args, **kwargs: docs)
 
     with TestClient(app) as client:
         response = client.get("/api/v1/documents/review-queue")
@@ -75,7 +76,8 @@ def test_review_endpoint_approve_sets_review_fields(monkeypatch):
     doc = _doc()
 
     app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(id=uuid4(), email="editor@example.com")
-    monkeypatch.setattr("app.api.v1.documents.crud_document.get_document", lambda db, id, user: doc)
+    app.dependency_overrides[get_active_workspace] = lambda: SimpleNamespace(id=uuid4())
+    monkeypatch.setattr("app.api.v1.documents.crud_document.get_document", lambda *args, **kwargs: doc)
 
     def _update(db, db_obj, **kwargs):
         for key, value in kwargs.items():
@@ -99,7 +101,8 @@ def test_review_endpoint_edit_stores_overrides(monkeypatch):
     doc = _doc()
 
     app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(id=uuid4(), email="reviewer@example.com")
-    monkeypatch.setattr("app.api.v1.documents.crud_document.get_document", lambda db, id, user: doc)
+    app.dependency_overrides[get_active_workspace] = lambda: SimpleNamespace(id=uuid4())
+    monkeypatch.setattr("app.api.v1.documents.crud_document.get_document", lambda *args, **kwargs: doc)
 
     def _update(db, db_obj, **kwargs):
         for key, value in kwargs.items():

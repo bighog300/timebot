@@ -57,7 +57,7 @@ describe('admin settings', () => {
 
   it('plans panel is editable and can save updates', async () => {
     render(<MemoryRouter><AdminPlansPage /></MemoryRouter>);
-    fireEvent.change(screen.getByDisplayValue('10'), { target: { value: '20' } });
+    fireEvent.change(screen.getAllByDisplayValue('10')[0], { target: { value: '20' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     expect(mutateAdminPlan).toHaveBeenCalled();
   });
