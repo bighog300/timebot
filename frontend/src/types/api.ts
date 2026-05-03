@@ -379,7 +379,7 @@ export interface DocumentCluster {
 }
 
 
-export interface AdminUser { id: string; email: string; display_name: string; role: string; created_at: string; }
+export interface AdminUser { id: string; email: string; display_name: string; role: string; created_at: string; is_active: boolean; }
 export interface AdminUsersPage { items: AdminUser[]; total_count: number; limit: number; offset: number; }
 export interface AdminAuditEvent { id: string; actor_id: string | null; actor_email: string | null; entity_type: string; entity_id: string; action: string; details: Record<string, unknown>; created_at: string; }
 export interface AdminAuditPage { items: AdminAuditEvent[]; total_count: number; limit: number; offset: number; }
@@ -593,3 +593,5 @@ export interface PromptExecutionSummary {
   failures_by_provider: Record<string, number>;
   fallback_by_provider: Record<string, number>;
 }
+
+export interface AdminInvite { id: string; email: string; role: string; status: string; created_at: string; dev_invite_link?: string | null; }
