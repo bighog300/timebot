@@ -46,6 +46,12 @@ def send_campaign_recipient_email(recipient_id: str):
         db.close()
 
 
+def enqueue_campaign_recipient_send(recipient_id: str):
+    if settings.CELERY_TASK_ALWAYS_EAGER:
+        return send_campaign_recipient_email.apply(args=[recipient_id])
+    return send_campaign_recipient_email.delay(recipient_id)
+
+
 @celery_app.task(
     bind=True,
     name="app.workers.tasks.process_document_task",

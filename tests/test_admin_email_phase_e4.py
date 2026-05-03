@@ -39,13 +39,7 @@ def test_campaign_send_safety_and_tracking(client, test_user, db, monkeypatch):
     db.add(extra); db.commit(); db.refresh(extra)
     t = _template(db, 'active')
 
-    sent_to = []
-    def fake_send(self, **kwargs):
-        sent_to.append(kwargs['to_email'])
-        if kwargs['to_email'] == 'fail@example.com':
-            raise HTTPException(status_code=502, detail='Provider failed with key=SECRET_TOKEN')
-        return {'status': 'sent', 'provider': 'default', 'log_id': 'log123'}
-    monkeypatch.setattr('app.api.v1.admin.EmailDeliveryService.send_email', fake_send)
+    monkeypatch.setattr('app.api.v1.admin.enqueue_campaign_recipient_send', lambda rid: True)
 
     cid = _campaign(client, str(t.id), audience_filters_json={'emails': ['a@example.com', 'A@example.com', 'bad', 'fail@example.com']})
     db.add(EmailSuppression(email='a@example.com', reason='manual'))
@@ -54,20 +48,18 @@ def test_campaign_send_safety_and_tracking(client, test_user, db, monkeypatch):
     assert preview.status_code == 200
     p = preview.json()
     assert p['total_candidates'] == 4 and p['suppressed_count'] == 1 and p['invalid_count'] == 1 and p['duplicate_count'] == 1 and p['sendable_count'] == 1
-    assert sent_to == []
 
     bad_confirm = client.post(f'/api/v1/admin/email/campaigns/{cid}/send', json={'confirmation_text': 'send campaign'})
     assert bad_confirm.status_code == 400
 
     ok = client.post(f'/api/v1/admin/email/campaigns/{cid}/send', json={'confirmation_text': 'SEND CAMPAIGN'})
     assert ok.status_code == 200
-    assert sent_to == ['fail@example.com']
     rows = db.query(EmailCampaignRecipient).filter(EmailCampaignRecipient.campaign_id == cid).all()
     assert len(rows) == 3
     reasons = {(r.email, r.status, r.skip_reason) for r in rows if r.skip_reason}
     assert ('a@example.com', 'skipped', 'suppressed') in reasons and ('bad', 'skipped', 'invalid') in reasons
-    failed = [r for r in rows if r.email == 'fail@example.com'][0]
-    assert failed.status == 'failed'
+    failed = [r for r in rows if r.email == "fail@example.com"][0]
+    assert failed.status == 'queued'
     assert db.query(EmailSendLog).filter(EmailSendLog.campaign_id == cid, EmailSendLog.template_id == t.id).count() == 0
     assert db.query(AdminAuditEvent).filter(AdminAuditEvent.action == 'email_campaign_send_started').count() == 1
 
