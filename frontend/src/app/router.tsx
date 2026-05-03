@@ -24,6 +24,10 @@ import { ReportsPage } from '@/pages/ReportsPage';
 import { ChatPage } from '@/pages/ChatPage';
 import { AdminPromptTemplatesPage } from '@/pages/AdminPromptTemplatesPage';
 import { PricingPage } from '@/pages/PricingPage';
+import { SettingsLayoutPage } from '@/pages/settings/SettingsLayoutPage';
+import { SettingsAccountPage } from '@/pages/settings/SettingsAccountPage';
+import { SettingsBillingPage } from '@/pages/settings/SettingsBillingPage';
+import { SettingsUsagePage } from '@/pages/settings/SettingsUsagePage';
 
 export const router = createBrowserRouter([
   { path: '/login', element: <LoginPage /> },
@@ -53,6 +57,16 @@ export const router = createBrowserRouter([
       { path: 'chat', element: <ChatPage /> },
       { path: 'reports', element: <ReportsPage /> },
       { path: 'pricing', element: <PricingPage /> },
+      {
+        path: 'settings',
+        element: <SettingsLayoutPage />,
+        children: [
+          { index: true, element: <SettingsAccountPage /> },
+          { path: 'account', element: <SettingsAccountPage /> },
+          { path: 'billing', element: <SettingsBillingPage /> },
+          { path: 'usage', element: <SettingsUsagePage /> },
+        ],
+      },
       { path: 'connections/callback', element: <ConnectionCallbackPage /> },
       { path: 'admin', element: <RequireAdmin><AdminPage /></RequireAdmin> },
       { path: 'admin/chatbot-settings', element: <RequireAdmin><AdminChatbotSettingsPage /></RequireAdmin> },

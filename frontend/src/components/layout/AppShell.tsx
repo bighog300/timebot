@@ -25,6 +25,7 @@ const baseLinks = [
   ['/connections', 'Connections'],
   ['/chat', 'Chat'],
   ['/reports', 'Reports'],
+  ['/settings', 'Settings'],
 ] as const;
 
 const adminLinks = [['/admin', 'Admin'], ['/admin/chatbot-settings', 'Chatbot Settings'], ['/admin/prompts', 'Prompt Templates']] as const;
