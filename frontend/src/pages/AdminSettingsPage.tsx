@@ -10,6 +10,9 @@ import {
   useAdminCancelOrDowngrade,
   useAdminSystemStatus,
   useAdminLlmModels,
+  useAdminSystemHealth,
+  useAdminSystemJobs,
+  useAdminLlmMetricsSystem,
   useAdminPlans,
   useUpdateAdminPlan,
   useResetAdminPlanDefaults,
@@ -96,7 +99,25 @@ export function AdminAuditPage() {
 }
 
 
-export function AdminSystemPage() { return <AdminBillingPage />; }
+export function AdminSystemPage() {
+  const health = useAdminSystemHealth();
+  const jobs = useAdminSystemJobs();
+  const llm = useAdminLlmMetricsSystem();
+  if (health.isLoading || jobs.isLoading || llm.isLoading) return <Card>Loading system observability...</Card>;
+  if (health.isError || jobs.isError || llm.isError) return <Card>Failed to load observability dashboard. <button className='underline' onClick={()=>{health.refetch();jobs.refetch();llm.refetch();}}>Refresh</button></Card>;
+  if (!health.data || !jobs.data || !llm.data) return <Card>No observability data available.</Card>;
+  return <Card><div className='space-y-3'>
+    <div className='flex items-center justify-between'><h2 className='text-lg'>System observability</h2><button className='rounded bg-slate-700 px-2 py-1 text-sm' onClick={()=>{health.refetch();jobs.refetch();llm.refetch();}}>Refresh</button></div>
+    <p>Overall status: <strong>{health.data.overall_status}</strong></p>
+    <p>Database: {health.data.database.status} • Redis: {health.data.redis.status} • Celery: {health.data.celery.status} • Vector store: {health.data.vector_store.status}</p>
+    <p>LLM providers: {Object.entries(health.data.llm_providers).map(([k,v])=>`${k}:${v.status}`).join(', ') || 'None'}</p>
+    <h3 className='font-medium'>Job queues</h3>
+    <p>Queue length: {jobs.data.queue_length} • Active: {jobs.data.active_jobs} • Failed: {jobs.data.failed_jobs} • Completed: {jobs.data.recent_completed_jobs} • Retries: {jobs.data.retry_count}</p>
+    <p>Recent sanitized failures: {jobs.data.last_error_summary ?? 'None'}</p>
+    <h3 className='font-medium'>LLM error rates</h3>
+    <p>Total calls: {llm.data.total_calls} • Success: {llm.data.success_count} • Errors: {llm.data.error_count} • Error rate: {(llm.data.error_rate*100).toFixed(2)}%</p>
+  </div></Card>;
+}
 
 export function AdminPlansPage() {
   const { pushToast } = useUIStore();

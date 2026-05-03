@@ -57,6 +57,9 @@ export const keys = {
   adminPlans: ['admin-plans'] as const,
   adminUsageSummary: (userId: string) => ['admin-usage-summary', userId] as const,
   adminSystemStatus: ['admin-system-status'] as const,
+  adminSystemHealth: ['admin-system-health'] as const,
+  adminSystemJobs: ['admin-system-jobs'] as const,
+  adminLlmMetricsSystem: ['admin-llm-metrics-system'] as const,
   adminPrompts: ['admin-prompts'] as const,
   adminPromptExecutions: ['admin-prompt-executions'] as const,
   adminLlmModels: ['admin-llm-models'] as const,
@@ -530,6 +533,9 @@ export function useAdminSubscriptions() { const authReady = useAuthReady(); retu
 export function useAdminPlans() { const authReady = useAuthReady(); return useQuery({ queryKey: keys.adminPlans, queryFn: api.listAdminPlans, enabled: authReady }); }
 export function useAdminUsageSummary(userId: string) { const authReady = useAuthReady(); return useQuery({ queryKey: keys.adminUsageSummary(userId), queryFn: () => api.getAdminUsageSummary(userId), enabled: authReady && Boolean(userId) }); }
 export function useAdminSystemStatus() { const authReady = useAuthReady(); return useQuery({ queryKey: keys.adminSystemStatus, queryFn: api.getAdminSystemStatus, enabled: authReady }); }
+export function useAdminSystemHealth() { const authReady = useAuthReady(); return useQuery({ queryKey: keys.adminSystemHealth, queryFn: api.getAdminSystemHealth, enabled: authReady }); }
+export function useAdminSystemJobs() { const authReady = useAuthReady(); return useQuery({ queryKey: keys.adminSystemJobs, queryFn: api.getAdminSystemJobs, enabled: authReady }); }
+export function useAdminLlmMetricsSystem() { const authReady = useAuthReady(); return useQuery({ queryKey: keys.adminLlmMetricsSystem, queryFn: api.getAdminLlmMetrics, enabled: authReady }); }
 export function useAdminUpdateUserPlan() {
   const qc = useQueryClient();
   return useMutation({ mutationFn: ({ userId, plan_slug }: { userId: string; plan_slug: string }) => api.updateAdminUserPlan(userId, plan_slug), onSuccess: () => { qc.invalidateQueries({ queryKey: keys.adminSubscriptions }); qc.invalidateQueries({ queryKey: ['admin-audit'] }); } });
