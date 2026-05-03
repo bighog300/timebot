@@ -42,6 +42,24 @@ class EmailTemplate(Base):
     updated_at = Column(TIMESTAMP(timezone=True), nullable=False, default=func.now(), onupdate=func.now())
 
 
+class EmailCampaign(Base):
+    __tablename__ = "email_campaigns"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name = Column(String(255), nullable=False, index=True)
+    template_id = Column(UUID(as_uuid=True), ForeignKey("email_templates.id", ondelete="RESTRICT"), nullable=False)
+    audience_type = Column(String(64), nullable=False, default="all_users")
+    audience_filters_json = Column(JSONB, nullable=True)
+    status = Column(String(32), nullable=False, default="draft", index=True)
+    subject_override = Column(String(500), nullable=True)
+    preheader_override = Column(String(500), nullable=True)
+    variables_json = Column(JSONB, nullable=True)
+    created_by_admin_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    updated_by_admin_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at = Column(TIMESTAMP(timezone=True), nullable=False, default=func.now())
+    updated_at = Column(TIMESTAMP(timezone=True), nullable=False, default=func.now(), onupdate=func.now())
+
+
 class EmailSendLog(Base):
     __tablename__ = "email_send_logs"
 

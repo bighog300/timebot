@@ -71,6 +71,11 @@ import type {
   EmailTestSendRequest,
   EmailTestSendResult,
   EmailSendLog,
+  EmailCampaign,
+  EmailCampaignCreate,
+  EmailCampaignPatch,
+  EmailCampaignPreviewResponse,
+  EmailCampaignTestSendRequest,
 } from '@/types/api';
 
 
@@ -237,6 +242,13 @@ export const api = {
   getEmailTemplate: async (templateId: string): Promise<EmailTemplate> => (await http.get(`/admin/email/templates/${templateId}`)).data,
   patchEmailTemplate: async (templateId: string, payload: EmailTemplatePatch): Promise<EmailTemplate> => (await http.patch(`/admin/email/templates/${templateId}`, payload)).data,
   archiveEmailTemplate: async (templateId: string): Promise<EmailTemplate> => (await http.delete(`/admin/email/templates/${templateId}`)).data,
+  listEmailCampaigns: async (): Promise<EmailCampaign[]> => (await http.get('/admin/email/campaigns')).data,
+  createEmailCampaign: async (payload: EmailCampaignCreate): Promise<EmailCampaign> => (await http.post('/admin/email/campaigns', payload)).data,
+  getEmailCampaign: async (campaignId: string): Promise<EmailCampaign> => (await http.get(`/admin/email/campaigns/${campaignId}`)).data,
+  patchEmailCampaign: async (campaignId: string, payload: EmailCampaignPatch): Promise<EmailCampaign> => (await http.patch(`/admin/email/campaigns/${campaignId}`, payload)).data,
+  archiveEmailCampaign: async (campaignId: string): Promise<EmailCampaign> => (await http.delete(`/admin/email/campaigns/${campaignId}`)).data,
+  previewEmailCampaign: async (campaignId: string, payload: { variables_json?: Record<string, unknown> | null }): Promise<EmailCampaignPreviewResponse> => (await http.post(`/admin/email/campaigns/${campaignId}/preview`, payload)).data,
+  testSendCampaign: async (campaignId: string, payload: EmailCampaignTestSendRequest): Promise<EmailTestSendResult> => (await http.post(`/admin/email/campaigns/${campaignId}/test-send`, payload)).data,
   testSendEmail: async (payload: EmailTestSendRequest): Promise<EmailTestSendResult> => (await http.post('/admin/email/test-send', payload)).data,
   getEmailSendLogs: async (): Promise<EmailSendLog[]> => (await http.get('/admin/email/send-logs')).data,
   listPromptTemplates: async (): Promise<PromptTemplate[]> => (await http.get('/admin/prompts')).data,
