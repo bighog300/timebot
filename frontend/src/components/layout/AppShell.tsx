@@ -28,6 +28,8 @@ const baseLinks = [
   ['/connections', 'Connections'],
   ['/chat', 'Chat'],
   ['/reports', 'Reports'],
+  ['/notifications', 'Notifications'],
+  ['/messages', 'Messages'],
   ['/settings', 'Settings'],
 ] as const;
 
