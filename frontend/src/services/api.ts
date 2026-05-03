@@ -102,6 +102,49 @@ export function getErrorDetail(error: unknown): string {
   return error instanceof Error ? error.message : 'Unexpected error';
 }
 
+const ALLOWED_PLAN_LIMIT_KEYS = ['documents_per_month', 'storage_bytes', 'processing_jobs_per_month', 'seats'] as const;
+const ALLOWED_PLAN_FEATURE_KEYS = ['basic_search', 'chat', 'priority_support', 'team_workspace', 'insights_enabled', 'category_intelligence_enabled', 'relationship_detection_enabled'] as const;
+
+type AdminPlanPatchPayload = Partial<Pick<AdminPlan, 'name' | 'price_monthly_cents' | 'limits_json' | 'features_json' | 'is_active'>>;
+
+export function normalizeAdminPlanPatchPayload(payload: AdminPlanPatchPayload): AdminPlanPatchPayload {
+  const normalized: AdminPlanPatchPayload = {};
+
+  if (typeof payload.name === 'string') normalized.name = payload.name;
+  if (typeof payload.is_active === 'boolean') normalized.is_active = payload.is_active;
+
+  if (payload.price_monthly_cents !== undefined && payload.price_monthly_cents !== null) {
+    const parsed = Number(payload.price_monthly_cents as unknown);
+    if (Number.isFinite(parsed)) normalized.price_monthly_cents = parsed;
+  }
+
+  if (payload.limits_json && typeof payload.limits_json === 'object') {
+    const limits: Record<string, number | null> = {};
+    for (const key of ALLOWED_PLAN_LIMIT_KEYS) {
+      const value: unknown = payload.limits_json[key];
+      if (value === undefined) continue;
+      if (value === null || (typeof value === 'string' && value.trim() === '')) {
+        limits[key] = null;
+        continue;
+      }
+      const parsed = Number(value);
+      if (Number.isFinite(parsed)) limits[key] = parsed;
+    }
+    normalized.limits_json = limits;
+  }
+
+  if (payload.features_json && typeof payload.features_json === 'object') {
+    const features: Record<string, boolean> = {};
+    for (const key of ALLOWED_PLAN_FEATURE_KEYS) {
+      const value = payload.features_json[key];
+      if (typeof value === 'boolean') features[key] = value;
+    }
+    normalized.features_json = features;
+  }
+
+  return normalized;
+}
+
 export const api = {
   listWorkspaces: async (): Promise<Workspace[]> => (await http.get("/workspaces")).data,
   getWorkspace: async (workspaceId: string): Promise<Workspace> => (await http.get(`/workspaces/${workspaceId}`)).data,
@@ -226,7 +269,7 @@ export const api = {
 
   listAdminSubscriptions: async (): Promise<AdminSubscription[]> => (await http.get('/admin/subscriptions')).data,
   listAdminPlans: async (): Promise<AdminPlan[]> => (await http.get('/admin/plans')).data,
-  updateAdminPlan: async (planId: string, payload: Partial<Pick<AdminPlan, 'name' | 'price_monthly_cents' | 'limits_json' | 'features_json' | 'is_active'>>): Promise<AdminPlan> => (await http.patch(`/admin/plans/${planId}`, payload)).data,
+  updateAdminPlan: async (planId: string, payload: AdminPlanPatchPayload): Promise<AdminPlan> => (await http.patch(`/admin/plans/${planId}`, normalizeAdminPlanPatchPayload(payload))).data,
   resetAdminPlanDefaults: async (): Promise<AdminPlan[]> => (await http.post('/admin/plans/reset-defaults')).data,
   getAdminUsageSummary: async (userId: string): Promise<AdminUsageSummary> => (await http.get(`/admin/users/${userId}/usage-summary`)).data,
   getAdminSystemStatus: async (): Promise<AdminSystemStatus> => (await http.get('/admin/system-status')).data,
