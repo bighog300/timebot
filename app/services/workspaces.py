@@ -22,7 +22,10 @@ class WorkspaceService:
             return existing
         ws = Workspace(name=f"{user.display_name}'s Workspace", type="personal", owner_user_id=user.id)
         db.add(ws)
-        db.flush()
+        if hasattr(db, "flush"):
+            db.flush()
+        else:
+            db.commit()
         db.add(WorkspaceMember(workspace_id=ws.id, user_id=user.id, role="owner"))
         db.commit()
         db.refresh(ws)

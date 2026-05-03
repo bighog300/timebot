@@ -17,19 +17,20 @@ def create_document(db: Session, obj_in: DocumentCreate, user: User, workspace_i
     return db_obj
 
 
-def get_document(db: Session, id: UUID, user: User, workspace_id=None) -> Optional[Document]:
-    q = db.query(Document).filter(Document.id == id, Document.user_id == user.id)
+def _workspace_filter(q, workspace_id, user_id):
     if workspace_id is not None:
-        q = q.filter(Document.workspace_id == workspace_id)
+        return q.filter(or_(Document.workspace_id == workspace_id, (Document.workspace_id.is_(None) & (Document.user_id == user_id))))
+    return q.filter(Document.user_id == user_id)
+
+
+def get_document(db: Session, id: UUID, user: User, workspace_id=None) -> Optional[Document]:
+    q = db.query(Document).filter(Document.id == id)
+    q = _workspace_filter(q, workspace_id, user.id)
     return q.first()
 
 
-def get_documents(
-    db: Session, user: User, workspace_id=None, skip: int = 0, limit: int = 100, include_archived: bool = False
-) -> List[Document]:
-    q = db.query(Document).filter(Document.user_id == user.id)
-    if workspace_id is not None:
-        q = q.filter(Document.workspace_id == workspace_id)
+def get_documents(db: Session, user: User, workspace_id=None, skip: int = 0, limit: int = 100, include_archived: bool = False) -> List[Document]:
+    q = _workspace_filter(db.query(Document), workspace_id, user.id)
     if not include_archived:
         q = q.filter(Document.is_archived == False)
     return q.order_by(desc(Document.upload_date)).offset(skip).limit(limit).all()
@@ -54,9 +55,7 @@ def update_document_fields(db: Session, db_obj: Document, **kwargs) -> Document:
 
 
 def delete_document(db: Session, id: UUID, user: User, workspace_id=None) -> Optional[Document]:
-    q = db.query(Document).filter(Document.id == id, Document.user_id == user.id)
-    if workspace_id is not None:
-        q = q.filter(Document.workspace_id == workspace_id)
+    q = _workspace_filter(db.query(Document).filter(Document.id == id), workspace_id, user.id)
     obj = q.first()
     if obj:
         db.delete(obj)
@@ -65,59 +64,25 @@ def delete_document(db: Session, id: UUID, user: User, workspace_id=None) -> Opt
 
 
 def search_documents(db: Session, user: User, workspace_id, query: str, skip: int = 0, limit: int = 20) -> List[Document]:
-    return (
-        db.query(Document)
-        .filter(
-            Document.search_vector.op("@@")(func.plainto_tsquery("english", query)),
-            Document.is_archived == False,
-            Document.user_id == user.id,
-            Document.workspace_id == workspace_id,
-        )
-        .order_by(desc(Document.upload_date))
-        .offset(skip)
-        .limit(limit)
-        .all()
-    )
+    q = db.query(Document).filter(Document.search_vector.op("@@")(func.plainto_tsquery("english", query)), Document.is_archived == False)
+    q = _workspace_filter(q, workspace_id, user.id)
+    return q.order_by(desc(Document.upload_date)).offset(skip).limit(limit).all()
 
 
-def get_documents_by_category(
-    db: Session, user: User, category_id: UUID, skip: int = 0, limit: int = 100
-) -> List[Document]:
-    return (
-        db.query(Document)
-        .filter(
-            or_(
-                Document.ai_category_id == category_id,
-                Document.user_category_id == category_id,
-            ),
-            Document.is_archived == False,
-            Document.user_id == user.id,
-            Document.workspace_id == workspace_id,
-        )
-        .order_by(desc(Document.upload_date))
-        .offset(skip)
-        .limit(limit)
-        .all()
-    )
+def get_documents_by_category(db: Session, user: User, category_id: UUID, workspace_id=None, skip: int = 0, limit: int = 100) -> List[Document]:
+    q = db.query(Document).filter(or_(Document.ai_category_id == category_id, Document.user_category_id == category_id), Document.is_archived == False)
+    q = _workspace_filter(q, workspace_id, user.id)
+    return q.order_by(desc(Document.upload_date)).offset(skip).limit(limit).all()
 
 
-def count_documents(db: Session, user: User, include_archived: bool = False) -> int:
-    q = db.query(Document).filter(Document.user_id == user.id)
-    if workspace_id is not None:
-        q = q.filter(Document.workspace_id == workspace_id)
+def count_documents(db: Session, user: User, workspace_id=None, include_archived: bool = False) -> int:
+    q = _workspace_filter(db.query(Document), workspace_id, user.id)
     if not include_archived:
         q = q.filter(Document.is_archived == False)
     return q.count()
 
 
-def get_review_queue(
-    db: Session, user: User, workspace_id=None, status: str = "pending", skip: int = 0, limit: int = 50
-) -> List[Document]:
-    return (
-        db.query(Document)
-        .filter(Document.review_status == status, Document.is_archived == False, Document.user_id == user.id, Document.workspace_id == workspace_id)
-        .order_by(Document.ai_confidence.asc().nullsfirst(), desc(Document.upload_date))
-        .offset(skip)
-        .limit(limit)
-        .all()
-    )
+def get_review_queue(db: Session, user: User, workspace_id=None, status: str = "pending", skip: int = 0, limit: int = 50) -> List[Document]:
+    q = db.query(Document).filter(Document.review_status == status, Document.is_archived == False)
+    q = _workspace_filter(q, workspace_id, user.id)
+    return q.order_by(Document.ai_confidence.asc().nullsfirst(), desc(Document.upload_date)).offset(skip).limit(limit).all()
