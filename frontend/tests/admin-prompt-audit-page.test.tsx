@@ -9,7 +9,7 @@ type PromptAuditHookState = {
 };
 
 type PromptAuditSummaryState = {
-  data: { total_estimated_cost_usd: number } | null;
+  data: { total_estimated_cost_usd: number | string | null } | null;
 };
 
 const mockState: PromptAuditHookState = {
@@ -66,4 +66,18 @@ test('unknown pricing renders fallback label', () => {
 
   render(<AdminPromptAuditPage />);
   expect(screen.getByText('pricing unknown')).toBeInTheDocument();
+});
+
+test('string numeric values are formatted without crashing', () => {
+  mockState.isLoading = false;
+  mockState.isError = false;
+  mockState.data = [{ id:'3', prompt_template_id:null, purpose:null, actor_user_id:null, provider:'openai', model:'gpt-4o-mini', fallback_used:false, primary_error:null, latency_ms:'42', input_tokens:'1', output_tokens:'2', total_tokens:'3456', success:true, error_message:null, source:'admin_test', estimated_cost_usd:'0.0005', currency:'USD', pricing_known:true, created_at:new Date().toISOString() }];
+  summaryState.data = { total_estimated_cost_usd: '1.5' };
+
+  render(<AdminPromptAuditPage />);
+
+  expect(screen.getByText('USD 0.000500')).toBeInTheDocument();
+  expect(screen.getByText('3,456')).toBeInTheDocument();
+  expect(screen.getByText('42')).toBeInTheDocument();
+  expect(screen.getByText('$1.500000')).toBeInTheDocument();
 });

@@ -596,19 +596,19 @@ export interface AdminPromptExecutionSummaryFilters {
   created_before?: string;
 }
 
-export interface PromptExecutionLog { id: string; prompt_template_id: string | null; purpose: string | null; actor_user_id: string | null; provider: string; model: string; fallback_used: boolean; fallback_reason: string | null; primary_provider: string | null; primary_model: string | null; primary_error: string | null; latency_ms: number | null; input_tokens: number | null; output_tokens: number | null; total_tokens: number | null; success: boolean; error_message: string | null; source: string | null; estimated_cost_usd: number | null; currency: string | null; pricing_known: boolean; created_at: string; }
+export interface PromptExecutionLog { id: string; prompt_template_id: string | null; purpose: string | null; actor_user_id: string | null; provider: string; model: string; fallback_used: boolean; fallback_reason: string | null; primary_provider: string | null; primary_model: string | null; primary_error: string | null; latency_ms: number | string | null; input_tokens: number | string | null; output_tokens: number | string | null; total_tokens: number | string | null; success: boolean; error_message: string | null; source: string | null; estimated_cost_usd: number | string | null; currency: string | null; pricing_known: boolean; created_at: string; }
 
 export interface PromptExecutionSummary {
   total_calls: number;
   success_rate: number;
   fallback_rate: number;
-  avg_latency_ms: number | null;
-  total_tokens: number;
+  avg_latency_ms: number | string | null;
+  total_tokens: number | string;
   calls_by_provider: Record<string, number>;
   calls_by_model: Record<string, number>;
-  total_estimated_cost_usd: number;
-  cost_by_provider: Record<string, number>;
-  cost_by_model: Record<string, number>;
+  total_estimated_cost_usd: number | string | null;
+  cost_by_provider: Record<string, number | string>;
+  cost_by_model: Record<string, number | string>;
   pricing_unknown_count: number;
   calls_by_source: Record<string, number>;
   failures_by_provider: Record<string, number>;
