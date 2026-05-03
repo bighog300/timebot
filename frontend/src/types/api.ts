@@ -528,3 +528,23 @@ export interface UsageSummary {
   reports: UsageMetric;
   chat_messages: UsageMetric;
 }
+
+
+export interface AdminSubscription {
+  user_id: string;
+  email: string;
+  subscription_id: string;
+  plan_slug: string;
+  plan_name: string;
+  status: string;
+  cancel_at_period_end: boolean;
+  usage_credits: Record<string, number>;
+  limit_overrides: Record<string, number>;
+}
+
+export interface AdminUsageSummary {
+  user_id: string;
+  window_start: string;
+  window_end: string;
+  usage: Record<string, unknown>;
+}
