@@ -333,3 +333,14 @@ def test_prompt_test_primary_failure_without_fallback_returns_error(client, test
     r = client.post('/api/v1/admin/prompts/test', json={"type":"chat","content":"x","sample_context":"y","provider":"openai","model":"gpt-4o-mini"})
     assert r.status_code == 502
 
+
+
+def test_admin_prompt_test_creates_execution_log(client, test_user, db, monkeypatch):
+    from app.models.prompt_execution_log import PromptExecutionLog
+    test_user.role = 'admin'; db.commit()
+    monkeypatch.setattr('app.config.settings.OPENAI_API_KEY', 'test-key')
+    monkeypatch.setattr('app.services.openai_client.openai_client_service.generate_completion_for_provider', lambda *_: type('R', (), {'text':'ok','usage':type('U',(),{'total_tokens':11})()})())
+    r = client.post('/api/v1/admin/prompts/test', json={'type':'chat','content':'c','sample_context':'s','provider':'openai','model':'gpt-4o-mini','temperature':0.2,'max_tokens':100,'top_p':1})
+    assert r.status_code == 200
+    row = db.query(PromptExecutionLog).order_by(PromptExecutionLog.created_at.desc()).first()
+    assert row is not None and row.source == 'admin_test' and row.success is True

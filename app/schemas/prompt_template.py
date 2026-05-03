@@ -93,3 +93,34 @@ class PromptTemplateTestResponse(BaseModel):
     provider_used: str
     model_used: str
     primary_error: str | None = None
+
+
+class PromptExecutionLogResponse(BaseModel):
+    id: UUID
+    prompt_template_id: UUID | None = None
+    purpose: str | None = None
+    actor_user_id: UUID | None = None
+    provider: str
+    model: str
+    fallback_used: bool
+    primary_error: str | None = None
+    latency_ms: int | None = None
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+    total_tokens: int | None = None
+    success: bool
+    error_message: str | None = None
+    source: str | None = None
+    created_at: datetime
+    class Config:
+        from_attributes = True
+
+
+class PromptExecutionSummaryResponse(BaseModel):
+    total_calls: int
+    success_rate: float
+    fallback_rate: float
+    avg_latency_ms: float | None = None
+    total_tokens: int
+    calls_by_provider: dict[str, int]
+    calls_by_model: dict[str, int]

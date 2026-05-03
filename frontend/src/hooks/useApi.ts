@@ -56,6 +56,7 @@ export const keys = {
   adminUsageSummary: (userId: string) => ['admin-usage-summary', userId] as const,
   adminSystemStatus: ['admin-system-status'] as const,
   adminPrompts: ['admin-prompts'] as const,
+  adminPromptExecutions: ['admin-prompt-executions'] as const,
   adminLlmModels: ['admin-llm-models'] as const,
   chatbotSettings: ['chatbot-settings'] as const,
   chatSessions: ['chat-sessions'] as const,
@@ -639,3 +640,5 @@ export function useSubscription() { const authReady = useAuthReady(); return use
 export function usePlans() { const authReady = useAuthReady(); return useQuery({ queryKey: keys.plans, queryFn: api.listPlans, enabled: authReady }); }
 export function useCreateCheckoutSession() { return useMutation({ mutationFn: (plan: string) => api.createCheckoutSession(plan) }); }
 export function useCreateCustomerPortalSession() { return useMutation({ mutationFn: () => api.createCustomerPortalSession() }); }
+
+export function useAdminPromptExecutions() { const authReady = useAuthReady(); return useQuery({ queryKey: keys.adminPromptExecutions, queryFn: api.listPromptExecutions, enabled: authReady }); }
