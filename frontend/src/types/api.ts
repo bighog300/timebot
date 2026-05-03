@@ -548,3 +548,17 @@ export interface AdminUsageSummary {
   window_end: string;
   usage: Record<string, unknown>;
 }
+
+export interface AdminSystemStatus {
+  billing_configured: boolean;
+  stripe_configured: boolean;
+  stripe_prices_configured: boolean;
+  environment: 'development' | 'staging' | 'production';
+  limits_configured: boolean;
+  features: {
+    insights_enabled: boolean;
+    category_intelligence_enabled: boolean;
+    relationship_detection_enabled: boolean;
+  };
+}
+

@@ -1,11 +1,16 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { AdminSettingsPage, AdminSubscriptionsPage } from '@/pages/AdminSettingsPage';
+import { AdminSettingsPage, AdminSubscriptionsPage, AdminBillingPage } from '@/pages/AdminSettingsPage';
 import { RequireAdmin } from '@/components/auth/RequireAdmin';
 
 const mutatePlan = vi.fn().mockResolvedValue({});
 const mutateUsage = vi.fn().mockResolvedValue({});
+const mockUseAdminSystemStatus = vi.fn(() => ({
+  isLoading: false,
+  isError: false,
+  data: { billing_configured: true, stripe_configured: true, stripe_prices_configured: true, environment: 'development', limits_configured: true, features: { insights_enabled: true, category_intelligence_enabled: true, relationship_detection_enabled: true } },
+}));
 
 vi.mock('@/store/uiStore', () => ({ useUIStore: () => ({ pushToast: vi.fn() }) }));
 vi.mock('@/hooks/useApi', () => ({
@@ -15,6 +20,7 @@ vi.mock('@/hooks/useApi', () => ({
   useAdminCancelOrDowngrade: () => ({ mutateAsync: vi.fn().mockResolvedValue({}) }),
   useAdminUsageSummary: () => ({ isLoading: false, isError: false, data: { user_id: 'u1', usage: {} } }),
   useAdminAudit: () => ({ isLoading: false, isError: false, data: { items: [] } }),
+  useAdminSystemStatus: () => mockUseAdminSystemStatus(),
 }));
 
 vi.mock('@/auth/AuthContext', () => ({
@@ -34,5 +40,17 @@ describe('admin settings', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Grant usage' }));
     expect(mutatePlan).toHaveBeenCalled();
     expect(mutateUsage).toHaveBeenCalled();
+  });
+
+  it('billing/system status renders from backend status endpoint data', () => {
+    render(<MemoryRouter><AdminBillingPage /></MemoryRouter>);
+    expect(screen.getByText('Billing & system configuration')).toBeInTheDocument();
+    expect(screen.getByText('Environment:')).toBeInTheDocument();
+  });
+
+  it('shows warning when billing is not configured', () => {
+    mockUseAdminSystemStatus.mockReturnValueOnce({ isLoading: false, isError: false, data: { billing_configured: false, stripe_configured: false, stripe_prices_configured: false, environment: 'development', limits_configured: true, features: { insights_enabled: true, category_intelligence_enabled: true, relationship_detection_enabled: true } } });
+    render(<MemoryRouter><AdminBillingPage /></MemoryRouter>);
+    expect(screen.getByText(/Billing is misconfigured/i)).toBeInTheDocument();
   });
 });

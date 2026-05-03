@@ -112,3 +112,18 @@ class AdminUsageOverrideRequest(BaseModel):
 
 class AdminCancelDowngradeRequest(BaseModel):
     downgrade_to_plan_slug: str = "free"
+
+
+class AdminSystemStatusFeaturesResponse(BaseModel):
+    insights_enabled: bool
+    category_intelligence_enabled: bool
+    relationship_detection_enabled: bool
+
+
+class AdminSystemStatusResponse(BaseModel):
+    billing_configured: bool
+    stripe_configured: bool
+    stripe_prices_configured: bool
+    environment: str
+    limits_configured: bool
+    features: AdminSystemStatusFeaturesResponse

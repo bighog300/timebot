@@ -133,3 +133,42 @@ def test_admin_override_and_credits_affect_enforcement(client, test_user, db, mo
         assert False, "expected limit"
     except HTTPException as exc:
         assert exc.status_code == 402
+
+
+def test_admin_can_access_system_status(client, test_user, db):
+    test_user.role = 'admin'
+    db.commit()
+    response = client.get('/api/v1/admin/system-status')
+    assert response.status_code == 200
+
+
+def test_non_admin_cannot_access_system_status(client, test_user, db):
+    test_user.role = 'viewer'
+    db.commit()
+    response = client.get('/api/v1/admin/system-status')
+    assert response.status_code == 403
+
+
+def test_system_status_response_shape_and_no_secrets(client, test_user, db, monkeypatch):
+    from app.config import settings
+
+    test_user.role = 'admin'
+    db.commit()
+    monkeypatch.setattr(settings, 'APP_ENV', 'staging')
+    monkeypatch.setattr(settings, 'STRIPE_SECRET_KEY', 'sk_test_123')
+    monkeypatch.setattr(settings, 'STRIPE_PRICE_PRO_MONTHLY', 'price_pro')
+    monkeypatch.setattr(settings, 'STRIPE_PRICE_TEAM_MONTHLY', 'price_team')
+
+    response = client.get('/api/v1/admin/system-status')
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload['billing_configured'] is True
+    assert payload['stripe_configured'] is True
+    assert payload['stripe_prices_configured'] is True
+    assert payload['environment'] == 'staging'
+    assert 'features' in payload
+    assert 'insights_enabled' in payload['features']
+    assert 'category_intelligence_enabled' in payload['features']
+    assert 'relationship_detection_enabled' in payload['features']
+    assert 'stripe_secret_key' not in payload
+    assert 'sk_test_123' not in str(payload)

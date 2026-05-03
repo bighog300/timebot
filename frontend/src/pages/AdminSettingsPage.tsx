@@ -9,6 +9,7 @@ import {
   useAdminUpdateUserPlan,
   useAdminUpdateUsageControls,
   useAdminCancelOrDowngrade,
+  useAdminSystemStatus,
 } from '@/hooks/useApi';
 
 export function AdminSettingsPage() {
@@ -64,14 +65,26 @@ export function AdminUserUsagePage() {
 }
 
 export function AdminBillingPage() {
-  const subs = useAdminSubscriptions();
-  const hasBilling = useMemo(() => (subs.data ?? []).some((s) => s.plan_slug !== 'free'), [subs.data]);
-  return <Card>
-    <h2 className='mb-2 text-lg'>Billing/System visibility</h2>
-    <p>Billing configured: <strong>{hasBilling ? 'Likely configured' : 'Not evident from admin API'}</strong></p>
-    <p className='text-sm text-slate-400'>Stripe secret keys are never displayed in this UI.</p>
-    <p className='text-sm text-slate-400'>Rate-limit / quota visibility: shown per-user through usage summary and limit overrides.</p>
-  </Card>;
+  const systemStatus = useAdminSystemStatus();
+
+  if (systemStatus.isLoading) return <Card>Loading billing/system status...</Card>;
+  if (systemStatus.isError) return <Card><div className='border border-amber-700 bg-amber-950/40 p-3 text-amber-200 rounded'>Failed to load billing/system status. Please try again.</div></Card>;
+
+  const status = systemStatus.data;
+  if (!status) return <Card>System status unavailable.</Card>;
+
+  const billingOk = status.billing_configured;
+  const stripeOk = status.stripe_configured;
+
+  return <Card><div className='space-y-2'>
+    <h2 className='text-lg'>Billing & system configuration</h2>
+    <p>Billing configured: <strong className={billingOk ? 'text-emerald-400' : 'text-amber-300'}>{billingOk ? 'Configured' : 'Not configured'}</strong></p>
+    <p>Stripe configured: <strong className={stripeOk ? 'text-emerald-400' : 'text-amber-300'}>{stripeOk ? 'Configured' : 'Missing'}</strong></p>
+    <p>Stripe prices configured: <strong className={status.stripe_prices_configured ? 'text-emerald-400' : 'text-amber-300'}>{status.stripe_prices_configured ? 'Configured' : 'Missing'}</strong></p>
+    <p>Environment: <strong>{status.environment}</strong></p>
+    <p>Limits configured: <strong className={status.limits_configured ? 'text-emerald-400' : 'text-amber-300'}>{status.limits_configured ? 'Configured' : 'Missing/invalid'}</strong></p>
+    {!billingOk && <div className='rounded border border-amber-700 bg-amber-950/40 p-3 text-amber-200'>Warning: Billing is misconfigured. Set Stripe secret key and required Stripe price IDs.</div>}
+  </div></Card>;
 }
 
 export function AdminAuditPage() {
