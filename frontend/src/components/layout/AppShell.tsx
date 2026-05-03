@@ -31,6 +31,7 @@ const baseLinks = [
   ['/notifications', 'Notifications'],
   ['/messages', 'Messages'],
   ['/settings', 'Settings'],
+  ['/workspaces', 'Workspaces'],
 ] as const;
 
 const adminLinks = [['/admin', 'Admin Overview'], ['/admin/users', 'Users'], ['/admin/messages', 'Admin Messages'], ['/admin/settings', 'Settings']] as const;
