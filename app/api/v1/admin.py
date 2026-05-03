@@ -4,13 +4,15 @@ import secrets
 import time
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import func, or_
+from sqlalchemy import func, or_, text
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db, get_current_user_role
 from app.models.admin_audit import AdminAuditEvent
 from app.models.document import Document
 from app.models.intelligence import DocumentActionItem, DocumentRelationshipReview, DocumentReviewItem
+from app.models.prompt_execution_log import PromptExecutionLog
+from app.models.relationships import ProcessingQueue
 from app.models.user import User, UserInvite
 from app.models.billing import Plan, Subscription
 from app.models.processing_event import DocumentProcessingEvent
@@ -42,6 +44,10 @@ from app.schemas.admin import (
     AdminSystemStatusFeaturesResponse,
     AdminSystemStatusResponse,
     AdminLlmModelsResponse,
+    AdminSystemHealthResponse,
+    AdminSystemJobsResponse,
+    AdminLlmMetricsResponse,
+    SystemComponentStatus,
     LlmProviderCatalogResponse,
     LlmModelOptionResponse,
 )
@@ -60,6 +66,7 @@ from app.schemas.prompt_template import (
 )
 from app.services.openai_client import APIError, openai_client_service
 from app.services.prompt_templates import activate_prompt_template, clear_default_for_purpose, run_prompt_with_fallback, list_prompt_executions, summarize_prompt_executions
+from app.services.error_sanitizer import sanitize_processing_error
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -556,6 +563,88 @@ def admin_system_status(_: str = Depends(require_admin)):
         ),
     )
 
+
+
+
+def _status_from_ok(ok: bool) -> str:
+    return "healthy" if ok else "down"
+
+
+@router.get("/system/health", response_model=AdminSystemHealthResponse)
+def admin_system_health(_: str = Depends(require_admin), db: Session = Depends(get_db)):
+    db_status = SystemComponentStatus(status="unknown")
+    try:
+        db.execute(text("SELECT 1"))
+        db_status = SystemComponentStatus(status="healthy")
+    except Exception:
+        db_status = SystemComponentStatus(status="down", detail="database unavailable")
+
+    redis_status = SystemComponentStatus(status="unknown")
+    try:
+        from redis import Redis
+        client = Redis.from_url(settings.REDIS_URL, socket_connect_timeout=1, socket_timeout=1)
+        redis_status = SystemComponentStatus(status=_status_from_ok(bool(client.ping())))
+    except Exception:
+        redis_status = SystemComponentStatus(status="down", detail="redis unavailable")
+
+    celery_status = SystemComponentStatus(status="unknown")
+    try:
+        from app.workers.monitoring import inspect_workers
+        workers = inspect_workers(timeout=2)
+        celery_status = SystemComponentStatus(status="healthy" if workers.get("worker_count", 0) > 0 else "degraded", detail=f"workers={workers.get('worker_count', 0)}")
+    except Exception:
+        celery_status = SystemComponentStatus(status="degraded", detail="worker heartbeat unavailable")
+
+    vector_status = SystemComponentStatus(status="unknown")
+    try:
+        if settings.QDRANT_HOST:
+            from qdrant_client import QdrantClient
+            q = QdrantClient(host=settings.QDRANT_HOST, port=settings.QDRANT_PORT, timeout=1)
+            q.get_collections()
+            vector_status = SystemComponentStatus(status="healthy")
+        else:
+            vector_status = SystemComponentStatus(status="unknown", detail="not configured")
+    except Exception:
+        vector_status = SystemComponentStatus(status="degraded", detail="vector store unavailable")
+
+    llm_providers = {
+        "openai": SystemComponentStatus(status="configured" if bool(settings.OPENAI_API_KEY.strip()) else "unconfigured"),
+        "gemini": SystemComponentStatus(status="configured" if bool(settings.GEMINI_API_KEY.strip()) else "unconfigured"),
+        "anthropic": SystemComponentStatus(status="configured" if bool(settings.ANTHROPIC_API_KEY.strip()) else "unconfigured"),
+    }
+    statuses = [db_status.status, redis_status.status, celery_status.status, vector_status.status]
+    overall = "healthy" if all(s == "healthy" for s in statuses if s != "unknown") else "degraded"
+    if "down" in statuses:
+        overall = "down"
+
+    return AdminSystemHealthResponse(overall_status=overall, database=db_status, redis=redis_status, celery=celery_status, vector_store=vector_status, llm_providers=llm_providers, app={"version": settings.VERSION, "environment": settings.APP_ENV})
+
+
+@router.get("/system/jobs", response_model=AdminSystemJobsResponse)
+def admin_system_jobs(_: str = Depends(require_admin), db: Session = Depends(get_db)):
+    queue_length = db.query(func.count(ProcessingQueue.id)).filter(ProcessingQueue.status == "queued").scalar() or 0
+    active_jobs = db.query(func.count(ProcessingQueue.id)).filter(ProcessingQueue.status == "processing").scalar() or 0
+    failed_jobs = db.query(func.count(ProcessingQueue.id)).filter(ProcessingQueue.status == "failed").scalar() or 0
+    recent_completed_jobs = db.query(func.count(ProcessingQueue.id)).filter(ProcessingQueue.status == "completed").scalar() or 0
+    retry_count = db.query(func.coalesce(func.sum(ProcessingQueue.attempts), 0)).scalar() or 0
+    last_failed = db.query(ProcessingQueue.error_message).filter(ProcessingQueue.status == "failed").order_by(ProcessingQueue.completed_at.desc(), ProcessingQueue.created_at.desc()).first()
+    return AdminSystemJobsResponse(queue_length=queue_length, active_jobs=active_jobs, failed_jobs=failed_jobs, recent_completed_jobs=recent_completed_jobs, retry_count=int(retry_count), last_error_summary=sanitize_processing_error(last_failed[0] if last_failed and last_failed[0] else None))
+
+
+@router.get("/system/llm-metrics", response_model=AdminLlmMetricsResponse)
+def admin_llm_metrics(_: str = Depends(require_admin), db: Session = Depends(get_db)):
+    summary = summarize_prompt_executions(db)
+    total = int(summary["total_calls"])
+    success_count = int(round(summary["success_rate"] * total)) if total else 0
+    error_count = max(0, total - success_count)
+    lats = [row[0] for row in db.query(PromptExecutionLog.latency_ms).filter(PromptExecutionLog.latency_ms.isnot(None)).all()]
+    lats = sorted(int(x) for x in lats if x is not None)
+    def pct(p: float):
+        if not lats:
+            return None
+        idx = min(len(lats)-1, max(0, int(round((len(lats)-1)*p))))
+        return float(lats[idx])
+    return AdminLlmMetricsResponse(total_calls=total, success_count=success_count, error_count=error_count, error_rate=(error_count/total if total else 0.0), provider_breakdown={k:int(v) for k,v in summary["calls_by_provider"].items()}, model_breakdown={k:int(v) for k,v in summary["calls_by_model"].items()}, fallback_usage=int(round(summary["fallback_rate"]*total)) if total else 0, latency_percentiles_ms={"p50": pct(0.5), "p90": pct(0.9), "p99": pct(0.99)}, cost_totals={"total_estimated_cost_usd": float(summary["total_estimated_cost_usd"]), "pricing_unknown_count": float(summary["pricing_unknown_count"])})
 
 @router.get("/metrics", response_model=AdminMetricsResponse)
 def admin_metrics(_: str = Depends(require_admin), db: Session = Depends(get_db)):

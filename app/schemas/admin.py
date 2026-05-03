@@ -167,6 +167,42 @@ class AdminLlmModelsResponse(BaseModel):
     providers: list[LlmProviderCatalogResponse]
 
 
+class SystemComponentStatus(BaseModel):
+    status: str
+    detail: str | None = None
+
+
+class AdminSystemHealthResponse(BaseModel):
+    overall_status: str
+    database: SystemComponentStatus
+    redis: SystemComponentStatus
+    celery: SystemComponentStatus
+    vector_store: SystemComponentStatus
+    llm_providers: dict[str, SystemComponentStatus]
+    app: dict[str, str | None]
+
+
+class AdminSystemJobsResponse(BaseModel):
+    queue_length: int
+    active_jobs: int
+    failed_jobs: int
+    recent_completed_jobs: int
+    retry_count: int
+    last_error_summary: str | None = None
+
+
+class AdminLlmMetricsResponse(BaseModel):
+    total_calls: int
+    success_count: int
+    error_count: int
+    error_rate: float
+    provider_breakdown: dict[str, int]
+    model_breakdown: dict[str, int]
+    fallback_usage: int
+    latency_percentiles_ms: dict[str, float | None]
+    cost_totals: dict[str, float]
+
+
 class AdminUserCreateRequest(BaseModel):
     email: str
     password: str | None = Field(default=None, min_length=8, max_length=128)

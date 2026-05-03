@@ -580,6 +580,10 @@ export interface AdminSystemStatus {
   };
 }
 
+
+export interface AdminSystemHealth { overall_status: string; database: { status: string; detail?: string | null }; redis: { status: string; detail?: string | null }; celery: { status: string; detail?: string | null }; vector_store: { status: string; detail?: string | null }; llm_providers: Record<string, { status: string; detail?: string | null }>; app: Record<string, string | null>; }
+export interface AdminSystemJobs { queue_length: number; active_jobs: number; failed_jobs: number; recent_completed_jobs: number; retry_count: number; last_error_summary?: string | null; }
+export interface AdminLlmMetrics { total_calls: number; success_count: number; error_count: number; error_rate: number; provider_breakdown: Record<string, number>; model_breakdown: Record<string, number>; fallback_usage: number; latency_percentiles_ms: Record<string, number | null>; cost_totals: Record<string, number>; }
 export interface AdminPromptExecutionSummaryFilters {
   provider?: string;
   model?: string;

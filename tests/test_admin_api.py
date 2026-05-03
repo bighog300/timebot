@@ -384,3 +384,48 @@ def test_role_deactivate_reactivate_delete_are_audited(client, test_user, db):
     assert 'deactivated' in actions
     assert 'reactivated' in actions
     assert 'soft_deleted' in actions
+
+def test_non_admin_denied_new_observability_endpoints(client, test_user, db):
+    test_user.role = 'viewer'; db.commit()
+    assert client.get('/api/v1/admin/system/health').status_code == 403
+    assert client.get('/api/v1/admin/system/jobs').status_code == 403
+    assert client.get('/api/v1/admin/system/llm-metrics').status_code == 403
+
+
+def test_health_endpoint_sanitized_and_no_keys(client, test_user, db, monkeypatch):
+    from app.config import settings
+    test_user.role = 'admin'; db.commit()
+    monkeypatch.setattr(settings, 'OPENAI_API_KEY', 'sk-secret-value')
+    response = client.get('/api/v1/admin/system/health')
+    assert response.status_code == 200
+    payload = response.json()
+    assert 'database_url' not in str(payload).lower()
+    assert 'sk-secret-value' not in str(payload)
+
+
+def test_jobs_endpoint_sanitizes_errors(client, test_user, db):
+    from app.models.relationships import ProcessingQueue
+    import uuid
+    test_user.role = 'admin'; db.commit()
+    row = ProcessingQueue(document_id=uuid.uuid4(), task_type='ai_analysis', status='failed', error_message='Bearer sk-abc-token leaked', attempts=2)
+    db.add(row); db.commit()
+    response = client.get('/api/v1/admin/system/jobs')
+    assert response.status_code == 200
+    assert 'sk-abc' not in str(response.json())
+
+
+def test_llm_metrics_aggregates(client, test_user, db):
+    from app.models.prompt_execution_log import PromptExecutionLog
+    test_user.role = 'admin'; db.commit()
+    db.add_all([
+        PromptExecutionLog(provider='openai', model='gpt-4.1-mini', fallback_used=False, success=True, latency_ms=100, source='x'),
+        PromptExecutionLog(provider='openai', model='gpt-4.1-mini', fallback_used=True, success=True, latency_ms=200, source='x'),
+        PromptExecutionLog(provider='gemini', model='gemini-1.5-flash', fallback_used=False, success=False, latency_ms=500, source='x'),
+    ])
+    db.commit()
+    response = client.get('/api/v1/admin/system/llm-metrics')
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload['total_calls'] >= 3
+    assert payload['error_count'] >= 1
+    assert 'openai' in payload['provider_breakdown']
