@@ -2,11 +2,11 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, vi, expect } from 'vitest';
 import { AdminEmailSuppressionsPage } from '@/pages/AdminEmailSuppressionsPage';
 
-const api = {
+const { api } = vi.hoisted(() => ({ api: {
   listEmailSuppressions: vi.fn(async()=>[{id:'1',email:'x@example.com',reason:'manual',created_at:'now'}]),
   addEmailSuppression: vi.fn(async()=>({})),
   removeEmailSuppression: vi.fn(async()=>({})),
-};
+}}));
 vi.mock('@/services/api', ()=>({ api }));
 
 describe('admin suppressions page', ()=>{
