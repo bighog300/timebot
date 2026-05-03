@@ -58,6 +58,11 @@ class PromptTemplateUpdate(BaseModel):
     enabled: bool | None = None
     is_default: bool | None = None
     fallback_enabled: bool | None = None
+    fallback_order: str | None = Field(default=None, pattern="^(provider_then_model|model_then_provider)$")
+    max_fallback_attempts: int | None = Field(default=None, ge=0, le=5)
+    retry_on_provider_errors: bool | None = None
+    retry_on_rate_limit: bool | None = None
+    retry_on_validation_error: bool | None = None
     fallback_provider: str | None = Field(default=None, pattern="^(openai|gemini)$")
     fallback_model: str | None = Field(default=None, min_length=1, max_length=120)
 
@@ -105,6 +110,9 @@ class PromptTemplateTestResponse(BaseModel):
     provider_used: str
     model_used: str
     primary_error: str | None = None
+    preview_mode: bool = True
+    sample_context_used: bool = True
+    system_prompt_source: str = "production"
 
 
 class PromptExecutionLogResponse(BaseModel):

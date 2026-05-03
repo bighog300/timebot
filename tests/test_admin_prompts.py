@@ -1,6 +1,7 @@
 import pytest
 import uuid
 
+from app.models.admin_audit import AdminAuditEvent
 from app.models.prompt_template import PromptTemplate
 from app.services.prompt_templates import activate_prompt_template, get_active_prompt_content
 
@@ -136,6 +137,9 @@ def test_admin_can_test_prompt_template(client, test_user, db, monkeypatch):
     r = client.post("/api/v1/admin/prompts/test", json={"type": "chat", "content": "You are helper", "sample_context": "Question: hello"})
     assert r.status_code == 200
     assert r.json()["preview"] == "preview output"
+    assert r.json()["preview_mode"] is True
+    assert r.json()["sample_context_used"] is True
+    assert r.json()["system_prompt_source"] == "production"
 
 
 def test_non_admin_cannot_test_prompt_template(client, test_user, db):
@@ -347,6 +351,38 @@ def test_admin_prompt_test_creates_execution_log(client, test_user, db, monkeypa
     assert row is not None and row.source == 'admin_test' and row.success is True
     assert row.pricing_known is True
     assert row.estimated_cost_usd is not None
+
+
+def test_activate_prompt_creates_admin_audit_event(client, test_user, db):
+    test_user.role = "admin"
+    p = PromptTemplate(type="chat", name="v1", content="c", version=1, is_active=False)
+    db.add(p)
+    db.commit()
+    r = client.post(f"/api/v1/admin/prompts/{p.id}/activate")
+    assert r.status_code == 200
+    db.refresh(p)
+    assert p.is_active is True
+    ev = db.query(AdminAuditEvent).filter(AdminAuditEvent.entity_id == str(p.id), AdminAuditEvent.action == "prompt_template_activated").first()
+    assert ev is not None
+    assert str(ev.actor_id) == str(test_user.id)
+    assert ev.entity_type == "prompt_template"
+    assert ev.details["type"] == "chat"
+
+
+def test_prompt_test_does_not_wrap_with_sandbox_strings(client, test_user, db, monkeypatch):
+    test_user.role = "admin"
+    db.commit()
+    monkeypatch.setattr("app.config.settings.OPENAI_API_KEY", "test-key")
+    captured = {}
+    def fake_run(template, user_input, **kwargs):
+        captured["user_input"] = user_input
+        return {"output": "ok", "latency_ms": 1, "token_usage": 2, "fallback_used": False, "provider_used": "openai", "model_used": "gpt-4o-mini", "primary_error": None}
+    monkeypatch.setattr("app.api.v1.admin.run_prompt_with_fallback", fake_run)
+    r = client.post("/api/v1/admin/prompts/test", json={"type":"chat","content":"template {sample_context}","sample_context":"ctx"})
+    assert r.status_code == 200
+    assert "Candidate prompt template" not in captured["user_input"]
+    assert "Prompt type:" not in captured["user_input"]
+    assert captured["user_input"] == "template ctx"
 
 
 def test_record_prompt_execution_unknown_pricing_does_not_fail(db):

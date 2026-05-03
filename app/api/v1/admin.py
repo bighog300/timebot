@@ -86,6 +86,7 @@ from app.schemas.prompt_template import (
 )
 from app.services.openai_client import APIError, openai_client_service
 from app.services.prompt_templates import activate_prompt_template, clear_default_for_purpose, run_prompt_with_fallback, list_prompt_executions, summarize_prompt_executions
+from app.prompts.document_analysis import DOCUMENT_ANALYSIS_SYSTEM
 from app.services.error_sanitizer import sanitize_processing_error
 from app.services.email_secrets import email_secret_crypto
 from app.workers.tasks import enqueue_campaign_recipient_send
@@ -1167,11 +1168,18 @@ def update_prompt_template(prompt_id: str, payload: PromptTemplateUpdate, _: str
 
 
 @router.post("/prompts/{prompt_id}/activate", response_model=PromptTemplateResponse)
-def activate_prompt(prompt_id: str, _: str = Depends(require_admin), db: Session = Depends(get_db)):
+def activate_prompt(prompt_id: str, _: str = Depends(require_admin), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     prompt = db.query(PromptTemplate).filter(PromptTemplate.id == prompt_id).first()
     if not prompt:
         raise HTTPException(status_code=404, detail="Prompt template not found")
     activate_prompt_template(db, prompt)
+    db.add(AdminAuditEvent(
+        actor_id=current_user.id,
+        entity_type="prompt_template",
+        entity_id=str(prompt.id),
+        action="prompt_template_activated",
+        details={"type": prompt.type, "name": prompt.name, "version": prompt.version},
+    ))
     db.commit()
     db.refresh(prompt)
     return prompt
@@ -1182,20 +1190,10 @@ def test_prompt_template(payload: PromptTemplateTestRequest, _: str = Depends(re
     if not openai_client_service.enabled:
         raise HTTPException(status_code=503, detail="AI service unavailable")
 
-    system_prompt = (
-        "You are a prompt sandbox for Timebot admins. "
-        "Use only the provided sample context. "
-        "Do not invent or fetch external information. "
-        "If information is missing in sample context, explicitly say so."
-    )
-    user_prompt = (
-        f"Prompt type: {payload.type}\n\n"
-        "Candidate prompt template:\n"
-        f"{payload.content}\n\n"
-        "Sample context/query/document text:\n"
-        f"{payload.sample_context}\n\n"
-        "Return the assistant response preview only."
-    )
+    system_prompt = DOCUMENT_ANALYSIS_SYSTEM if payload.type == "timeline_extraction" else ""
+    user_prompt = payload.content.replace("{sample_context}", payload.sample_context)
+    if "{sample_context}" not in payload.content:
+        user_prompt = f"{payload.content}\n\n{payload.sample_context}"
 
     _validate_fallback_payload(payload.provider, payload.model, payload.fallback_enabled, payload.fallback_provider, payload.fallback_model)
     from app.models.prompt_template import PromptTemplate
@@ -1213,10 +1211,22 @@ def test_prompt_template(payload: PromptTemplateTestRequest, _: str = Depends(re
         fallback_model=payload.fallback_model,
     )
     try:
-        result = run_prompt_with_fallback(template, f"{system_prompt}\n\n{user_prompt}", db=db, user_id=current_user.id, source="admin_test", purpose=payload.type)
+        final_prompt = f"{system_prompt}\n\n{user_prompt}" if system_prompt else user_prompt
+        result = run_prompt_with_fallback(template, final_prompt, db=db, user_id=current_user.id, source="admin_test", purpose=payload.type)
     except RuntimeError as exc:
         raise HTTPException(status_code=502, detail=f"AI request failed: {exc}") from exc
-    return PromptTemplateTestResponse(preview=result["output"], latency_ms=result["latency_ms"], usage_tokens=result["token_usage"], fallback_used=result["fallback_used"], provider_used=result["provider_used"], model_used=result["model_used"], primary_error=result["primary_error"])
+    return PromptTemplateTestResponse(
+        preview=result["output"],
+        latency_ms=result["latency_ms"],
+        usage_tokens=result["token_usage"],
+        fallback_used=result["fallback_used"],
+        provider_used=result["provider_used"],
+        model_used=result["model_used"],
+        primary_error=result["primary_error"],
+        preview_mode=True,
+        sample_context_used=True,
+        system_prompt_source="production",
+    )
 
 
 DEFAULT_CHATBOT_SETTINGS = {
