@@ -4,10 +4,18 @@ import { useAdminPromptExecutionSummary } from '@/hooks/useApi';
 function pct(v: number) { return `${(v * 100).toFixed(1)}%`; }
 function usd(v: number) { return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(v); }
 function num(v: number) { return new Intl.NumberFormat('en-US').format(v); }
+function toNumber(v: number | string | null | undefined): number | null {
+  if (typeof v === 'number') return Number.isFinite(v) ? v : null;
+  if (typeof v === 'string') {
+    const parsed = Number(v.trim());
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
 
-function Breakdown({ title, data, formatter = (v:number)=>String(v) }: { title: string; data: Record<string, number>; formatter?: (v:number)=>string }) {
+function Breakdown({ title, data, formatter = (v:number)=>String(v) }: { title: string; data: Record<string, number | string>; formatter?: (v:number)=>string }) {
   const entries = Object.entries(data);
-  return <section><h3 className="font-semibold">{title}</h3>{entries.length ? <ul>{entries.map(([k,v]) => <li key={k}>{k}: {formatter(v)}</li>)}</ul> : <p>No data.</p>}</section>;
+  return <section><h3 className="font-semibold">{title}</h3>{entries.length ? <ul>{entries.map(([k,v]) => <li key={k}>{k}: {formatter(toNumber(v) ?? 0)}</li>)}</ul> : <p>No data.</p>}</section>;
 }
 
 export function AdminPromptAnalyticsPage() {
@@ -43,7 +51,7 @@ export function AdminPromptAnalyticsPage() {
       <label>Created after <input aria-label="created_after" type="date" value={filters.created_after ?? ''} onChange={(e)=>setFilters((f)=>({...f, created_after:e.target.value}))} /></label>
       <label>Created before <input aria-label="created_before" type="date" value={filters.created_before ?? ''} onChange={(e)=>setFilters((f)=>({...f, created_before:e.target.value}))} /></label>
     </div>
-    <p>Total calls: {num(d.total_calls)}</p><p>Success rate: {pct(d.success_rate)}</p><p>Fallback rate: {pct(d.fallback_rate)}</p><p>Average latency: {d.avg_latency_ms?.toFixed(1) ?? '-'} ms</p><p>Total tokens: {num(d.total_tokens)}</p><p>Total estimated cost: {usd(d.total_estimated_cost_usd)}</p><p>Unknown pricing count: {num(d.pricing_unknown_count)}</p>
+    <p>Total calls: {num(d.total_calls)}</p><p>Success rate: {pct(d.success_rate)}</p><p>Fallback rate: {pct(d.fallback_rate)}</p><p>Average latency: {toNumber(d.avg_latency_ms)?.toFixed(1) ?? '-'} ms</p><p>Total tokens: {num(toNumber(d.total_tokens) ?? 0)}</p><p>Total estimated cost: {usd(toNumber(d.total_estimated_cost_usd) ?? 0)}</p><p>Unknown pricing count: {num(d.pricing_unknown_count)}</p>
     <Breakdown title="Calls by provider" data={d.calls_by_provider} />
     <Breakdown title="Calls by model" data={d.calls_by_model} />
     <Breakdown title="Cost by provider" data={d.cost_by_provider} formatter={usd} />
