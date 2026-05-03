@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useActivatePromptTemplate, useAdminLlmModels, useAdminPromptTemplates, useCreatePromptTemplate, useTestPromptTemplate, useUpdatePromptTemplate } from '@/hooks/useApi';
 import { getErrorDetail } from '@/services/api';
 import { useUIStore } from '@/store/uiStore';
-import type { PromptTemplateType } from '@/types/api';
+import type { LlmProviderCatalog, PromptTemplateTestResponse, PromptTemplateType } from '@/types/api';
 
 const promptTypes: PromptTemplateType[] = ['chat', 'retrieval', 'report', 'timeline_extraction', 'relationship_detection'];
 
@@ -20,9 +20,9 @@ export function AdminPromptTemplatesPage() {
   const [editForm, setEditForm] = useState({ name: '', content: '' });
   const [testForm, setTestForm] = useState<{ prompt_type: PromptTemplateType; prompt_content: string; sample_context: string; provider: 'openai' | 'gemini'; model: string; temperature: number; max_tokens: number; top_p: number; fallback_enabled: boolean; fallback_provider: 'openai' | 'gemini' | null; fallback_model: string | null }>({ prompt_type: 'chat', prompt_content: '', sample_context: '', provider: 'openai', model: 'gpt-4o-mini', temperature: 0.2, max_tokens: 800, top_p: 1, fallback_enabled: false, fallback_provider: 'openai', fallback_model: 'gpt-4.1-mini' });
   const [preview, setPreview] = useState('');
-  const [previewMeta, setPreviewMeta] = useState<any>(null);
+  const [previewMeta, setPreviewMeta] = useState<PromptTemplateTestResponse | null>(null);
   const [previewError, setPreviewError] = useState('');
-  const providerCatalog = llmModels.data?.providers ?? [];
+  const providerCatalog: LlmProviderCatalog[] = llmModels.data?.providers ?? [];
   const getModelsForProvider = (providerId: 'openai' | 'gemini') => providerCatalog.find((provider) => provider.id === providerId)?.models ?? [];
 
 
