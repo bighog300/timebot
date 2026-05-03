@@ -65,7 +65,11 @@ def get_prompt_for_purpose(db: Session, prompt_type: str) -> PromptTemplate | No
             PromptTemplate.enabled.is_(True),
             PromptTemplate.is_default.is_(True),
         )
-        .order_by(PromptTemplate.updated_at.desc(), PromptTemplate.created_at.desc())
+        .order_by(
+            PromptTemplate.is_active.desc(),
+            PromptTemplate.updated_at.desc(),
+            PromptTemplate.created_at.desc(),
+        )
         .first()
     )
     if default_prompt:
@@ -77,7 +81,12 @@ def get_prompt_for_purpose(db: Session, prompt_type: str) -> PromptTemplate | No
             PromptTemplate.type == prompt_type,
             PromptTemplate.enabled.is_(True),
         )
-        .order_by(PromptTemplate.version.desc(), PromptTemplate.created_at.desc(), PromptTemplate.updated_at.desc())
+        .order_by(
+            PromptTemplate.is_active.desc(),
+            PromptTemplate.version.desc(),
+            PromptTemplate.created_at.desc(),
+            PromptTemplate.updated_at.desc(),
+        )
         .first()
     )
 
