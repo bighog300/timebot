@@ -33,7 +33,7 @@ const baseLinks = [
   ['/settings', 'Settings'],
 ] as const;
 
-const adminLinks = [['/admin', 'Admin Overview'], ['/admin/users', 'Users'], ['/admin/settings', 'Settings']] as const;
+const adminLinks = [['/admin', 'Admin Overview'], ['/admin/users', 'Users'], ['/admin/messages', 'Admin Messages'], ['/admin/settings', 'Settings']] as const;
 
 export function AppShell() {
   const { toasts, dismissToast } = useUIStore();
@@ -47,6 +47,7 @@ export function AppShell() {
   const [selectedUseCase, setSelectedUseCase] = useState<string | null>(null);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [activeWorkspaceId, setActiveWorkspaceId] = useState<string>("");
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
 
   useEffect(() => {
     const completed = readOnboardingCompleted();
@@ -91,6 +92,10 @@ export function AppShell() {
     }).catch(() => undefined);
   }, []);
 
+
+  useEffect(() => {
+    api.listNotifications().then((items) => setUnreadNotifications(items.filter((item) => !item.read_at).length)).catch(() => undefined);
+  }, []);
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 px-3 py-3 sm:px-4">
@@ -126,9 +131,8 @@ export function AppShell() {
             >
               <span className="inline-flex items-center gap-1.5">
                 {label}
-                {to === '/review' && pendingReviewCount > 0 && (
-                  <span className="rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] text-white">{pendingReviewCount}</span>
-                )}
+                {to === '/review' && pendingReviewCount > 0 && (<span className="rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] text-white">{pendingReviewCount}</span>)}
+                {to === '/notifications' && unreadNotifications > 0 && (<span className="rounded-full bg-blue-600 px-1.5 py-0.5 text-[10px] text-white">{unreadNotifications}</span>)}
               </span>
             </NavLink>
           ))}
@@ -149,9 +153,8 @@ export function AppShell() {
               >
                 <span className="inline-flex items-center gap-2">
                   {label}
-                  {to === '/review' && pendingReviewCount > 0 && (
-                    <span className="rounded-full bg-red-600 px-2 py-0.5 text-[10px] text-white">{pendingReviewCount}</span>
-                  )}
+                  {to === '/review' && pendingReviewCount > 0 && (<span className="rounded-full bg-red-600 px-2 py-0.5 text-[10px] text-white">{pendingReviewCount}</span>)}
+                  {to === '/notifications' && unreadNotifications > 0 && (<span className="rounded-full bg-blue-600 px-2 py-0.5 text-[10px] text-white">{unreadNotifications}</span>)}
                 </span>
               </NavLink>
             ))}

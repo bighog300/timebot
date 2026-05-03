@@ -28,8 +28,8 @@ def _require_admin(role: str = Depends(get_current_user_role)) -> str:
 
 
 @router.get("/notifications", response_model=list[NotificationResponse])
-def list_notifications(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    return db.query(Notification).filter(Notification.user_id == current_user.id).order_by(Notification.created_at.desc()).all()
+def list_notifications(limit: int = Query(default=50, ge=1, le=100), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    return db.query(Notification).filter(Notification.user_id == current_user.id).order_by(Notification.created_at.desc()).limit(limit).all()
 
 
 @router.post("/notifications/{notification_id}/read")
@@ -50,8 +50,8 @@ def mark_all_read(db: Session = Depends(get_db), current_user: User = Depends(ge
 
 
 @router.get("/messages", response_model=list[ThreadResponse])
-def list_threads(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    return db.query(UserMessageThread).filter(UserMessageThread.user_id == current_user.id).order_by(UserMessageThread.updated_at.desc()).all()
+def list_threads(limit: int = Query(default=50, ge=1, le=100), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    return db.query(UserMessageThread).filter(UserMessageThread.user_id == current_user.id).order_by(UserMessageThread.updated_at.desc()).limit(limit).all()
 
 
 @router.post("/messages", response_model=ThreadResponse, status_code=201)
@@ -85,11 +85,11 @@ def user_reply(thread_id: UUID, payload: MessageReplyRequest, db: Session = Depe
 
 
 @admin_router.get("/messages", response_model=list[ThreadResponse])
-def admin_list_messages(status: str | None = Query(default=None), category: str | None = Query(default=None), _: str = Depends(_require_admin), db: Session = Depends(get_db)):
+def admin_list_messages(status: str | None = Query(default=None), category: str | None = Query(default=None), limit: int = Query(default=100, ge=1, le=200), _: str = Depends(_require_admin), db: Session = Depends(get_db)):
     q = db.query(UserMessageThread)
     if status: q = q.filter(UserMessageThread.status == status)
     if category: q = q.filter(UserMessageThread.category == category)
-    return q.order_by(UserMessageThread.updated_at.desc()).all()
+    return q.order_by(UserMessageThread.updated_at.desc()).limit(limit).all()
 
 
 @admin_router.get("/messages/{thread_id}", response_model=ThreadResponse)
