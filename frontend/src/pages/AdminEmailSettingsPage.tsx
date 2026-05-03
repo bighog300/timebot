@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import { api, getErrorDetail } from '@/services/api';
-import type { EmailProviderConfig, EmailSendLog, EmailTestSendResult } from '@/types/api';
+import type { EmailProviderConfig, EmailProviderConfigPatch, EmailSendLog, EmailTestSendResult } from '@/types/api';
 
 export function AdminEmailSettingsPage() {
   const [items, setItems] = useState<EmailProviderConfig[]>([]);
   const [err, setErr] = useState('');
   const [keys, setKeys] = useState<Record<string, string>>({});
+  const [webhookSecrets, setWebhookSecrets] = useState<Record<string, string>>({});
   const [logs, setLogs] = useState<EmailSendLog[]>([]);
   const [toEmail, setToEmail] = useState('');
   const [provider, setProvider] = useState<'default' | 'resend' | 'sendgrid'>('default');
@@ -22,7 +23,7 @@ export function AdminEmailSettingsPage() {
   return <div>
     <h2>Email Providers</h2>
     {err && <div>{err}</div>}
-    {items.map((i) => <div key={i.provider}><h3>{i.provider}</h3><div>{i.configured ? 'Configured' : 'Not configured'}</div><input value={i.from_email} onChange={(e) => setItems((v) => v.map((x) => x.provider === i.provider ? { ...x, from_email: e.target.value } : x))} /><input placeholder='api key' value={keys[i.provider] ?? ''} onChange={(e) => setKeys((v) => ({ ...v, [i.provider]: e.target.value }))} /><button onClick={async () => { const payload: { enabled: boolean; from_email: string; from_name?: string | null; reply_to?: string | null; api_key?: string } = { enabled: i.enabled, from_email: i.from_email, from_name: i.from_name, reply_to: i.reply_to }; if ((keys[i.provider] ?? '') !== '') payload.api_key = keys[i.provider]; const updated = await api.patchEmailProviderConfig(i.provider as 'resend' | 'sendgrid', payload); setItems((v) => v.map((x) => x.provider === i.provider ? updated : x)); setKeys((v) => ({ ...v, [i.provider]: '' })); }}>Save</button></div>)}
+    {items.map((i) => <div key={i.provider}><h3>{i.provider}</h3><div>{i.configured ? 'Configured' : 'Not configured'} • webhook {i.webhook_configured ? 'Configured' : 'Not configured'}</div><div>/api/v1/email/webhooks/{i.provider}</div><input value={i.from_email} onChange={(e) => setItems((v) => v.map((x) => x.provider === i.provider ? { ...x, from_email: e.target.value } : x))} /><input placeholder='api key' value={keys[i.provider] ?? ''} onChange={(e) => setKeys((v) => ({ ...v, [i.provider]: e.target.value }))} /><input placeholder='webhook secret' value={webhookSecrets[i.provider] ?? ''} onChange={(e)=>setWebhookSecrets((v)=>({...v,[i.provider]:e.target.value}))} /><button onClick={async () => { const payload: EmailProviderConfigPatch = { enabled: i.enabled, from_email: i.from_email, from_name: i.from_name, reply_to: i.reply_to }; if ((keys[i.provider] ?? '') !== '') payload.api_key = keys[i.provider]; if ((webhookSecrets[i.provider] ?? '') !== '') payload.webhook_secret = webhookSecrets[i.provider]; const updated = await api.patchEmailProviderConfig(i.provider as 'resend' | 'sendgrid', payload); setItems((v) => v.map((x) => x.provider === i.provider ? updated : x)); setKeys((v) => ({ ...v, [i.provider]: '' })); setWebhookSecrets((v)=>({...v,[i.provider]:''})); }}>Save</button></div>)}
 
     <h2>Send test email</h2>
     <select aria-label='provider' value={provider} onChange={(e) => setProvider(e.target.value as 'default' | 'resend' | 'sendgrid')}><option value='default'>default</option><option value='resend'>resend</option><option value='sendgrid'>sendgrid</option></select>

@@ -627,8 +627,8 @@ export interface MessageItem { id: string; sender_user_id?: string | null; sende
 export interface MessageThread { id: string; user_id: string; workspace_id?: string | null; category: "bug_report"|"feature_request"|"support"; subject: string; status: "open"|"in_progress"|"closed"; created_at: string; updated_at: string; messages?: MessageItem[]; }
 
 
-export interface EmailProviderConfig { provider: 'resend'|'sendgrid'; enabled: boolean; from_email: string; from_name?: string | null; reply_to?: string | null; configured: boolean; created_at: string; updated_at: string; }
-export interface EmailProviderConfigPatch { enabled?: boolean; from_email?: string; from_name?: string | null; reply_to?: string | null; api_key?: string | null; }
+export interface EmailProviderConfig { provider: 'resend'|'sendgrid'; enabled: boolean; from_email: string; from_name?: string | null; reply_to?: string | null; configured: boolean; webhook_configured: boolean; created_at: string; updated_at: string; }
+export interface EmailProviderConfigPatch { enabled?: boolean; from_email?: string; from_name?: string | null; reply_to?: string | null; api_key?: string | null; webhook_secret?: string | null; clear_webhook_secret?: boolean; }
 export interface EmailTemplate { id: string; name: string; slug: string; category: 'transactional'|'campaign'|'system'; status: 'draft'|'active'|'archived'; subject: string; preheader?: string | null; html_body: string; text_body?: string | null; variables_json: Record<string, unknown> | unknown[]; created_by_admin_id?: string | null; updated_by_admin_id?: string | null; created_at: string; updated_at: string; }
 export type EmailTemplateCreate = Omit<EmailTemplate,'id'|'created_by_admin_id'|'updated_by_admin_id'|'created_at'|'updated_at'>;
 export type EmailTemplatePatch = Partial<EmailTemplateCreate>;

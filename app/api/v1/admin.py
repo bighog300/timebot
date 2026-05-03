@@ -88,7 +88,7 @@ from app.services.openai_client import APIError, openai_client_service
 from app.services.prompt_templates import activate_prompt_template, clear_default_for_purpose, run_prompt_with_fallback, list_prompt_executions, summarize_prompt_executions
 from app.services.error_sanitizer import sanitize_processing_error
 from app.services.email_secrets import email_secret_crypto
-from app.workers.tasks import send_campaign_recipient_email
+from app.workers.tasks import enqueue_campaign_recipient_send
 from app.services.email_delivery import EmailDeliveryService
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -450,15 +450,26 @@ def send_email_campaign(campaign_id: str, payload: EmailCampaignSendRequest, _: 
     for e in resolved['invalid']:
         db.add(EmailCampaignRecipient(campaign_id=c.id, email=e, status='skipped', skip_reason='invalid'))
     queued_count=0
+    enqueue_error: str | None = None
     for email, user_id in resolved['sendable']:
         recipient = EmailCampaignRecipient(campaign_id=c.id, email=email, user_id=user_id, status='queued', queued_at=datetime.now(timezone.utc))
         db.add(recipient); db.flush()
         try:
-            send_campaign_recipient_email.delay(str(recipient.id))
-        except Exception:
-            pass
-        queued_count+=1
+            enqueue_campaign_recipient_send(str(recipient.id))
+            queued_count+=1
+        except Exception as exc:
+            recipient.status = 'failed'
+            recipient.failed_at = datetime.now(timezone.utc)
+            enqueue_error = sanitize_processing_error(str(exc))
+            c.send_error_sanitized = enqueue_error
+    if queued_count == 0:
+        c.status = 'failed'
+        c.send_failed_at = datetime.now(timezone.utc)
+        db.commit()
+        raise HTTPException(status_code=503, detail='Failed to queue campaign recipients')
     c.status='sending'; c.send_started_at=datetime.now(timezone.utc); c.send_failed_at=None; c.send_error_sanitized=None
+    if enqueue_error:
+        c.send_error_sanitized = enqueue_error
     _audit_admin_email_action(db, current_user, 'email_campaign', str(c.id), 'email_campaign_queued', {'queued_count': queued_count})
     db.commit()
     return EmailCampaignSendResponse(total_candidates=resolved['total'], sendable_count=len(resolved['sendable']), sent_count=0, failed_count=0, skipped_count=len(resolved['suppressed'])+len(resolved['invalid'])+resolved['duplicates'], status='sending', campaign_id=str(c.id), recipient_count=queued_count)
