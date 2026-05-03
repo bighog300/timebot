@@ -552,6 +552,17 @@ export interface AdminUsageSummary {
   usage: Record<string, unknown>;
 }
 
+export interface AdminPlan {
+  id: string;
+  slug: 'free' | 'pro' | 'team' | string;
+  name: string;
+  price_monthly_cents: number;
+  currency: string;
+  limits_json: Record<string, number | null>;
+  features_json: Record<string, boolean>;
+  is_active: boolean;
+}
+
 export interface AdminSystemStatus {
   billing_configured: boolean;
   stripe_configured: boolean;

@@ -10,7 +10,11 @@ import {
   useAdminCancelOrDowngrade,
   useAdminSystemStatus,
   useAdminLlmModels,
+  useAdminPlans,
+  useUpdateAdminPlan,
+  useResetAdminPlanDefaults,
 } from '@/hooks/useApi';
+import { useState } from 'react';
 
 export function AdminSubscriptionsPage() {
   const { pushToast } = useUIStore();
@@ -95,11 +99,31 @@ export function AdminAuditPage() {
 export function AdminSystemPage() { return <AdminBillingPage />; }
 
 export function AdminPlansPage() {
-  const subs = useAdminSubscriptions();
-  if (subs.isLoading) return <Card>Loading plans & limits...</Card>;
-  if (subs.isError) return <Card>Editable plan limits are not yet exposed by the backend.</Card>;
-  if (!subs.data?.length) return <Card>Editable plan limits are not yet exposed by the backend.</Card>;
-  return <Card><div className='space-y-2'><h2 className='text-lg'>Plans & limits</h2><p className='text-sm text-slate-300'>Editable plan limits are not yet exposed by the backend.</p><div className='overflow-x-auto'><table className='w-full min-w-[42rem] text-sm'><thead><tr className='text-left'><th>Email</th><th>Plan</th><th>Status</th><th>Credits</th><th>Overrides</th></tr></thead><tbody>{subs.data.map((s)=><tr key={s.subscription_id} className='border-t border-slate-800'><td>{s.email}</td><td>{s.plan_slug}</td><td>{s.status}</td><td>{JSON.stringify(s.usage_credits)}</td><td>{JSON.stringify(s.limit_overrides)}</td></tr>)}</tbody></table></div></div></Card>;
+  const { pushToast } = useUIStore();
+  const plans = useAdminPlans();
+  const updatePlan = useUpdateAdminPlan();
+  const resetDefaults = useResetAdminPlanDefaults();
+  type PlanDraft = { id: string; slug: string; name: string; price_monthly_cents: number; limits_json: Record<string, number | null>; features_json: Record<string, boolean>; is_active: boolean };
+  const [drafts, setDrafts] = useState<Record<string, PlanDraft>>({});
+  if (plans.isLoading) return <Card>Loading plans & limits...</Card>;
+  if (plans.isError || !plans.data?.length) return <Card>Unable to load plan settings.</Card>;
+  return <Card><div className='space-y-3'><h2 className='text-lg'>Plans & limits</h2><p className='text-sm text-amber-300'>Changes affect enforcement immediately for users on this plan.</p>
+    <button className='rounded bg-slate-700 px-2 py-1 text-sm' onClick={async()=>{ if (confirm('Reset Free/Pro/Team defaults?')) { await resetDefaults.mutateAsync(); pushToast('Plan defaults reset'); } }}>Reset defaults</button>
+    {plans.data.filter((p)=>['free','pro','team'].includes(p.slug)).map((p)=>{
+      const d: PlanDraft = drafts[p.id] ?? (p as PlanDraft);
+      const storageGb = d.limits_json?.storage_bytes == null ? '' : String(Number(d.limits_json.storage_bytes)/(1024**3));
+      return <div key={p.id} className='rounded border border-slate-700 p-3 space-y-2'>
+        <div className='font-semibold'>{p.slug}</div>
+        <input className='bg-slate-900 p-1' value={d.name ?? ''} onChange={(e)=>setDrafts((prev)=>({...prev,[p.id]:{...d,name:e.target.value}}))} />
+        <input type='number' min={0} className='bg-slate-900 p-1' value={d.price_monthly_cents ?? 0} onChange={(e)=>setDrafts((prev)=>({...prev,[p.id]:{...d,price_monthly_cents:Number(e.target.value)}}))} />
+        <input type='number' min={0} className='bg-slate-900 p-1' value={d.limits_json?.documents_per_month ?? ''} onChange={(e)=>setDrafts((prev)=>({...prev,[p.id]:{...d,limits_json:{...d.limits_json,documents_per_month:e.target.value===''?null:Number(e.target.value)}}}))} />
+        <input type='number' min={0} className='bg-slate-900 p-1' value={storageGb} onChange={(e)=>setDrafts((prev)=>({...prev,[p.id]:{...d,limits_json:{...d.limits_json,storage_bytes:e.target.value===''?null:Math.round(Number(e.target.value)*(1024**3))}}}))} />
+        <input type='number' min={0} className='bg-slate-900 p-1' value={d.limits_json?.processing_jobs_per_month ?? ''} onChange={(e)=>setDrafts((prev)=>({...prev,[p.id]:{...d,limits_json:{...d.limits_json,processing_jobs_per_month:e.target.value===''?null:Number(e.target.value)}}}))} />
+        {['insights_enabled','category_intelligence_enabled','relationship_detection_enabled'].map((k)=><label key={k} className='block'><input type='checkbox' checked={Boolean(d.features_json?.[k])} onChange={(e)=>setDrafts((prev)=>({...prev,[p.id]:{...d,features_json:{...d.features_json,[k]:e.target.checked}}}))} /> {k}</label>)}
+        <button className='rounded bg-emerald-700 px-2 py-1 text-sm' onClick={async()=>{ if (Object.values(d.limits_json ?? {}).some((v)=>typeof v==='number'&&v<0)) { pushToast('Limits cannot be negative','error'); return; } await updatePlan.mutateAsync({planId:p.id,payload:{name:d.name,price_monthly_cents:d.price_monthly_cents,limits_json:d.limits_json,features_json:d.features_json,is_active:d.is_active}}); pushToast('Plan updated'); }}>Save</button>
+      </div>;
+    })}
+  </div></Card>;
 }
 
 export function AdminLlmProvidersPage() {

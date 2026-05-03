@@ -7,6 +7,8 @@ import { RequireAdmin } from '@/components/auth/RequireAdmin';
 
 const mutatePlan = vi.fn().mockResolvedValue({});
 const mutateUsage = vi.fn().mockResolvedValue({});
+const mutateAdminPlan = vi.fn().mockResolvedValue({});
+const mutateReset = vi.fn().mockResolvedValue({});
 
 vi.mock('@/store/uiStore', () => ({ useUIStore: () => ({ pushToast: vi.fn() }) }));
 vi.mock('@/hooks/useApi', () => ({
@@ -18,6 +20,9 @@ vi.mock('@/hooks/useApi', () => ({
   useAdminAudit: () => ({ isLoading: false, isError: false, data: { items: [] } }),
   useAdminSystemStatus: () => ({ isLoading: false, isError: false, data: { billing_configured: true, stripe_configured: true, stripe_prices_configured: true, environment: 'development', limits_configured: true, features: { insights_enabled: true, category_intelligence_enabled: true, relationship_detection_enabled: true } } }),
   useAdminLlmModels: () => ({ isLoading: false, isError: false, data: { providers: [{ id: 'openai', name: 'OpenAI', configured: true, models: [{ id: 'gpt-4o-mini', name: 'GPT-4o Mini' }] }] } }),
+  useAdminPlans: () => ({ isLoading: false, isError: false, data: [{ id: 'p1', slug: 'free', name: 'Free', price_monthly_cents: 0, currency: 'usd', limits_json: { documents_per_month: 10, storage_bytes: 1073741824, processing_jobs_per_month: 10 }, features_json: { insights_enabled: false, category_intelligence_enabled: false, relationship_detection_enabled: false }, is_active: true }] }),
+  useUpdateAdminPlan: () => ({ mutateAsync: mutateAdminPlan }),
+  useResetAdminPlanDefaults: () => ({ mutateAsync: mutateReset }),
 }));
 
 vi.mock('@/auth/AuthContext', () => ({
@@ -50,8 +55,10 @@ describe('admin settings', () => {
     expect(screen.getByText('Yes')).toBeInTheDocument();
   });
 
-  it('plans panel shows backend placeholder', () => {
+  it('plans panel is editable and can save updates', async () => {
     render(<MemoryRouter><AdminPlansPage /></MemoryRouter>);
-    expect(screen.getByText(/Editable plan limits are not yet exposed by the backend/)).toBeInTheDocument();
+    fireEvent.change(screen.getByDisplayValue('10'), { target: { value: '20' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(mutateAdminPlan).toHaveBeenCalled();
   });
 });

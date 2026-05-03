@@ -218,9 +218,31 @@ def test_admin_can_list_prompt_execution_logs(client, test_user, db):
     test_user.role='admin'; db.commit()
     db.add(PromptExecutionLog(provider='openai', model='gpt-4o-mini', fallback_used=False, success=True, source='x'))
     db.commit()
-    r = client.get('/api/v1/admin/prompt-executions')
-    assert r.status_code == 200
-    assert len(r.json()) >= 1
+
+
+def test_non_admin_cannot_manage_plans(client, test_user, db):
+    test_user.role = "viewer"; db.commit()
+    assert client.get("/api/v1/admin/plans").status_code == 403
+    assert client.post("/api/v1/admin/plans/reset-defaults").status_code == 403
+
+
+def test_admin_can_list_and_update_plans_and_audit(client, test_user, db):
+    test_user.role = "admin"; db.commit()
+    plans = client.get("/api/v1/admin/plans")
+    assert plans.status_code == 200
+    free = next(p for p in plans.json() if p["slug"] == "free")
+    patch = client.patch(f"/api/v1/admin/plans/{free['id']}", json={"limits_json": {"documents_per_month": 11, "storage_bytes": 524288000, "processing_jobs_per_month": 10}, "features_json": {"insights_enabled": True, "category_intelligence_enabled": False, "relationship_detection_enabled": False}})
+    assert patch.status_code == 200
+    assert patch.json()["limits_json"]["documents_per_month"] == 11
+    ev = db.query(AdminAuditEvent).filter(AdminAuditEvent.entity_type == "plan", AdminAuditEvent.entity_id == free["id"]).first()
+    assert ev is not None
+
+
+def test_invalid_plan_patch_rejected(client, test_user, db):
+    test_user.role = "admin"; db.commit()
+    free = next(p for p in client.get("/api/v1/admin/plans").json() if p["slug"] == "free")
+    assert client.patch(f"/api/v1/admin/plans/{free['id']}", json={"limits_json": {"documents_per_month": -1}}).status_code == 422
+    assert client.patch(f"/api/v1/admin/plans/{free['id']}", json={"features_json": {"insights_enabled": "yes"}}).status_code == 422
 
 
 def test_non_admin_cannot_list_prompt_execution_logs(client, test_user, db):

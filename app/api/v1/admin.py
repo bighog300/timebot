@@ -32,6 +32,8 @@ from app.schemas.admin import (
     AdminSubscriptionResponse,
     AdminUsageSummaryResponse,
     AdminPlanUpdateRequest,
+    AdminPlanResponse,
+    AdminPlanPatchRequest,
     AdminUsageOverrideRequest,
     AdminCancelDowngradeRequest,
     AdminUserResponse,
@@ -200,6 +202,94 @@ def list_user_subscriptions(_: str = Depends(require_admin), db: Session = Depen
         )
         for s, u, p in rows
     ]
+
+
+def _validate_limits_json(limits_json: dict) -> None:
+    for key, value in limits_json.items():
+        if value is None:
+            continue
+        if not isinstance(value, (int, float)) or value < 0:
+            raise HTTPException(status_code=422, detail=f"Invalid limit for '{key}'. Expected non-negative number or null.")
+
+
+def _validate_features_json(features_json: dict) -> None:
+    for key, value in features_json.items():
+        if not isinstance(value, bool):
+            raise HTTPException(status_code=422, detail=f"Invalid feature flag for '{key}'. Expected boolean.")
+
+
+@router.get("/plans", response_model=list[AdminPlanResponse])
+def list_admin_plans(_: str = Depends(require_admin), db: Session = Depends(get_db)):
+    seed_default_plans(db)
+    plans = db.query(Plan).filter(Plan.is_active.is_(True)).order_by(Plan.created_at.asc()).all()
+    return plans
+
+
+@router.patch("/plans/{plan_id}", response_model=AdminPlanResponse)
+def patch_admin_plan(plan_id: str, payload: AdminPlanPatchRequest, _: str = Depends(require_admin), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    plan = db.query(Plan).filter(Plan.id == plan_id).first()
+    if not plan:
+        raise HTTPException(status_code=404, detail="Plan not found")
+
+    if payload.limits_json is not None:
+        _validate_limits_json(payload.limits_json)
+    if payload.features_json is not None:
+        _validate_features_json(payload.features_json)
+
+    before = {
+        "name": plan.name,
+        "price_monthly_cents": plan.price_monthly_cents,
+        "limits_json": dict(plan.limits_json or {}),
+        "features_json": dict(plan.features_json or {}),
+        "is_active": plan.is_active,
+    }
+    if payload.name is not None:
+        plan.name = payload.name
+    if payload.price_monthly_cents is not None:
+        plan.price_monthly_cents = payload.price_monthly_cents
+    if payload.limits_json is not None:
+        plan.limits_json = payload.limits_json
+    if payload.features_json is not None:
+        plan.features_json = payload.features_json
+    if payload.is_active is not None:
+        plan.is_active = payload.is_active
+
+    db.add(
+        AdminAuditEvent(
+            actor_id=current_user.id,
+            entity_type="plan",
+            entity_id=str(plan.id),
+            action="plan_config_updated",
+            details={"plan_slug": plan.slug, "before": before, "after": {"name": plan.name, "price_monthly_cents": plan.price_monthly_cents, "limits_json": plan.limits_json or {}, "features_json": plan.features_json or {}, "is_active": plan.is_active}},
+        )
+    )
+    db.commit()
+    db.refresh(plan)
+    return plan
+
+
+@router.post("/plans/reset-defaults", response_model=list[AdminPlanResponse])
+def reset_admin_plan_defaults(_: str = Depends(require_admin), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    seed_payloads = {}
+    from app.services.subscriptions import DEFAULT_PLANS
+    for payload in DEFAULT_PLANS:
+        seed_payloads[payload["slug"]] = payload
+
+    plans = db.query(Plan).filter(Plan.slug.in_(["free", "pro", "team"])).all()
+    before = {}
+    for plan in plans:
+        before[plan.slug] = {"name": plan.name, "price_monthly_cents": plan.price_monthly_cents, "limits_json": plan.limits_json or {}, "features_json": plan.features_json or {}, "is_active": plan.is_active}
+        defaults = seed_payloads.get(plan.slug)
+        if not defaults:
+            continue
+        plan.name = defaults["name"]
+        plan.price_monthly_cents = defaults["price_monthly_cents"]
+        plan.limits_json = defaults["limits_json"]
+        plan.features_json = defaults["features_json"]
+        plan.is_active = True
+    db.add(AdminAuditEvent(actor_id=current_user.id, entity_type="plan", entity_id="defaults", action="plan_defaults_reset", details={"before": before, "slugs": ["free", "pro", "team"]}))
+    db.commit()
+    return db.query(Plan).filter(Plan.is_active.is_(True)).order_by(Plan.created_at.asc()).all()
 
 
 @router.get("/users/{user_id}/usage-summary", response_model=AdminUsageSummaryResponse)

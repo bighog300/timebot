@@ -55,6 +55,7 @@ import type {
   AdminSystemStatus,
   AdminLlmModelsResponse,
   AdminInvite,
+  AdminPlan,
 } from '@/types/api';
 
 
@@ -181,6 +182,9 @@ export const api = {
   listAdminAudit: async (limit = 20, offset = 0): Promise<AdminAuditPage> => (await http.get('/admin/audit', { params: { limit, offset } })).data,
 
   listAdminSubscriptions: async (): Promise<AdminSubscription[]> => (await http.get('/admin/subscriptions')).data,
+  listAdminPlans: async (): Promise<AdminPlan[]> => (await http.get('/admin/plans')).data,
+  updateAdminPlan: async (planId: string, payload: Partial<Pick<AdminPlan, 'name' | 'price_monthly_cents' | 'limits_json' | 'features_json' | 'is_active'>>): Promise<AdminPlan> => (await http.patch(`/admin/plans/${planId}`, payload)).data,
+  resetAdminPlanDefaults: async (): Promise<AdminPlan[]> => (await http.post('/admin/plans/reset-defaults')).data,
   getAdminUsageSummary: async (userId: string): Promise<AdminUsageSummary> => (await http.get(`/admin/users/${userId}/usage-summary`)).data,
   getAdminSystemStatus: async (): Promise<AdminSystemStatus> => (await http.get('/admin/system-status')).data,
   getAdminLlmModels: async (): Promise<AdminLlmModelsResponse> => (await http.get('/admin/llm-models')).data,

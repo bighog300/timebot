@@ -54,6 +54,7 @@ export const keys = {
   adminProcessingSummary: ['admin-processing-summary'] as const,
   adminAudit: (page:number,limit:number)=>['admin-audit',page,limit] as const,
   adminSubscriptions: ['admin-subscriptions'] as const,
+  adminPlans: ['admin-plans'] as const,
   adminUsageSummary: (userId: string) => ['admin-usage-summary', userId] as const,
   adminSystemStatus: ['admin-system-status'] as const,
   adminPrompts: ['admin-prompts'] as const,
@@ -524,6 +525,7 @@ export function useAdminProcessingSummary() { const authReady = useAuthReady(); 
 export function useAdminAudit(page=0, limit=20) { const authReady = useAuthReady(); return useQuery({queryKey: keys.adminAudit(page, limit), queryFn: () => api.listAdminAudit(limit, page*limit), enabled: authReady}); }
 
 export function useAdminSubscriptions() { const authReady = useAuthReady(); return useQuery({ queryKey: keys.adminSubscriptions, queryFn: api.listAdminSubscriptions, enabled: authReady }); }
+export function useAdminPlans() { const authReady = useAuthReady(); return useQuery({ queryKey: keys.adminPlans, queryFn: api.listAdminPlans, enabled: authReady }); }
 export function useAdminUsageSummary(userId: string) { const authReady = useAuthReady(); return useQuery({ queryKey: keys.adminUsageSummary(userId), queryFn: () => api.getAdminUsageSummary(userId), enabled: authReady && Boolean(userId) }); }
 export function useAdminSystemStatus() { const authReady = useAuthReady(); return useQuery({ queryKey: keys.adminSystemStatus, queryFn: api.getAdminSystemStatus, enabled: authReady }); }
 export function useAdminUpdateUserPlan() {
@@ -537,6 +539,14 @@ export function useAdminUpdateUsageControls() {
 export function useAdminCancelOrDowngrade() {
   const qc = useQueryClient();
   return useMutation({ mutationFn: ({ userId, downgrade_to_plan_slug }: { userId: string; downgrade_to_plan_slug: string }) => api.cancelOrDowngradeAdminSubscription(userId, downgrade_to_plan_slug), onSuccess: () => qc.invalidateQueries({ queryKey: keys.adminSubscriptions }) });
+}
+export function useUpdateAdminPlan() {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: ({ planId, payload }: { planId: string; payload: Record<string, unknown> }) => api.updateAdminPlan(planId, payload), onSuccess: () => { qc.invalidateQueries({ queryKey: keys.adminPlans }); qc.invalidateQueries({ queryKey: ['admin-audit'] }); } });
+}
+export function useResetAdminPlanDefaults() {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: () => api.resetAdminPlanDefaults(), onSuccess: () => { qc.invalidateQueries({ queryKey: keys.adminPlans }); qc.invalidateQueries({ queryKey: ['admin-audit'] }); } });
 }
 
 export function useUpdateUserRole() {
