@@ -160,7 +160,7 @@ def run_prompt_with_fallback(prompt_template: PromptTemplate, user_input: str, d
         }
         if db is not None:
             usage = getattr(response, "usage", None)
-            record_prompt_execution(db, prompt_template_id=getattr(prompt_template, "id", None), purpose=purpose, actor_user_id=user_id, provider=prompt_template.provider, model=prompt_template.model, fallback_used=False, primary_error=None, latency_ms=result["latency_ms"], input_tokens=getattr(usage, "prompt_tokens", None), output_tokens=getattr(usage, "completion_tokens", None), total_tokens=getattr(usage, "total_tokens", None), success=True, error_message=None, source=source)
+            record_prompt_execution(db, prompt_template_id=getattr(prompt_template, "id", None), purpose=purpose, actor_user_id=user_id, provider=prompt_template.provider, model=prompt_template.model, primary_provider=prompt_template.provider, primary_model=prompt_template.model, fallback_used=False, fallback_reason=None, primary_error=None, latency_ms=result["latency_ms"], input_tokens=getattr(usage, "prompt_tokens", None), output_tokens=getattr(usage, "completion_tokens", None), total_tokens=getattr(usage, "total_tokens", None), success=True, error_message=None, source=source)
         return result
     except Exception as exc:
         primary_error = normalize_llm_error(exc)
@@ -185,12 +185,12 @@ def run_prompt_with_fallback(prompt_template: PromptTemplate, user_input: str, d
         }
         if db is not None:
             usage = getattr(response, "usage", None)
-            record_prompt_execution(db, prompt_template_id=getattr(prompt_template, "id", None), purpose=purpose, actor_user_id=user_id, provider=fallback_provider, model=fallback_model, fallback_used=True, primary_error=primary_error, latency_ms=result["latency_ms"], input_tokens=getattr(usage, "prompt_tokens", None), output_tokens=getattr(usage, "completion_tokens", None), total_tokens=getattr(usage, "total_tokens", None), success=True, error_message=None, source=source)
+            record_prompt_execution(db, prompt_template_id=getattr(prompt_template, "id", None), purpose=purpose, actor_user_id=user_id, provider=fallback_provider, model=fallback_model, primary_provider=prompt_template.provider, primary_model=prompt_template.model, fallback_used=True, fallback_reason="primary_error", primary_error=primary_error, latency_ms=result["latency_ms"], input_tokens=getattr(usage, "prompt_tokens", None), output_tokens=getattr(usage, "completion_tokens", None), total_tokens=getattr(usage, "total_tokens", None), success=True, error_message=None, source=source)
         return result
     except Exception as fallback_exc:
         message = f"primary={primary_error}; fallback={normalize_llm_error(fallback_exc)}"
         if db is not None:
-            record_prompt_execution(db, prompt_template_id=getattr(prompt_template, "id", None), purpose=purpose, actor_user_id=user_id, provider=fallback_provider, model=fallback_model, fallback_used=True, primary_error=primary_error, latency_ms=round((time.perf_counter() - started) * 1000), input_tokens=None, output_tokens=None, total_tokens=None, success=False, error_message=message[:300], source=source)
+            record_prompt_execution(db, prompt_template_id=getattr(prompt_template, "id", None), purpose=purpose, actor_user_id=user_id, provider=fallback_provider, model=fallback_model, primary_provider=prompt_template.provider, primary_model=prompt_template.model, fallback_used=True, fallback_reason="primary_error", primary_error=primary_error, latency_ms=round((time.perf_counter() - started) * 1000), input_tokens=None, output_tokens=None, total_tokens=None, success=False, error_message=message[:300], source=source)
         raise RuntimeError(message) from fallback_exc
 
 
@@ -214,6 +214,10 @@ def list_prompt_executions(db: Session, *, prompt_template_id=None, provider=Non
         q = q.filter(PromptExecutionLog.provider == provider)
     if model:
         q = q.filter(PromptExecutionLog.model == model)
+    if purpose:
+        q = q.filter(PromptExecutionLog.purpose == purpose)
+    if actor_user_id:
+        q = q.filter(PromptExecutionLog.actor_user_id == actor_user_id)
     if success is not None:
         q = q.filter(PromptExecutionLog.success.is_(success))
     if fallback_used is not None:
@@ -223,13 +227,17 @@ def list_prompt_executions(db: Session, *, prompt_template_id=None, provider=Non
     return q.order_by(PromptExecutionLog.created_at.desc()).offset(offset).limit(limit).all()
 
 
-def _apply_prompt_execution_filters(q, *, provider=None, model=None, source=None, success=None, fallback_used=None, created_after: datetime | None = None, created_before: datetime | None = None):
+def _apply_prompt_execution_filters(q, *, provider=None, model=None, source=None, purpose=None, actor_user_id=None, success=None, fallback_used=None, created_after: datetime | None = None, created_before: datetime | None = None):
     if provider:
         q = q.filter(PromptExecutionLog.provider == provider)
     if model:
         q = q.filter(PromptExecutionLog.model == model)
     if source:
         q = q.filter(PromptExecutionLog.source == source)
+    if purpose:
+        q = q.filter(PromptExecutionLog.purpose == purpose)
+    if actor_user_id:
+        q = q.filter(PromptExecutionLog.actor_user_id == actor_user_id)
     if success is not None:
         q = q.filter(PromptExecutionLog.success.is_(success))
     if fallback_used is not None:
@@ -241,12 +249,14 @@ def _apply_prompt_execution_filters(q, *, provider=None, model=None, source=None
     return q
 
 
-def summarize_prompt_executions(db: Session, *, provider: str | None = None, model: str | None = None, source: str | None = None, success: bool | None = None, fallback_used: bool | None = None, created_after: datetime | None = None, created_before: datetime | None = None):
+def summarize_prompt_executions(db: Session, *, provider: str | None = None, model: str | None = None, source: str | None = None, purpose: str | None = None, actor_user_id: str | None = None, success: bool | None = None, fallback_used: bool | None = None, created_after: datetime | None = None, created_before: datetime | None = None):
     base = _apply_prompt_execution_filters(
         db.query(PromptExecutionLog),
         provider=provider,
         model=model,
         source=source,
+        purpose=purpose,
+        actor_user_id=actor_user_id,
         success=success,
         fallback_used=fallback_used,
         created_after=created_after,
