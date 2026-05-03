@@ -6,7 +6,10 @@ import { InsightsPage } from '@/pages/InsightsPage';
 const mockUseInsightsOverview = vi.fn();
 const mockUseStructuredInsights = vi.fn();
 
+const mockUseInsightsAccess = vi.fn();
+
 vi.mock('@/hooks/useApi', () => ({
+  useInsightsAccess: () => mockUseInsightsAccess(),
   useInsightsOverview: () => mockUseInsightsOverview(),
   useStructuredInsights: () => mockUseStructuredInsights(),
 }));
@@ -14,11 +17,13 @@ vi.mock('@/hooks/useApi', () => ({
 describe('insights structured panel', () => {
   afterEach(() => {
     cleanup();
+    mockUseInsightsAccess.mockReset();
     mockUseInsightsOverview.mockReset();
     mockUseStructuredInsights.mockReset();
   });
 
   it('fetches and renders structured insight cards with severity and optional links/evidence', () => {
+    mockUseInsightsAccess.mockReturnValue({ insightsEnabled: true, isLoading: false });
     mockUseInsightsOverview.mockReturnValue({ data: { action_item_summary: {}, category_distribution: [], recent_activity: [] }, isLoading: false, isError: false });
     mockUseStructuredInsights.mockReturnValue({
       data: [
@@ -45,6 +50,7 @@ describe('insights structured panel', () => {
   });
 
   it('applies type and severity filters and keeps related links/evidence visible', () => {
+    mockUseInsightsAccess.mockReturnValue({ insightsEnabled: true, isLoading: false });
     mockUseInsightsOverview.mockReturnValue({ data: { action_item_summary: {}, category_distribution: [], recent_activity: [] }, isLoading: false, isError: false });
     mockUseStructuredInsights.mockReturnValue({
       data: [
@@ -87,6 +93,7 @@ describe('insights structured panel', () => {
   });
 
   it('renders empty state when no structured insights exist', () => {
+    mockUseInsightsAccess.mockReturnValue({ insightsEnabled: true, isLoading: false });
     mockUseInsightsOverview.mockReturnValue({ data: { action_item_summary: {}, category_distribution: [], recent_activity: [] }, isLoading: false, isError: false });
     mockUseStructuredInsights.mockReturnValue({ data: [], isLoading: false, isError: false });
 
@@ -96,6 +103,7 @@ describe('insights structured panel', () => {
   });
 
   it('does not crash when optional evidence fields are missing', () => {
+    mockUseInsightsAccess.mockReturnValue({ insightsEnabled: true, isLoading: false });
     mockUseInsightsOverview.mockReturnValue({ data: { action_item_summary: {}, category_distribution: [], recent_activity: [] }, isLoading: false, isError: false });
     mockUseStructuredInsights.mockReturnValue({
       data: [
@@ -118,6 +126,7 @@ describe('insights structured panel', () => {
   });
 
   it('renders document links from related_document_ids when available', () => {
+    mockUseInsightsAccess.mockReturnValue({ insightsEnabled: true, isLoading: false });
     mockUseInsightsOverview.mockReturnValue({ data: { action_item_summary: {}, category_distribution: [], recent_activity: [] }, isLoading: false, isError: false });
     mockUseStructuredInsights.mockReturnValue({
       data: [
@@ -140,6 +149,7 @@ describe('insights structured panel', () => {
   });
 
   it('renders timeline navigation from related_event_ids when available', () => {
+    mockUseInsightsAccess.mockReturnValue({ insightsEnabled: true, isLoading: false });
     mockUseInsightsOverview.mockReturnValue({ data: { action_item_summary: {}, category_distribution: [], recent_activity: [] }, isLoading: false, isError: false });
     mockUseStructuredInsights.mockReturnValue({
       data: [
@@ -162,6 +172,7 @@ describe('insights structured panel', () => {
   });
 
   it('does not crash when related ids are missing', () => {
+    mockUseInsightsAccess.mockReturnValue({ insightsEnabled: true, isLoading: false });
     mockUseInsightsOverview.mockReturnValue({ data: { action_item_summary: {}, category_distribution: [], recent_activity: [] }, isLoading: false, isError: false });
     mockUseStructuredInsights.mockReturnValue({
       data: [

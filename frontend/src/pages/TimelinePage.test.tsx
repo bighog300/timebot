@@ -15,6 +15,10 @@ vi.mock('react-router-dom', async () => {
 
 vi.mock('@/services/api', () => ({ api: { getTimeline: vi.fn(), getStructuredInsights: vi.fn() } }));
 
+vi.mock('@/hooks/useApi', () => ({
+  useInsightsAccess: () => ({ authReady: true, insightsEnabled: true }),
+}));
+
 
 const mockMatchMedia = (matches: boolean) => {
   vi.stubGlobal('matchMedia', vi.fn().mockImplementation(() => ({
