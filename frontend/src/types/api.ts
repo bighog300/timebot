@@ -565,4 +565,18 @@ export interface AdminSystemStatus {
   };
 }
 
-export interface PromptExecutionLog { id: string; prompt_template_id: string | null; purpose: string | null; actor_user_id: string | null; provider: string; model: string; fallback_used: boolean; primary_error: string | null; latency_ms: number | null; input_tokens: number | null; output_tokens: number | null; total_tokens: number | null; success: boolean; error_message: string | null; source: string | null; created_at: string; }
+export interface PromptExecutionLog { id: string; prompt_template_id: string | null; purpose: string | null; actor_user_id: string | null; provider: string; model: string; fallback_used: boolean; primary_error: string | null; latency_ms: number | null; input_tokens: number | null; output_tokens: number | null; total_tokens: number | null; success: boolean; error_message: string | null; source: string | null; estimated_cost_usd: number | null; currency: string | null; pricing_known: boolean; created_at: string; }
+
+export interface PromptExecutionSummary {
+  total_calls: number;
+  success_rate: number;
+  fallback_rate: number;
+  avg_latency_ms: number | null;
+  total_tokens: number;
+  calls_by_provider: Record<string, number>;
+  calls_by_model: Record<string, number>;
+  total_estimated_cost_usd: number;
+  cost_by_provider: Record<string, number>;
+  cost_by_model: Record<string, number>;
+  pricing_unknown_count: number;
+}

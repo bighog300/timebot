@@ -227,3 +227,20 @@ def test_non_admin_cannot_list_prompt_execution_logs(client, test_user, db):
     test_user.role='viewer'; db.commit()
     r = client.get('/api/v1/admin/prompt-executions')
     assert r.status_code == 403
+
+
+
+def test_prompt_execution_summary_includes_costs(client, test_user, db):
+    from app.models.prompt_execution_log import PromptExecutionLog
+
+    test_user.role = 'admin'
+    db.commit()
+    db.add(PromptExecutionLog(provider='openai', model='gpt-4o-mini', fallback_used=False, success=True, source='x', pricing_known=True, estimated_cost_usd=0.123456, currency='USD'))
+    db.add(PromptExecutionLog(provider='openai', model='unknown', fallback_used=False, success=False, source='x', pricing_known=False, estimated_cost_usd=None, currency='USD'))
+    db.commit()
+
+    r = client.get('/api/v1/admin/prompt-executions/summary')
+    assert r.status_code == 200
+    payload = r.json()
+    assert 'total_estimated_cost_usd' in payload
+    assert payload['pricing_unknown_count'] >= 1
