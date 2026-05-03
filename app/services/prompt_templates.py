@@ -4,9 +4,11 @@ import logging
 import time
 
 from sqlalchemy.exc import OperationalError, ProgrammingError
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models.prompt_template import PromptTemplate
+from app.models.prompt_execution_log import PromptExecutionLog
 from app.services.default_prompt_templates import DEFAULT_PROMPT_TEMPLATES
 
 PROMPT_TYPES = {"chat", "retrieval", "report", "timeline_extraction", "relationship_detection"}
@@ -129,7 +131,7 @@ def normalize_llm_error(error: Exception) -> str:
     return redacted[:300]
 
 
-def run_prompt_with_fallback(prompt_template: PromptTemplate, user_input: str, db: Session | None, user_id: str | None = None) -> dict:
+def run_prompt_with_fallback(prompt_template: PromptTemplate, user_input: str, db: Session | None, user_id: str | None = None, source: str | None = None, purpose: str | None = None) -> dict:
     from app.services.openai_client import openai_client_service
 
     request_payload = {
@@ -144,7 +146,7 @@ def run_prompt_with_fallback(prompt_template: PromptTemplate, user_input: str, d
     primary_error = None
     try:
         response = openai_client_service.generate_completion_for_provider(prompt_template.provider, request_payload)
-        return {
+        result = {
             "output": openai_client_service.extract_response_text(response),
             "provider_used": prompt_template.provider,
             "model_used": prompt_template.model,
@@ -152,7 +154,13 @@ def run_prompt_with_fallback(prompt_template: PromptTemplate, user_input: str, d
             "primary_error": None,
             "latency_ms": round((time.perf_counter() - started) * 1000),
             "token_usage": getattr(getattr(response, "usage", None), "total_tokens", None),
+            "error_message": None,
+            "error_message": None,
         }
+        if db is not None:
+            usage = getattr(response, "usage", None)
+            record_prompt_execution(db, prompt_template_id=getattr(prompt_template, "id", None), purpose=purpose, actor_user_id=user_id, provider=prompt_template.provider, model=prompt_template.model, fallback_used=False, primary_error=None, latency_ms=result["latency_ms"], input_tokens=getattr(usage, "prompt_tokens", None), output_tokens=getattr(usage, "completion_tokens", None), total_tokens=getattr(usage, "total_tokens", None), success=True, error_message=None, source=source)
+        return result
     except Exception as exc:
         primary_error = normalize_llm_error(exc)
 
@@ -164,7 +172,7 @@ def run_prompt_with_fallback(prompt_template: PromptTemplate, user_input: str, d
     fallback_payload = {**request_payload, "model": fallback_model}
     try:
         response = openai_client_service.generate_completion_for_provider(fallback_provider, fallback_payload)
-        return {
+        result = {
             "output": openai_client_service.extract_response_text(response),
             "provider_used": fallback_provider,
             "model_used": fallback_model,
@@ -172,6 +180,58 @@ def run_prompt_with_fallback(prompt_template: PromptTemplate, user_input: str, d
             "primary_error": primary_error,
             "latency_ms": round((time.perf_counter() - started) * 1000),
             "token_usage": getattr(getattr(response, "usage", None), "total_tokens", None),
+            "error_message": None,
         }
+        if db is not None:
+            usage = getattr(response, "usage", None)
+            record_prompt_execution(db, prompt_template_id=getattr(prompt_template, "id", None), purpose=purpose, actor_user_id=user_id, provider=fallback_provider, model=fallback_model, fallback_used=True, primary_error=primary_error, latency_ms=result["latency_ms"], input_tokens=getattr(usage, "prompt_tokens", None), output_tokens=getattr(usage, "completion_tokens", None), total_tokens=getattr(usage, "total_tokens", None), success=True, error_message=None, source=source)
+        return result
     except Exception as fallback_exc:
-        raise RuntimeError(f"primary={primary_error}; fallback={normalize_llm_error(fallback_exc)}") from fallback_exc
+        message = f"primary={primary_error}; fallback={normalize_llm_error(fallback_exc)}"
+        if db is not None:
+            record_prompt_execution(db, prompt_template_id=getattr(prompt_template, "id", None), purpose=purpose, actor_user_id=user_id, provider=fallback_provider, model=fallback_model, fallback_used=True, primary_error=primary_error, latency_ms=round((time.perf_counter() - started) * 1000), input_tokens=None, output_tokens=None, total_tokens=None, success=False, error_message=message[:300], source=source)
+        raise RuntimeError(message) from fallback_exc
+
+
+def record_prompt_execution(db: Session, **kwargs) -> PromptExecutionLog:
+    row = PromptExecutionLog(**kwargs)
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return row
+
+
+def list_prompt_executions(db: Session, *, prompt_template_id=None, provider=None, model=None, success=None, fallback_used=None, source=None, limit: int = 100, offset: int = 0):
+    q = db.query(PromptExecutionLog)
+    if prompt_template_id:
+        q = q.filter(PromptExecutionLog.prompt_template_id == prompt_template_id)
+    if provider:
+        q = q.filter(PromptExecutionLog.provider == provider)
+    if model:
+        q = q.filter(PromptExecutionLog.model == model)
+    if success is not None:
+        q = q.filter(PromptExecutionLog.success.is_(success))
+    if fallback_used is not None:
+        q = q.filter(PromptExecutionLog.fallback_used.is_(fallback_used))
+    if source:
+        q = q.filter(PromptExecutionLog.source == source)
+    return q.order_by(PromptExecutionLog.created_at.desc()).offset(offset).limit(limit).all()
+
+
+def summarize_prompt_executions(db: Session):
+    total_calls = db.query(func.count(PromptExecutionLog.id)).scalar() or 0
+    success_calls = db.query(func.count(PromptExecutionLog.id)).filter(PromptExecutionLog.success.is_(True)).scalar() or 0
+    fallback_calls = db.query(func.count(PromptExecutionLog.id)).filter(PromptExecutionLog.fallback_used.is_(True)).scalar() or 0
+    avg_latency_ms = db.query(func.avg(PromptExecutionLog.latency_ms)).scalar()
+    total_tokens = db.query(func.coalesce(func.sum(PromptExecutionLog.total_tokens), 0)).scalar() or 0
+    by_provider = dict(db.query(PromptExecutionLog.provider, func.count(PromptExecutionLog.id)).group_by(PromptExecutionLog.provider).all())
+    by_model = dict(db.query(PromptExecutionLog.model, func.count(PromptExecutionLog.id)).group_by(PromptExecutionLog.model).all())
+    return {
+        'total_calls': total_calls,
+        'success_rate': (success_calls / total_calls) if total_calls else 0.0,
+        'fallback_rate': (fallback_calls / total_calls) if total_calls else 0.0,
+        'avg_latency_ms': float(avg_latency_ms) if avg_latency_ms is not None else None,
+        'total_tokens': int(total_tokens),
+        'calls_by_provider': by_provider,
+        'calls_by_model': by_model,
+    }

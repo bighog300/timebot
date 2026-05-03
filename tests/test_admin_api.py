@@ -212,3 +212,18 @@ def test_llm_models_contains_openai_and_gemini_and_safe_config(client, test_user
     assert "OPENAI_API_KEY" not in str(payload)
     assert "GEMINI_API_KEY" not in str(payload)
     assert "sk-test-openai" not in str(payload)
+
+def test_admin_can_list_prompt_execution_logs(client, test_user, db):
+    from app.models.prompt_execution_log import PromptExecutionLog
+    test_user.role='admin'; db.commit()
+    db.add(PromptExecutionLog(provider='openai', model='gpt-4o-mini', fallback_used=False, success=True, source='x'))
+    db.commit()
+    r = client.get('/api/v1/admin/prompt-executions')
+    assert r.status_code == 200
+    assert len(r.json()) >= 1
+
+
+def test_non_admin_cannot_list_prompt_execution_logs(client, test_user, db):
+    test_user.role='viewer'; db.commit()
+    r = client.get('/api/v1/admin/prompt-executions')
+    assert r.status_code == 403

@@ -76,6 +76,7 @@ export const router = createBrowserRouter([
           { path: 'audit', element: <AdminAuditPage /> },
           { path: 'chatbot-settings', element: <AdminChatbotSettingsPage /> },
           { path: 'prompts', element: <AdminPromptTemplatesPage /> },
+          { path: 'prompts/audit', element: <AdminPromptAuditPage /> },
         ],
       },
     ],
@@ -84,4 +85,5 @@ export const router = createBrowserRouter([
 
 import { AdminSettingsPage, AdminSubscriptionsPage, AdminUserUsagePage, AdminBillingPage, AdminAuditPage } from '@/pages/AdminSettingsPage';
 import { AdminPromptTemplatesPage } from '@/pages/AdminPromptTemplatesPage';
+import { AdminPromptAuditPage } from '@/pages/AdminPromptAuditPage';
 import { AdminChatbotSettingsPage } from '@/pages/AdminChatbotSettingsPage';

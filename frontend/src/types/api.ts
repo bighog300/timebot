@@ -564,3 +564,5 @@ export interface AdminSystemStatus {
     relationship_detection_enabled: boolean;
   };
 }
+
+export interface PromptExecutionLog { id: string; prompt_template_id: string | null; purpose: string | null; actor_user_id: string | null; provider: string; model: string; fallback_used: boolean; primary_error: string | null; latency_ms: number | null; input_tokens: number | null; output_tokens: number | null; total_tokens: number | null; success: boolean; error_message: string | null; source: string | null; created_at: string; }

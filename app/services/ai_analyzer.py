@@ -74,7 +74,7 @@ class AIAnalyzer:
             ai_calls += 1
             active_template = get_prompt_for_purpose(db, "timeline_extraction") if db is not None else None
             if active_template is not None and prompt_source == "admin":
-                result = run_prompt_with_fallback(active_template, f"{DOCUMENT_ANALYSIS_SYSTEM}\n\n{prompt}", db, None)
+                result = run_prompt_with_fallback(active_template, f"{DOCUMENT_ANALYSIS_SYSTEM}\n\n{prompt}", db, None, source="runtime_ai_analyzer", purpose="timeline_extraction")
                 content = result["output"]
             else:
                 response = openai_client_service.generate_completion({

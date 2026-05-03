@@ -46,9 +46,11 @@ from app.schemas.prompt_template import (
     PromptTemplateTestRequest,
     PromptTemplateTestResponse,
     PromptTemplateUpdate,
+    PromptExecutionLogResponse,
+    PromptExecutionSummaryResponse,
 )
 from app.services.openai_client import APIError, openai_client_service
-from app.services.prompt_templates import activate_prompt_template, clear_default_for_purpose, run_prompt_with_fallback
+from app.services.prompt_templates import activate_prompt_template, clear_default_for_purpose, run_prompt_with_fallback, list_prompt_executions, summarize_prompt_executions
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -453,7 +455,7 @@ def activate_prompt(prompt_id: str, _: str = Depends(require_admin), db: Session
 
 
 @router.post("/prompts/test", response_model=PromptTemplateTestResponse)
-def test_prompt_template(payload: PromptTemplateTestRequest, _: str = Depends(require_admin)):
+def test_prompt_template(payload: PromptTemplateTestRequest, _: str = Depends(require_admin), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     if not openai_client_service.enabled:
         raise HTTPException(status_code=503, detail="AI service unavailable")
 
@@ -488,7 +490,7 @@ def test_prompt_template(payload: PromptTemplateTestRequest, _: str = Depends(re
         fallback_model=payload.fallback_model,
     )
     try:
-        result = run_prompt_with_fallback(template, f"{system_prompt}\n\n{user_prompt}", db=None, user_id=None)
+        result = run_prompt_with_fallback(template, f"{system_prompt}\n\n{user_prompt}", db=db, user_id=current_user.id, source="admin_test", purpose=payload.type)
     except RuntimeError as exc:
         raise HTTPException(status_code=502, detail=f"AI request failed: {exc}") from exc
     return PromptTemplateTestResponse(preview=result["output"], latency_ms=result["latency_ms"], usage_tokens=result["token_usage"], fallback_used=result["fallback_used"], provider_used=result["provider_used"], model_used=result["model_used"], primary_error=result["primary_error"])
@@ -549,3 +551,13 @@ def reset_chatbot_settings(_: str = Depends(require_admin), db: Session = Depend
     db.commit()
     db.refresh(settings)
     return settings
+
+
+@router.get("/prompt-executions", response_model=list[PromptExecutionLogResponse])
+def get_prompt_executions(prompt_template_id: str | None = None, provider: str | None = None, model: str | None = None, success: bool | None = None, fallback_used: bool | None = None, source: str | None = None, limit: int = 100, offset: int = 0, _: str = Depends(require_admin), db: Session = Depends(get_db)):
+    return list_prompt_executions(db, prompt_template_id=prompt_template_id, provider=provider, model=model, success=success, fallback_used=fallback_used, source=source, limit=limit, offset=offset)
+
+
+@router.get("/prompt-executions/summary", response_model=PromptExecutionSummaryResponse)
+def get_prompt_executions_summary(_: str = Depends(require_admin), db: Session = Depends(get_db)):
+    return summarize_prompt_executions(db)
