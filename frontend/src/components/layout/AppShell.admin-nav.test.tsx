@@ -4,6 +4,12 @@ import { MemoryRouter } from 'react-router-dom';
 import { AppShell } from './AppShell';
 
 vi.mock('@/auth/AuthContext', () => ({ useAuth: vi.fn() }));
+vi.mock('@/services/api', () => ({
+  api: {
+    listWorkspaces: () => Promise.resolve([]),
+    listNotifications: () => Promise.resolve([]),
+  },
+}));
 vi.mock('@/hooks/useApi', () => ({ useQueueStats: () => ({ data: { pending_review_count: 0 } }) }));
 vi.mock('@/store/uiStore', () => ({ useUIStore: () => ({ toasts: [], dismissToast: vi.fn() }) }));
 
