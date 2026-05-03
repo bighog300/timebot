@@ -29,18 +29,7 @@ def get_active_prompt_content(db: Session, prompt_type: str, default_content: st
 
 
 def get_active_prompt_template(db: Session, prompt_type: str) -> PromptTemplate | None:
-    if prompt_type not in PROMPT_TYPES:
-        return None
-    return (
-        db.query(PromptTemplate)
-        .filter(
-            PromptTemplate.type == prompt_type,
-            PromptTemplate.is_active.is_(True),
-            PromptTemplate.enabled.is_(True),
-        )
-        .order_by(PromptTemplate.is_default.desc(), PromptTemplate.updated_at.desc())
-        .first()
-    )
+    return get_prompt_for_purpose(db, prompt_type)
 
 
 def activate_prompt_template(db: Session, template: PromptTemplate) -> PromptTemplate:
@@ -52,6 +41,44 @@ def activate_prompt_template(db: Session, template: PromptTemplate) -> PromptTem
     template.is_active = True
     db.add(template)
     return template
+
+
+def clear_default_for_purpose(db: Session, *, prompt_type: str, exclude_id: str | None = None) -> None:
+    query = db.query(PromptTemplate).filter(
+        PromptTemplate.type == prompt_type,
+        PromptTemplate.is_default.is_(True),
+    )
+    if exclude_id is not None:
+        query = query.filter(PromptTemplate.id != exclude_id)
+    query.update({PromptTemplate.is_default: False}, synchronize_session=False)
+
+
+def get_prompt_for_purpose(db: Session, prompt_type: str) -> PromptTemplate | None:
+    if prompt_type not in PROMPT_TYPES:
+        return None
+
+    default_prompt = (
+        db.query(PromptTemplate)
+        .filter(
+            PromptTemplate.type == prompt_type,
+            PromptTemplate.enabled.is_(True),
+            PromptTemplate.is_default.is_(True),
+        )
+        .order_by(PromptTemplate.updated_at.desc(), PromptTemplate.created_at.desc())
+        .first()
+    )
+    if default_prompt:
+        return default_prompt
+
+    return (
+        db.query(PromptTemplate)
+        .filter(
+            PromptTemplate.type == prompt_type,
+            PromptTemplate.enabled.is_(True),
+        )
+        .order_by(PromptTemplate.version.desc(), PromptTemplate.created_at.desc(), PromptTemplate.updated_at.desc())
+        .first()
+    )
 
 
 

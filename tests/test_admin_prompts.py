@@ -243,3 +243,49 @@ def test_runtime_falls_back_when_seeded_template_disabled(db):
     db.commit()
 
     assert get_active_prompt_content(db, "report", "built-in report") == "built-in report"
+
+def test_create_default_clears_previous_default_for_same_purpose(client, test_user, db):
+    test_user.role = 'admin'
+    existing = PromptTemplate(type='chat', name='existing', content='one', version=1, is_default=True)
+    db.add(existing)
+    db.commit()
+
+    r = client.post('/api/v1/admin/prompts', json={'type': 'chat', 'name': 'new', 'content': 'two', 'version': 2, 'is_default': True})
+    assert r.status_code == 201
+
+    db.refresh(existing)
+    assert existing.is_default is False
+    created = db.query(PromptTemplate).filter(PromptTemplate.id == r.json()['id']).first()
+    assert created is not None
+    assert created.is_default is True
+
+
+def test_update_to_default_clears_previous_default_for_same_purpose(client, test_user, db):
+    test_user.role = 'admin'
+    p1 = PromptTemplate(type='report', name='d1', content='one', version=1, is_default=True)
+    p2 = PromptTemplate(type='report', name='d2', content='two', version=2, is_default=False)
+    db.add_all([p1, p2])
+    db.commit()
+
+    r = client.put(f'/api/v1/admin/prompts/{p2.id}', json={'is_default': True})
+    assert r.status_code == 200
+
+    db.refresh(p1)
+    db.refresh(p2)
+    assert p1.is_default is False
+    assert p2.is_default is True
+
+
+def test_different_purposes_can_each_have_default(client, test_user, db):
+    test_user.role = 'admin'
+    db.commit()
+
+    r1 = client.post('/api/v1/admin/prompts', json={'type': 'chat', 'name': 'chat default', 'content': 'chat', 'version': 1, 'is_default': True})
+    r2 = client.post('/api/v1/admin/prompts', json={'type': 'report', 'name': 'report default', 'content': 'report', 'version': 1, 'is_default': True})
+    assert r1.status_code == 201
+    assert r2.status_code == 201
+
+    chat_defaults = db.query(PromptTemplate).filter(PromptTemplate.type == 'chat', PromptTemplate.is_default.is_(True)).count()
+    report_defaults = db.query(PromptTemplate).filter(PromptTemplate.type == 'report', PromptTemplate.is_default.is_(True)).count()
+    assert chat_defaults == 1
+    assert report_defaults == 1
