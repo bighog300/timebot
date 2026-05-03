@@ -18,6 +18,13 @@ const formatConfidence = (confidence?: number | null) => {
   return `${Math.round(confidence * 100)}%`;
 };
 
+const CONFIDENCE_CHIP: Record<'strong' | 'medium' | 'weak', string> = {
+  strong: 'border-green-600 bg-green-50 text-green-800 dark:bg-green-950 dark:text-green-200',
+  medium: 'border-amber-500 bg-amber-50 text-amber-800 dark:bg-amber-950 dark:text-amber-200',
+  weak: 'border-red-500  bg-red-50  text-red-800  dark:bg-red-950  dark:text-red-200',
+};
+const CHIP_BASE = 'inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] leading-4';
+
 
 
 const getSignalStrengthLabel = (event: TimelineEvent): 'strong' | 'medium' | 'weak' | null => {
@@ -78,6 +85,8 @@ export function TimelinePage() {
   const [containerWidth, setContainerWidth] = useState<number>(0);
   const [zoomMode, setZoomMode] = useState<TimelineZoom>('fit');
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeCategory, setActiveCategory] = useState<string | null>(null);
 
   const [isMobileView, setIsMobileView] = useState<boolean>(() => {
     if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
@@ -148,6 +157,24 @@ export function TimelinePage() {
 
     return Array.from(groups.values());
   }, [normalizedEvents]);
+  const availableCategories = useMemo(() => {
+    const seen = new Set<string>();
+    groupedEvents.forEach((g) => {
+      const cat = g.primary.event.category?.trim();
+      if (cat) seen.add(cat);
+    });
+    return Array.from(seen).sort();
+  }, [groupedEvents]);
+  const filteredGroups = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return groupedEvents.filter((group) => {
+      if (activeCategory && group.primary.event.category?.trim() !== activeCategory) return false;
+      if (!q) return true;
+      const title = (group.primary.event.title ?? '').toLowerCase();
+      const doc = (group.primary.event.document_title ?? '').toLowerCase();
+      return title.includes(q) || doc.includes(q);
+    });
+  }, [groupedEvents, searchQuery, activeCategory]);
   const linkedInsightTypesByEventId = useMemo(() => {
     const map = new Map<string, Set<string>>();
     const insights = (insightsQuery.data ?? []) as StructuredInsight[];
@@ -207,7 +234,9 @@ export function TimelinePage() {
 
     const dateToX = (date: Date) => ((date.getTime() - paddedMin.getTime()) / (paddedMax.getTime() - paddedMin.getTime())) * width;
 
-    return { width, ticks, dateToX, availableTimelineWidth, isScrollable: width > availableTimelineWidth + 8 };
+    const today = new Date();
+    const todayX = today >= paddedMin && today <= paddedMax ? dateToX(today) : null;
+    return { width, ticks, dateToX, availableTimelineWidth, isScrollable: width > availableTimelineWidth + 8, todayX };
   }, [containerWidth, normalizedEvents, zoomMode]);
 
   useEffect(() => {
@@ -234,9 +263,14 @@ export function TimelinePage() {
 
   return (
     <div className="w-full min-w-0 max-w-[calc(100vw-2rem)] space-y-3 overflow-hidden">
-      <h1 className="text-xl font-semibold">Timeline</h1>
+      <div className="flex items-baseline gap-3">
+        <h1 className="text-xl font-semibold">Timeline</h1>
+        <span className="text-sm text-slate-400" data-testid="timeline-event-count">
+          {groupedEvents.length} events
+        </span>
+      </div>
       {isMobileView ? <div className="space-y-3 md:hidden" data-testid="timeline-mobile-list">
-        {groupedEvents.map((group, idx) => {
+        {filteredGroups.map((group, idx) => {
           const item = group.primary;
           const similarCount = group.events.length - 1;
           const isExpanded = Boolean(expandedGroups[group.normalizedKey]);
@@ -273,9 +307,19 @@ export function TimelinePage() {
                 <p className="text-xs text-slate-400">{dateLabel}</p>
               </button>
               <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-slate-300">
-                {categoryLabel ? <span>Type: {categoryLabel}</span> : null}
-                {primaryConfidenceLabel ? <span>Confidence: {primaryConfidenceLabel}</span> : null}
-                {signalStrengthLabel ? <span>Signal: {signalStrengthLabel}</span> : null}
+                <div className="flex flex-wrap gap-1 mt-1">
+                  {primaryConfidenceLabel && signalStrengthLabel && (
+                    <span className={`${CHIP_BASE} ${CONFIDENCE_CHIP[signalStrengthLabel]}`} data-testid="confidence-chip">
+                      <span className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-current" />
+                      {primaryConfidenceLabel}
+                    </span>
+                  )}
+                  {categoryLabel && (
+                    <span className={`${CHIP_BASE} border-slate-600 bg-slate-800 text-slate-200`}>
+                      {categoryLabel}
+                    </span>
+                  )}
+                </div>
                 {item.event.is_milestone ? <span className="rounded-full border border-emerald-500/60 px-2 py-0.5 text-emerald-200">Milestone</span> : null}
                 {hasLinkedInsight ? <span className="rounded-full border border-violet-500/60 px-2 py-0.5 text-violet-200">Insight-linked</span> : null}
                 {linkedInsightTypes.map((insightType) => <span key={`mobile-${group.normalizedKey}-${insightType}`} className="rounded-full border border-violet-700/70 px-2 py-0.5 text-violet-100">Insight: {insightType}</span>)}
@@ -330,7 +374,17 @@ export function TimelinePage() {
           );
         })}
       </div> : null}
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2" data-testid="timeline-toolbar">
+        <input type="search" placeholder="Filter events…" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="rounded-md border border-slate-600 bg-slate-800 px-3 py-1 text-xs text-slate-200 placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-500" aria-label="Filter timeline events" data-testid="timeline-search-input" />
+        {availableCategories.length > 0 && (
+          <>
+            <button type="button" onClick={() => setActiveCategory(null)} className={`rounded-full border px-3 py-1 text-xs ${activeCategory === null ? 'border-blue-400 bg-blue-500/20 text-blue-200' : 'border-slate-600 text-slate-300 hover:bg-slate-800'}`} aria-pressed={activeCategory === null} data-testid="timeline-filter-all">All</button>
+            {availableCategories.map((cat) => (
+              <button key={cat} type="button" onClick={() => setActiveCategory((prev) => (prev === cat ? null : cat))} className={`rounded-full border px-3 py-1 text-xs ${activeCategory === cat ? 'border-blue-400 bg-blue-500/20 text-blue-200' : 'border-slate-600 text-slate-300 hover:bg-slate-800'}`} aria-pressed={activeCategory === cat} data-testid={`timeline-filter-${cat.toLowerCase().replace(/\s+/g, '-')}`}>{cat}</button>
+            ))}
+          </>
+        )}
+        <div className="ml-auto flex items-center gap-1">
         {ZOOM_OPTIONS.map((option) => (
           <button
             key={option.mode}
@@ -362,19 +416,15 @@ export function TimelinePage() {
             </button>
           </>
         ) : null}
+        </div>
       </div>
       {chart.isScrollable ? <p className="text-xs text-slate-400">Drag or scroll inside the chart to pan timeline.</p> : null}
-      {gaps.length ? (
-        <div className="rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2">
-          <div className="space-y-1">
-            {gaps.map((gap, idx) => (
-              <p key={`${gap.start_date}-${gap.end_date}-${idx}`} className="text-xs text-slate-300">
-                No activity for {gap.gap_duration_days} days ({gap.start_date} → {gap.end_date})
-              </p>
-            ))}
-          </div>
-        </div>
-      ) : null}
+      {gaps.length ? (() => {
+        const sorted = [...gaps].sort((a, b) => b.gap_duration_days - a.gap_duration_days);
+        const primary = sorted[0];
+        const remaining = sorted.length - 1;
+        return <div className="flex items-center gap-2 rounded-md border border-amber-600/50 bg-amber-500/10 px-3 py-2" data-testid="timeline-gap-banner"><span className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" aria-hidden="true" /><p className="text-xs text-amber-200">Gap: {primary.gap_duration_days} days with no activity — {primary.start_date} → {primary.end_date}</p>{remaining > 0 && <span className="ml-auto shrink-0 text-xs text-amber-400">+{remaining} more</span>}</div>;
+      })() : null}
       <div className="hidden w-full max-w-full min-w-0 overflow-hidden rounded-2xl border border-slate-700 bg-slate-900 shadow-sm md:block" data-testid="timeline-card">
         <div
           ref={scrollContainerRef}
@@ -397,10 +447,15 @@ export function TimelinePage() {
                     <div className="mt-1 -translate-x-1/2 whitespace-nowrap text-xs text-slate-300">{tick.label}</div>
                   </div>
                 ))}
+                {chart.todayX !== null && (
+                  <div className="absolute inset-y-0 w-px bg-orange-500" style={{ left: chart.todayX }} data-testid="timeline-today-line">
+                    <span className="absolute top-1 -translate-x-1/2 whitespace-nowrap rounded bg-orange-100 px-1 text-[9px] font-medium text-orange-800 dark:bg-orange-950 dark:text-orange-200">today</span>
+                  </div>
+                )}
               </div>
             </div>
 
-            {groupedEvents.map((group, idx) => {
+            {filteredGroups.map((group, idx) => {
               const item = group.primary;
               const startX = chart.dateToX(item.start);
               const endX = chart.dateToX(item.end);
@@ -449,9 +504,15 @@ export function TimelinePage() {
                   <div className="sticky left-0 z-30 shrink-0 border-r border-slate-700 bg-slate-900 p-3" style={{ width: LABEL_WIDTH }}>
                     <div className="truncate text-sm font-medium">{item.event.title}</div>
                     <div className="truncate text-xs text-slate-400">{item.event.document_title}</div>
-                    {categoryLabel ? <div className="truncate text-[11px] text-slate-500">Type: {categoryLabel}</div> : null}
-                    {primaryConfidenceLabel ? <div className="text-xs text-slate-500">Confidence: {primaryConfidenceLabel}</div> : null}
-                    {signalStrengthLabel ? <div className="text-xs text-slate-500">Signal: {signalStrengthLabel}</div> : null}
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {primaryConfidenceLabel && signalStrengthLabel && (
+                        <span className={`${CHIP_BASE} ${CONFIDENCE_CHIP[signalStrengthLabel]}`} data-testid="confidence-chip">
+                          <span className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-current" />
+                          {primaryConfidenceLabel}
+                        </span>
+                      )}
+                      {categoryLabel && <span className={`${CHIP_BASE} border-slate-600 bg-slate-800 text-slate-200`}>{categoryLabel}</span>}
+                    </div>
                     {item.event.is_milestone ? (
                       <span className="mt-1 inline-flex rounded-full border border-emerald-500/60 bg-emerald-500/10 px-2 py-0.5 text-[11px] text-emerald-200">
                         Milestone
@@ -529,23 +590,31 @@ export function TimelinePage() {
                     {chart.ticks.map((tick) => (
                       <div key={`${item.event.title}-${tick.label}`} className="absolute inset-y-0 w-px bg-slate-800" style={{ left: tick.x }} />
                     ))}
-                    {item.isMilestone ? (
-                      <div
-                        className="absolute h-3 w-3 -translate-x-1/2 rotate-45 rounded-[1px] bg-emerald-400"
-                        style={{ left: startX, marginTop: 25 }}
-                        data-testid="timeline-milestone"
-                      />
-                    ) : (
-                      <div
-                        className="absolute h-3 rounded bg-blue-500"
-                        style={{ left: startX, width, marginTop: 25 }}
-                        data-testid="timeline-range-bar"
-                      />
-                    )}
+                    {chart.todayX !== null && <div className="absolute inset-y-0 w-px bg-orange-500/40" style={{ left: chart.todayX }} aria-hidden="true" />}
+                    {(() => {
+                      const uncertaintyLabel = getTimelineUncertaintyLabel(item.event);
+                      const isApproximate = uncertaintyLabel === 'Approximate date'
+                        || uncertaintyLabel === 'Month only'
+                        || uncertaintyLabel === 'Date uncertain';
+                      return item.isMilestone ? (
+                        <div className="absolute h-3 w-3 -translate-x-1/2 rotate-45 rounded-[1px] bg-emerald-400" style={{ left: startX, marginTop: 25 }} data-testid="timeline-milestone" />
+                      ) : isApproximate ? (
+                        <div className="absolute h-3 rounded border border-dashed border-blue-400 bg-blue-500/50" style={{ left: startX, width, marginTop: 25 }} data-testid="timeline-range-bar-approximate" />
+                      ) : (
+                        <div className="absolute h-3 rounded bg-blue-500" style={{ left: startX, width, marginTop: 25 }} data-testid="timeline-range-bar" />
+                      );
+                    })()}
                   </div>
                 </div>
               );
             })}
+            <div className="sticky left-0 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-slate-700 bg-slate-900 px-4 py-2" data-testid="timeline-legend">
+              <span className="text-[10px] font-medium uppercase tracking-wide text-slate-500">Legend</span>
+              <span className="flex items-center gap-1.5 text-[11px] text-slate-300"><span className="inline-block h-2 w-5 rounded-sm bg-blue-500" />Range event</span>
+              <span className="flex items-center gap-1.5 text-[11px] text-slate-300"><span className="inline-block h-2.5 w-2.5 rotate-45 rounded-[1px] bg-emerald-400" />Milestone</span>
+              <span className="flex items-center gap-1.5 text-[11px] text-slate-300"><span className="inline-block h-2 w-5 rounded-sm border border-dashed border-blue-400 bg-blue-500/50" />Approximate date</span>
+              <span className="flex items-center gap-1.5 text-[11px] text-slate-400 ml-auto"><span className="inline-block h-1.5 w-1.5 rounded-full bg-green-500" /> Strong<span className="ml-2 inline-block h-1.5 w-1.5 rounded-full bg-amber-500" /> Medium<span className="ml-2 inline-block h-1.5 w-1.5 rounded-full bg-red-500" /> Weak</span>
+            </div>
           </div>
         </div>
       </div>
