@@ -18,6 +18,7 @@ from app.models.billing import Plan, Subscription
 from app.models.processing_event import DocumentProcessingEvent
 
 from app.models.chat import ChatbotSettings
+from app.models.email import EmailProviderConfig, EmailTemplate
 from app.models.prompt_template import PromptTemplate
 from app.schemas.chatbot import ChatbotSettingsPayload, ChatbotSettingsResponse
 from app.config import settings
@@ -40,6 +41,11 @@ from app.schemas.admin import (
     AdminCancelDowngradeRequest,
     AdminUserResponse,
     AdminUsersPageResponse,
+    EmailProviderConfigResponse,
+    EmailProviderConfigPatchRequest,
+    EmailTemplateCreateRequest,
+    EmailTemplatePatchRequest,
+    EmailTemplateResponse,
     ProcessingEventResponse,
     AdminSystemStatusFeaturesResponse,
     AdminSystemStatusResponse,
@@ -67,6 +73,7 @@ from app.schemas.prompt_template import (
 from app.services.openai_client import APIError, openai_client_service
 from app.services.prompt_templates import activate_prompt_template, clear_default_for_purpose, run_prompt_with_fallback, list_prompt_executions, summarize_prompt_executions
 from app.services.error_sanitizer import sanitize_processing_error
+from app.services.email_secrets import email_secret_crypto
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -131,6 +138,121 @@ def require_admin(role: str = Depends(get_current_user_role)) -> str:
     return role
 
 
+
+
+def _safe_email_provider_response(cfg: EmailProviderConfig) -> EmailProviderConfigResponse:
+    return EmailProviderConfigResponse(
+        provider=cfg.provider,
+        enabled=cfg.enabled,
+        from_email=cfg.from_email,
+        from_name=cfg.from_name,
+        reply_to=cfg.reply_to,
+        configured=bool(cfg.api_key_encrypted),
+        created_at=cfg.created_at,
+        updated_at=cfg.updated_at,
+    )
+
+
+def _audit_admin_email_action(db: Session, actor: User, entity_type: str, entity_id: str, action: str, details: dict) -> None:
+    db.add(AdminAuditEvent(actor_id=actor.id, entity_type=entity_type, entity_id=entity_id, action=action, details=details))
+
+
+def _validate_template_status_transition(current: str, nxt: str) -> None:
+    if current == nxt:
+        return
+    allowed = {('draft', 'active'), ('active', 'archived'), ('draft', 'archived'), ('archived', 'draft')}
+    if (current, nxt) not in allowed:
+        raise HTTPException(status_code=422, detail='Invalid template status transition')
+
+
+@router.get('/email/providers', response_model=list[EmailProviderConfigResponse])
+def list_email_provider_configs(_: str = Depends(require_admin), db: Session = Depends(get_db)):
+    providers = ['resend', 'sendgrid']
+    rows = {c.provider: c for c in db.query(EmailProviderConfig).filter(EmailProviderConfig.provider.in_(providers)).all()}
+    out: list[EmailProviderConfigResponse] = []
+    now = datetime.now(timezone.utc)
+    for provider in providers:
+        cfg = rows.get(provider)
+        if cfg:
+            out.append(_safe_email_provider_response(cfg))
+        else:
+            out.append(EmailProviderConfigResponse(provider=provider, enabled=False, from_email='', from_name=None, reply_to=None, configured=False, created_at=now, updated_at=now))
+    return out
+
+
+@router.get('/email/providers/{provider}', response_model=EmailProviderConfigResponse)
+def get_email_provider_config(provider: str, _: str = Depends(require_admin), db: Session = Depends(get_db)):
+    if provider not in {'resend', 'sendgrid'}:
+        raise HTTPException(status_code=404, detail='Provider not found')
+    cfg = db.query(EmailProviderConfig).filter(EmailProviderConfig.provider == provider).first()
+    if not cfg:
+        now = datetime.now(timezone.utc)
+        return EmailProviderConfigResponse(provider=provider, enabled=False, from_email='', from_name=None, reply_to=None, configured=False, created_at=now, updated_at=now)
+    return _safe_email_provider_response(cfg)
+
+
+@router.patch('/email/providers/{provider}', response_model=EmailProviderConfigResponse)
+def patch_email_provider_config(provider: str, payload: EmailProviderConfigPatchRequest, _: str = Depends(require_admin), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    if provider not in {'resend', 'sendgrid'}:
+        raise HTTPException(status_code=404, detail='Provider not found')
+    cfg = db.query(EmailProviderConfig).filter(EmailProviderConfig.provider == provider).first()
+    if not cfg:
+        cfg = EmailProviderConfig(provider=provider, from_email='')
+        db.add(cfg)
+    if payload.enabled is not None: cfg.enabled = payload.enabled
+    if payload.from_email is not None: cfg.from_email = payload.from_email
+    if payload.from_name is not None: cfg.from_name = payload.from_name
+    if payload.reply_to is not None: cfg.reply_to = payload.reply_to
+    if payload.api_key is not None:
+        val = payload.api_key.strip()
+        cfg.api_key_encrypted = email_secret_crypto.encrypt(val) if val else None
+    db.flush()
+    _audit_admin_email_action(db, current_user, 'email_provider_config', provider, 'email_provider_config_updated', {'provider': provider, 'enabled': cfg.enabled, 'configured': bool(cfg.api_key_encrypted)})
+    db.commit(); db.refresh(cfg)
+    return _safe_email_provider_response(cfg)
+
+
+@router.get('/email/templates', response_model=list[EmailTemplateResponse])
+def list_email_templates(_: str = Depends(require_admin), db: Session = Depends(get_db)):
+    return db.query(EmailTemplate).order_by(EmailTemplate.updated_at.desc()).all()
+
+@router.post('/email/templates', response_model=EmailTemplateResponse, status_code=201)
+def create_email_template(payload: EmailTemplateCreateRequest, _: str = Depends(require_admin), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    if db.query(EmailTemplate).filter(EmailTemplate.slug == payload.slug).first():
+        raise HTTPException(status_code=400, detail='Slug already exists')
+    t = EmailTemplate(**payload.model_dump(), created_by_admin_id=current_user.id, updated_by_admin_id=current_user.id)
+    db.add(t); db.flush()
+    _audit_admin_email_action(db, current_user, 'email_template', str(t.id), 'email_template_created', {'slug': t.slug, 'status': t.status})
+    db.commit(); db.refresh(t); return t
+
+@router.get('/email/templates/{template_id}', response_model=EmailTemplateResponse)
+def get_email_template(template_id: str, _: str = Depends(require_admin), db: Session = Depends(get_db)):
+    t = db.query(EmailTemplate).filter(EmailTemplate.id == template_id).first()
+    if not t: raise HTTPException(status_code=404, detail='Template not found')
+    return t
+
+@router.patch('/email/templates/{template_id}', response_model=EmailTemplateResponse)
+def patch_email_template(template_id: str, payload: EmailTemplatePatchRequest, _: str = Depends(require_admin), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    t = db.query(EmailTemplate).filter(EmailTemplate.id == template_id).first()
+    if not t: raise HTTPException(status_code=404, detail='Template not found')
+    update = payload.model_dump(exclude_unset=True)
+    if t.status == 'archived' and ('status' not in update or update.get('status') != 'draft'):
+        raise HTTPException(status_code=400, detail='Archived templates are read-only')
+    if 'slug' in update and update['slug'] != t.slug and db.query(EmailTemplate).filter(EmailTemplate.slug == update['slug']).first():
+        raise HTTPException(status_code=400, detail='Slug already exists')
+    if 'status' in update: _validate_template_status_transition(t.status, update['status'])
+    for k,v in update.items(): setattr(t,k,v)
+    t.updated_by_admin_id = current_user.id
+    _audit_admin_email_action(db, current_user, 'email_template', str(t.id), 'email_template_updated', {'slug': t.slug, 'status': t.status})
+    db.commit(); db.refresh(t); return t
+
+@router.delete('/email/templates/{template_id}', response_model=EmailTemplateResponse)
+def archive_email_template(template_id: str, _: str = Depends(require_admin), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    t = db.query(EmailTemplate).filter(EmailTemplate.id == template_id).first()
+    if not t: raise HTTPException(status_code=404, detail='Template not found')
+    t.status = 'archived'; t.updated_by_admin_id = current_user.id
+    _audit_admin_email_action(db, current_user, 'email_template', str(t.id), 'email_template_archived', {'slug': t.slug})
+    db.commit(); db.refresh(t); return t
 @router.get("/llm-models", response_model=AdminLlmModelsResponse)
 def admin_llm_models(_: str = Depends(require_admin)):
     provider_configured = {

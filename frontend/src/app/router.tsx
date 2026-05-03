@@ -100,6 +100,10 @@ export const router = createBrowserRouter([
           { path: 'settings/prompts/audit', element: <AdminPromptAuditPage /> },
           { path: 'settings/prompts/analytics', element: <AdminPromptAnalyticsPage /> },
           { path: 'settings/audit', element: <AdminAuditPage /> },
+          { path: 'settings/email', element: <AdminEmailSettingsPage /> },
+          { path: 'settings/email/templates', element: <AdminEmailTemplatesPage /> },
+          { path: 'settings/email/templates/new', element: <AdminEmailTemplateEditorPage /> },
+          { path: 'settings/email/templates/:templateId', element: <AdminEmailTemplateEditorPage /> },
           { path: 'messages', element: <AdminMessagesPage /> },
         ],
       },
@@ -114,3 +118,6 @@ import { AdminPromptAuditPage } from '@/pages/AdminPromptAuditPage';
 import { AdminPromptAnalyticsPage } from '@/pages/AdminPromptAnalyticsPage';
 import { AdminChatbotSettingsPage } from '@/pages/AdminChatbotSettingsPage';
 import { AdminUsersPage } from '@/pages/AdminUsersPage';
+import { AdminEmailSettingsPage } from '@/pages/AdminEmailSettingsPage';
+import { AdminEmailTemplatesPage } from '@/pages/AdminEmailTemplatesPage';
+import { AdminEmailTemplateEditorPage } from '@/pages/AdminEmailTemplateEditorPage';
