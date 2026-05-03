@@ -50,8 +50,8 @@ def test_inactive_user_cannot_login(db):
     db.commit()
     with _client_with_db(db) as client:
         response = client.post("/api/v1/auth/login", json={"email": user.email, "password": "abc12345"})
-    assert response.status_code == 401
-    assert response.json()["detail"] == "Invalid email or password"
+    assert response.status_code == 403
+    assert response.json()["detail"] == "User account is inactive"
 
 
 def test_me_requires_auth(db):

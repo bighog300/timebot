@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from uuid import uuid4
 
@@ -115,3 +115,48 @@ def test_protected_route_requires_auth_and_allows_when_authenticated():
     app.dependency_overrides.clear()
 
     assert allowed.status_code == 200
+
+
+def test_inactive_user_cannot_log_in(client, test_user, db):
+    test_user.is_active = False
+    db.commit()
+    response = client.post('/api/v1/auth/login', json={'email': test_user.email, 'password': 'password123'})
+    assert response.status_code == 403
+
+
+def test_invite_accept_success_and_states(client, test_user, db):
+    from app.models.user import UserInvite, User
+    import hashlib, secrets
+    test_user.role = 'admin'; db.commit()
+    token = secrets.token_urlsafe(16)
+    invite = UserInvite(email='accept@example.com', role='editor', token_hash=hashlib.sha256(token.encode('utf-8')).hexdigest(), invited_by_user_id=test_user.id, expires_at=datetime.now(timezone.utc) + timedelta(days=1))
+    db.add(invite); db.commit()
+    resp = client.post('/api/v1/auth/invites/accept', json={'token': token, 'password': 'password123', 'display_name': 'Accepted'})
+    assert resp.status_code == 200
+    db.refresh(invite)
+    assert invite.accepted_at is not None
+    assert db.query(User).filter(User.email == 'accept@example.com').first() is not None
+
+
+def test_expired_and_canceled_invite_rejected(client, test_user, db):
+    from app.models.user import UserInvite
+    import hashlib, secrets
+    test_user.role = 'admin'; db.commit()
+    t1 = secrets.token_urlsafe(16)
+    expired = UserInvite(email='expired@example.com', role='viewer', token_hash=hashlib.sha256(t1.encode('utf-8')).hexdigest(), invited_by_user_id=test_user.id, expires_at=datetime.now(timezone.utc) - timedelta(minutes=1))
+    t2 = secrets.token_urlsafe(16)
+    canceled = UserInvite(email='canceled@example.com', role='viewer', token_hash=hashlib.sha256(t2.encode('utf-8')).hexdigest(), invited_by_user_id=test_user.id, expires_at=datetime.now(timezone.utc) + timedelta(days=1), canceled_at=datetime.now(timezone.utc))
+    db.add_all([expired, canceled]); db.commit()
+    assert client.post('/api/v1/auth/invites/accept', json={'token': t1, 'password': 'password123', 'display_name': 'X'}).status_code == 400
+    assert client.post('/api/v1/auth/invites/accept', json={'token': t2, 'password': 'password123', 'display_name': 'Y'}).status_code == 400
+
+
+def test_duplicate_email_invite_and_accept_rejected(client, test_user, db):
+    from app.models.user import UserInvite
+    import hashlib, secrets
+    test_user.role = 'admin'; db.commit()
+    assert client.post('/api/v1/admin/users/invite', json={'email': test_user.email, 'role': 'viewer', 'expires_in_days': 7}).status_code == 400
+    token = secrets.token_urlsafe(16)
+    invite = UserInvite(email=test_user.email, role='viewer', token_hash=hashlib.sha256(token.encode('utf-8')).hexdigest(), invited_by_user_id=test_user.id, expires_at=datetime.now(timezone.utc) + timedelta(days=1))
+    db.add(invite); db.commit()
+    assert client.post('/api/v1/auth/invites/accept', json={'token': token, 'password': 'password123', 'display_name': 'Dup'}).status_code == 400

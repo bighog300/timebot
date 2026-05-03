@@ -62,7 +62,8 @@ def accept_invite(payload: InviteAcceptRequest, db: Session = Depends(get_db)):
     token_hash = hashlib.sha256(payload.token.encode("utf-8")).hexdigest()
     invite = db.query(UserInvite).filter(UserInvite.token_hash == token_hash).first()
     now = datetime.now(timezone.utc)
-    if not invite or invite.accepted_at or invite.canceled_at or invite.expires_at <= now:
+    expires_at = invite.expires_at.replace(tzinfo=timezone.utc) if invite and invite.expires_at.tzinfo is None else (invite.expires_at if invite else None)
+    if not invite or invite.accepted_at or invite.canceled_at or (expires_at is not None and expires_at <= now):
         raise HTTPException(status_code=400, detail="Invite token is invalid or expired")
     existing = db.query(User).filter(User.email == invite.email.lower()).first()
     if existing:

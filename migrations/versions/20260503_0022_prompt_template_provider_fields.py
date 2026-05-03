@@ -1,7 +1,7 @@
 """add provider/model controls to prompt templates
 
 Revision ID: 20260503_0022
-Revises: 20260502_0021_add_subscription_admin_fields
+Revises: 20260502_0021
 Create Date: 2026-05-03
 """
 
@@ -9,7 +9,7 @@ from alembic import op
 import sqlalchemy as sa
 
 revision = "20260503_0022"
-down_revision = "20260502_0021_add_subscription_admin_fields"
+down_revision = "20260502_0021"
 branch_labels = None
 depends_on = None
 

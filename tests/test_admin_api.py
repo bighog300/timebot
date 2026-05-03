@@ -282,3 +282,81 @@ def test_non_admin_cannot_access_prompt_execution_summary(client, test_user, db)
     db.commit()
     r = client.get('/api/v1/admin/prompt-executions/summary')
     assert r.status_code == 403
+
+
+def test_non_admin_cannot_manage_users(client, test_user, db):
+    target = User(id=uuid.uuid4(), email='deny-target@example.com', password_hash='x', display_name='Deny', is_active=True, role='viewer')
+    db.add(target); db.commit()
+    test_user.role = 'viewer'; db.commit()
+    assert client.post('/api/v1/admin/users', json={'email': 'x@example.com', 'password': 'password123', 'role': 'viewer', 'display_name': 'X'}).status_code == 403
+    assert client.post('/api/v1/admin/users/invite', json={'email': 'invite-deny@example.com', 'role': 'viewer', 'expires_in_days': 7}).status_code == 403
+    assert client.patch(f'/api/v1/admin/users/{target.id}/role', json={'role': 'editor'}).status_code == 403
+    assert client.post(f'/api/v1/admin/users/{target.id}/deactivate').status_code == 403
+    assert client.request('DELETE', f'/api/v1/admin/users/{target.id}', json={'confirmation': 'DELETE'}).status_code == 403
+
+
+def test_admin_create_user_creates_default_subscription(client, test_user, db):
+    from app.models.billing import Subscription
+    test_user.role = 'admin'; db.commit()
+    r = client.post('/api/v1/admin/users', json={'email': 'new-admin-create@example.com', 'password': 'password123', 'role': 'viewer', 'display_name': 'New User'})
+    assert r.status_code == 201
+    created_id = r.json()['id']
+    sub = db.query(Subscription).filter(Subscription.user_id == created_id).first()
+    assert sub is not None
+
+
+def test_admin_cannot_delete_self(client, test_user, db):
+    test_user.role = 'admin'; db.commit()
+    r = client.request('DELETE', f'/api/v1/admin/users/{test_user.id}', json={'confirmation': 'DELETE'})
+    assert r.status_code == 400
+
+
+def test_admin_cannot_remove_last_admin(client, test_user, db):
+    test_user.role = 'admin'; db.commit()
+    assert client.post(f'/api/v1/admin/users/{test_user.id}/deactivate').status_code == 400
+    assert client.request('DELETE', f'/api/v1/admin/users/{test_user.id}', json={'confirmation': 'DELETE'}).status_code == 400
+
+
+def test_invite_token_is_hashed_not_plaintext(client, test_user, db):
+    from app.models.user import UserInvite
+    import hashlib
+    test_user.role = 'admin'; db.commit()
+    r = client.post('/api/v1/admin/users/invite', json={'email': 'hashcheck@example.com', 'role': 'viewer', 'expires_in_days': 7})
+    assert r.status_code == 200
+    token = r.json()['invite_link'].split('token=')[1]
+    invite = db.query(UserInvite).filter(UserInvite.email == 'hashcheck@example.com').first()
+    assert invite is not None
+    assert invite.token_hash != token
+    assert invite.token_hash == hashlib.sha256(token.encode('utf-8')).hexdigest()
+
+
+def test_invite_resend_rotates_hash_and_cancel_marks_canceled_at(client, test_user, db):
+    from app.models.user import UserInvite
+    test_user.role = 'admin'; db.commit()
+    created = client.post('/api/v1/admin/users/invite', json={'email': 'rotate@example.com', 'role': 'viewer', 'expires_in_days': 7})
+    invite_id = created.json()['id']
+    invite = db.query(UserInvite).filter(UserInvite.id == invite_id).first()
+    old_hash = invite.token_hash
+    resent = client.post(f'/api/v1/admin/users/invites/{invite_id}/resend')
+    assert resent.status_code == 200
+    db.refresh(invite)
+    assert invite.token_hash != old_hash
+    canceled = client.post(f'/api/v1/admin/users/invites/{invite_id}/cancel')
+    assert canceled.status_code == 200
+    db.refresh(invite)
+    assert invite.canceled_at is not None
+
+
+def test_role_deactivate_reactivate_delete_are_audited(client, test_user, db):
+    test_user.role = 'admin'; db.commit()
+    target = User(id=uuid.uuid4(), email='audited@example.com', password_hash='x', display_name='Audited', is_active=True, role='viewer')
+    db.add(target); db.commit()
+    assert client.patch(f'/api/v1/admin/users/{target.id}/role', json={'role': 'editor'}).status_code == 200
+    assert client.post(f'/api/v1/admin/users/{target.id}/deactivate').status_code == 200
+    assert client.post(f'/api/v1/admin/users/{target.id}/reactivate').status_code == 200
+    assert client.request('DELETE', f'/api/v1/admin/users/{target.id}', json={'confirmation': 'DELETE'}).status_code == 200
+    actions = {e.action for e in db.query(AdminAuditEvent).filter(AdminAuditEvent.entity_id == str(target.id)).all()}
+    assert 'role_updated' in actions
+    assert 'deactivated' in actions
+    assert 'reactivated' in actions
+    assert 'soft_deleted' in actions
