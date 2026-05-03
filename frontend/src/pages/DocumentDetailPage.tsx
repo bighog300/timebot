@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '@/services/api';
 import { Button } from '@/components/ui/Button';
+import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { Card } from '@/components/ui/Card';
 import { ErrorState, LoadingState, EmptyState } from '@/components/ui/States';
 import { ProcessingStatusIndicator } from '@/components/documents/ProcessingStatusIndicator';
@@ -95,6 +96,7 @@ export function DocumentDetailPage() {
   const [keyPointsDraft, setKeyPointsDraft] = useState('');
   const [categoryOverrideId, setCategoryOverrideId] = useState('');
   const [relationshipFilter, setRelationshipFilter] = useState<'all' | 'structural' | 'ai_detected' | 'confirmed' | 'pending'>('all');
+  const [confirmAction, setConfirmAction] = useState<'delete' | 'reprocess' | null>(null);
 
   useEffect(() => {
     if (!intelligenceQuery.data) return;
@@ -288,17 +290,13 @@ export function DocumentDetailPage() {
       <div className="flex flex-wrap gap-2">
         <Button onClick={() => updateMutation.mutate({ is_favorite: !doc.is_favorite })}>{doc.is_favorite ? 'Unfavorite' : 'Favorite'}</Button>
         <Button onClick={() => updateMutation.mutate({ is_archived: !doc.is_archived })}>{doc.is_archived ? 'Unarchive' : 'Archive'}</Button>
-        <Button onClick={() => reprocessMutation.mutate()}>Reprocess</Button>
-        <Button
-          className="bg-red-700 hover:bg-red-600"
-          onClick={() => {
-            if (window.confirm('Delete this document permanently?')) {
-              deleteMutation.mutate();
-            }
-          }}
+        <Button onClick={() => setConfirmAction('reprocess')}>Reprocess</Button>
+        <button
+          className="rounded border border-red-800 px-3 py-1.5 text-sm text-red-400 hover:border-red-600 hover:text-red-200"
+          onClick={() => setConfirmAction('delete')}
         >
           Delete
-        </Button>
+        </button>
       </div>
 
       <Card>
@@ -472,6 +470,20 @@ export function DocumentDetailPage() {
           {similarQuery.data?.results.map((row) => <li key={row.document.id}>{row.document.filename} ({row.similarity_score.toFixed(2)})</li>)}
         </ul>
       </Card>
+      <ConfirmModal
+        open={confirmAction === 'reprocess'}
+        title="Reprocess document?"
+        description="The existing AI summary, tags, and timeline events will be discarded and regenerated. This cannot be undone."
+        onConfirm={() => { setConfirmAction(null); reprocessMutation.mutate(); }}
+        onCancel={() => setConfirmAction(null)}
+      />
+      <ConfirmModal
+        open={confirmAction === 'delete'}
+        title="Delete document permanently?"
+        description="This document and all associated intelligence data will be permanently deleted. This cannot be undone."
+        onConfirm={() => { setConfirmAction(null); deleteMutation.mutate(); }}
+        onCancel={() => setConfirmAction(null)}
+      />
     </div>
   );
 }

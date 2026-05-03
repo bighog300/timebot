@@ -378,11 +378,10 @@ describe('delete cache invalidation', () => {
   it('deleting a document invalidates timeline/gantt and insight caches', async () => {
     const invalidateSpy = vi.spyOn(QueryClient.prototype, 'invalidateQueries');
     vi.mocked(api.deleteDocument).mockResolvedValue(undefined as never);
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
-
     renderPage();
     await screen.findByText('Contract.pdf');
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
 
     await vi.waitFor(() => {
       expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: keys.timeline });
@@ -390,7 +389,6 @@ describe('delete cache invalidation', () => {
       expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: keys.documentClusters });
     });
 
-    confirmSpy.mockRestore();
     invalidateSpy.mockRestore();
   });
 });

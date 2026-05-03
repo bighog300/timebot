@@ -65,17 +65,17 @@ export function InsightsPage() {
                     type="button"
                     onClick={() => setTypeFilter(filter.value)}
                     className={`rounded-full px-3 py-1 text-xs font-medium ${
-                      typeFilter === filter.value ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-700'
+                      typeFilter === filter.value ? 'bg-slate-700 text-white' : 'bg-slate-800/50 text-slate-300 hover:bg-slate-800 hover:text-slate-100'
                     }`}
                   >
                     {filter.label}
                   </button>
                 ))}
               </div>
-              <label className="flex w-full max-w-xs flex-col gap-1 text-xs font-medium text-slate-600">
+              <label className="flex w-full max-w-xs flex-col gap-1 text-xs font-medium text-slate-400">
                 Severity
                 <select
-                  className="rounded-md border border-slate-300 bg-white px-2 py-1 text-sm"
+                  className="rounded-md border border-slate-700 bg-slate-900 px-2 py-1 text-sm text-slate-200 focus:outline-none focus:ring-1 focus:ring-slate-500"
                   value={severityFilter}
                   onChange={(event) => setSeverityFilter(event.target.value as (typeof SEVERITY_FILTERS)[number]['value'])}
                   aria-label="Severity filter"
@@ -95,11 +95,11 @@ export function InsightsPage() {
             <Card key={`${insight.type}-${index}`}>
               <div className="space-y-2 text-sm">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs uppercase tracking-wide">{insight.type}</span>
+                  <span className="rounded-full bg-slate-800 px-2 py-0.5 text-xs uppercase tracking-wide text-slate-300">{insight.type}</span>
                   <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${getSeverityBadgeClass(insight.severity)}`}>Severity: {getSeverityLabel(insight.severity)}</span>
                 </div>
                 <h3 className="text-base font-semibold">{insight.title}</h3>
-                <p className="text-slate-700">{insight.description}</p>
+                <p className="text-slate-300">{insight.description}</p>
                 {!!insight.related_documents?.length && (
                   <div>
                     <p className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-500">Related documents</p>
