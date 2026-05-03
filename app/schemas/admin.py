@@ -127,3 +127,19 @@ class AdminSystemStatusResponse(BaseModel):
     environment: str
     limits_configured: bool
     features: AdminSystemStatusFeaturesResponse
+
+
+class LlmModelOptionResponse(BaseModel):
+    id: str
+    name: str
+
+
+class LlmProviderCatalogResponse(BaseModel):
+    id: str
+    name: str
+    configured: bool
+    models: list[LlmModelOptionResponse]
+
+
+class AdminLlmModelsResponse(BaseModel):
+    providers: list[LlmProviderCatalogResponse]

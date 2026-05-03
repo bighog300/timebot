@@ -12,6 +12,10 @@ vi.mock('@/hooks/useApi', () => ({
     { id: 'p1', prompt_type: 'chat', name: 'Chat v1', content: 'Prompt A', version: 1, is_active: true, created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-02T00:00:00Z' },
     { id: 'p2', prompt_type: 'report', name: 'Report v1', content: 'Prompt B', version: 1, is_active: false, created_at: '2026-01-03T00:00:00Z', updated_at: '2026-01-04T00:00:00Z' },
   ], isLoading: false, isError: false }),
+  useAdminLlmModels: () => ({ data: { providers: [
+    { id: 'openai', name: 'OpenAI', configured: true, models: [{ id: 'gpt-4.1-mini', name: 'GPT-4.1 Mini' }, { id: 'gpt-4o-mini', name: 'GPT-4o Mini' }] },
+    { id: 'gemini', name: 'Gemini', configured: false, models: [{ id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash' }] },
+  ] }, isLoading: false, isError: false }),
   useCreatePromptTemplate: () => ({ mutateAsync: mutateCreate }),
   useUpdatePromptTemplate: () => ({ mutateAsync: mutateUpdate }),
   useActivatePromptTemplate: () => ({ mutateAsync: mutateActivate }),
@@ -56,6 +60,22 @@ describe('admin prompt templates', () => {
     expect(screen.getByText('Test prompt')).toBeInTheDocument();
     expect(screen.getByPlaceholderText('Prompt content for preview')).toBeInTheDocument();
     expect(screen.getByPlaceholderText('Sample context/query/document text')).toBeInTheDocument();
+  });
+
+  it('provider/model dropdowns render from catalog and unavailable provider is disabled', () => {
+    render(<AdminPromptTemplatesPage />);
+    const providerOptions = screen.getAllByRole('option', { name: /OpenAI|Gemini/i });
+    expect(providerOptions.some((option) => option.textContent?.includes('OpenAI'))).toBe(true);
+    expect(providerOptions.some((option) => option.textContent?.includes('Unavailable'))).toBe(true);
+  });
+
+  it('changing provider updates model options', () => {
+    render(<AdminPromptTemplatesPage />);
+    const selects = screen.getAllByRole('combobox');
+    const createProvider = selects[1];
+    const createModel = selects[2];
+    fireEvent.change(createProvider, { target: { value: 'gemini' } });
+    expect((createModel as HTMLSelectElement).value).toBe('gemini-1.5-flash');
   });
 
   it('running preview calls test endpoint hook', async () => {

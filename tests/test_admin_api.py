@@ -172,3 +172,43 @@ def test_system_status_response_shape_and_no_secrets(client, test_user, db, monk
     assert 'relationship_detection_enabled' in payload['features']
     assert 'stripe_secret_key' not in payload
     assert 'sk_test_123' not in str(payload)
+
+
+def test_admin_can_access_llm_models(client, test_user, db):
+    test_user.role = "admin"
+    db.commit()
+    response = client.get("/api/v1/admin/llm-models")
+    assert response.status_code == 200
+
+
+def test_non_admin_cannot_access_llm_models(client, test_user, db):
+    test_user.role = "viewer"
+    db.commit()
+    response = client.get("/api/v1/admin/llm-models")
+    assert response.status_code == 403
+
+
+def test_llm_models_contains_openai_and_gemini_and_safe_config(client, test_user, db, monkeypatch):
+    from app.config import settings
+
+    test_user.role = "admin"
+    db.commit()
+    monkeypatch.setattr(settings, "OPENAI_API_KEY", "sk-test-openai")
+    monkeypatch.setattr(settings, "GEMINI_API_KEY", "")
+
+    response = client.get("/api/v1/admin/llm-models")
+    assert response.status_code == 200
+    payload = response.json()
+    provider_ids = {provider["id"] for provider in payload["providers"]}
+    assert "openai" in provider_ids
+    assert "gemini" in provider_ids
+
+    openai = next(provider for provider in payload["providers"] if provider["id"] == "openai")
+    gemini = next(provider for provider in payload["providers"] if provider["id"] == "gemini")
+    assert openai["configured"] is True
+    assert gemini["configured"] is False
+    assert "gpt-4.1" in {model["id"] for model in openai["models"]}
+    assert "gemini-1.5-pro" in {model["id"] for model in gemini["models"]}
+    assert "OPENAI_API_KEY" not in str(payload)
+    assert "GEMINI_API_KEY" not in str(payload)
+    assert "sk-test-openai" not in str(payload)
