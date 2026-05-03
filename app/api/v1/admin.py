@@ -48,7 +48,7 @@ from app.schemas.prompt_template import (
     PromptTemplateUpdate,
 )
 from app.services.openai_client import APIError, openai_client_service
-from app.services.prompt_templates import activate_prompt_template
+from app.services.prompt_templates import activate_prompt_template, clear_default_for_purpose
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -388,6 +388,9 @@ def list_prompt_templates(_: str = Depends(require_admin), db: Session = Depends
 def create_prompt_template(payload: PromptTemplateCreate, _: str = Depends(require_admin), db: Session = Depends(get_db)):
     prompt = PromptTemplate(**payload.model_dump())
     db.add(prompt)
+    if prompt.is_default:
+        db.flush()
+        clear_default_for_purpose(db, prompt_type=prompt.type, exclude_id=str(prompt.id))
     if prompt.is_active:
         activate_prompt_template(db, prompt)
     db.commit()
@@ -403,6 +406,8 @@ def update_prompt_template(prompt_id: str, payload: PromptTemplateUpdate, _: str
     changes = payload.model_dump(exclude_unset=True)
     for k, v in changes.items():
         setattr(prompt, k, v)
+    if changes.get("is_default") is True:
+        clear_default_for_purpose(db, prompt_type=prompt.type, exclude_id=str(prompt.id))
     if changes.get("is_active") is True:
         activate_prompt_template(db, prompt)
     db.add(prompt)
