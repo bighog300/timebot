@@ -70,7 +70,7 @@ class EmailDeliveryService:
             raise HTTPException(status_code=400, detail="Provider missing API key")
         return cfg
 
-    def send_email(self, *, provider: str | None, to_email: str, subject: str, html_body: str, text_body: str | None = None, from_email: str | None = None, from_name: str | None = None, reply_to: str | None = None, template_id=None, metadata: dict | None = None) -> dict:
+    def send_email(self, *, provider: str | None, to_email: str, subject: str, html_body: str, text_body: str | None = None, from_email: str | None = None, from_name: str | None = None, reply_to: str | None = None, template_id=None, campaign_id=None, metadata: dict | None = None) -> dict:
         if not EMAIL_RE.match(to_email):
             raise HTTPException(status_code=422, detail="Invalid recipient email")
         cfg = self._resolve_provider(provider)
@@ -80,7 +80,7 @@ class EmailDeliveryService:
         resolved_from = from_email or cfg.from_email
         resolved_name = from_name if from_name is not None else cfg.from_name
         resolved_reply = reply_to if reply_to is not None else cfg.reply_to
-        log = EmailSendLog(provider=cfg.provider, recipient_email=to_email, from_email=resolved_from, from_name=resolved_name, reply_to=resolved_reply, subject=subject, template_id=template_id, status="queued", metadata_json=metadata or {})
+        log = EmailSendLog(provider=cfg.provider, recipient_email=to_email, from_email=resolved_from, from_name=resolved_name, reply_to=resolved_reply, subject=subject, template_id=template_id, campaign_id=campaign_id, status="queued", metadata_json=metadata or {})
         self.db.add(log)
         self.db.flush()
         try:

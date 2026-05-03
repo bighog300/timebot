@@ -295,6 +295,64 @@ class EmailTemplateResponse(BaseModel):
 
     model_config = {"from_attributes": True}
 
+class EmailCampaignCreateRequest(BaseModel):
+    name: str
+    template_id: UUID
+    audience_type: str
+    audience_filters_json: dict | list | None = None
+    status: str = Field(default="draft", pattern="^(draft|ready|archived)$")
+    subject_override: str | None = None
+    preheader_override: str | None = None
+    variables_json: dict | list | None = None
+
+
+class EmailCampaignPatchRequest(BaseModel):
+    name: str | None = None
+    template_id: UUID | None = None
+    audience_type: str | None = None
+    audience_filters_json: dict | list | None = None
+    status: str | None = Field(default=None, pattern="^(draft|ready|archived)$")
+    subject_override: str | None = None
+    preheader_override: str | None = None
+    variables_json: dict | list | None = None
+
+
+class EmailCampaignResponse(BaseModel):
+    id: UUID
+    name: str
+    template_id: UUID
+    audience_type: str
+    audience_filters_json: dict | list | None
+    status: str
+    subject_override: str | None
+    preheader_override: str | None
+    variables_json: dict | list | None
+    created_by_admin_id: UUID | None
+    updated_by_admin_id: UUID | None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class EmailCampaignPreviewRequest(BaseModel):
+    variables_json: dict | list | None = None
+
+
+class EmailCampaignPreviewResponse(BaseModel):
+    subject: str
+    preheader: str | None
+    html_body: str
+    text_body: str
+    missing_variables: list[str]
+
+
+class EmailCampaignTestSendRequest(BaseModel):
+    to_email: str
+    provider: str | None = Field(default=None, pattern="^(resend|sendgrid)$")
+    variables_json: dict | list | None = None
+
+
 class AdminEmailTestSendRequest(BaseModel):
     provider: str | None = Field(default=None, pattern="^(resend|sendgrid)$")
     to_email: str

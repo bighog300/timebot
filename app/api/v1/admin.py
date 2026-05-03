@@ -18,7 +18,7 @@ from app.models.billing import Plan, Subscription
 from app.models.processing_event import DocumentProcessingEvent
 
 from app.models.chat import ChatbotSettings
-from app.models.email import EmailProviderConfig, EmailTemplate, EmailSendLog
+from app.models.email import EmailProviderConfig, EmailTemplate, EmailCampaign, EmailSendLog
 from app.models.prompt_template import PromptTemplate
 from app.schemas.chatbot import ChatbotSettingsPayload, ChatbotSettingsResponse
 from app.config import settings
@@ -46,6 +46,12 @@ from app.schemas.admin import (
     EmailTemplateCreateRequest,
     EmailTemplatePatchRequest,
     EmailTemplateResponse,
+    EmailCampaignCreateRequest,
+    EmailCampaignPatchRequest,
+    EmailCampaignResponse,
+    EmailCampaignPreviewRequest,
+    EmailCampaignPreviewResponse,
+    EmailCampaignTestSendRequest,
     AdminEmailTestSendRequest,
     AdminEmailTestSendResponse,
     EmailSendLogResponse,
@@ -216,6 +222,48 @@ def patch_email_provider_config(provider: str, payload: EmailProviderConfigPatch
     return _safe_email_provider_response(cfg)
 
 
+def _validate_campaign_status_transition(current_status: str, next_status: str) -> None:
+    allowed = {"draft": {"ready", "archived"}, "ready": {"draft", "archived"}, "archived": {"draft"}}
+    if current_status == next_status:
+        return
+    if next_status not in allowed.get(current_status, set()):
+        raise HTTPException(status_code=400, detail=f"Invalid campaign status transition from {current_status} to {next_status}")
+
+
+def _ensure_active_template(db: Session, template_id: str):
+    t = db.query(EmailTemplate).filter(EmailTemplate.id == template_id).first()
+    if not t or t.status == 'archived':
+        raise HTTPException(status_code=400, detail='Template is missing or archived')
+    return t
+
+
+def _render_simple_template(content: str | None, variables: dict) -> tuple[str, list[str]]:
+    import re
+    if not content:
+        return '', []
+    missing: list[str] = []
+    def repl(match):
+        key = match.group(1).strip()
+        if key not in variables or variables.get(key) is None:
+            missing.append(key)
+            return ''
+        return str(variables.get(key))
+    rendered = re.sub(r"\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}\}", repl, content)
+    return rendered, sorted(set(missing))
+
+
+def _render_campaign(c: EmailCampaign, t: EmailTemplate, override_vars: dict | None = None) -> dict:
+    merged = {}
+    if isinstance(t.variables_json, dict): merged.update(t.variables_json)
+    if isinstance(c.variables_json, dict): merged.update(c.variables_json)
+    if isinstance(override_vars, dict): merged.update(override_vars)
+    subject, m1 = _render_simple_template(c.subject_override or t.subject, merged)
+    preheader, m2 = _render_simple_template(c.preheader_override or t.preheader or '', merged)
+    html_body, m3 = _render_simple_template(t.html_body, merged)
+    text_body, m4 = _render_simple_template(t.text_body or '', merged)
+    return {'subject':subject,'preheader':preheader or None,'html_body':html_body,'text_body':text_body,'missing_variables':sorted(set(m1+m2+m3+m4))}
+
+
 @router.get('/email/templates', response_model=list[EmailTemplateResponse])
 def list_email_templates(_: str = Depends(require_admin), db: Session = Depends(get_db)):
     return db.query(EmailTemplate).order_by(EmailTemplate.updated_at.desc()).all()
@@ -257,6 +305,72 @@ def archive_email_template(template_id: str, _: str = Depends(require_admin), db
     t.status = 'archived'; t.updated_by_admin_id = current_user.id
     _audit_admin_email_action(db, current_user, 'email_template', str(t.id), 'email_template_archived', {'slug': t.slug})
     db.commit(); db.refresh(t); return t
+
+@router.get('/email/campaigns', response_model=list[EmailCampaignResponse])
+def list_email_campaigns(limit: int = Query(50, ge=1, le=200), _: str = Depends(require_admin), db: Session = Depends(get_db)):
+    return db.query(EmailCampaign).order_by(EmailCampaign.created_at.desc()).limit(limit).all()
+
+
+@router.post('/email/campaigns', response_model=EmailCampaignResponse, status_code=201)
+def create_email_campaign(payload: EmailCampaignCreateRequest, _: str = Depends(require_admin), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    _ensure_active_template(db, str(payload.template_id))
+    c = EmailCampaign(**payload.model_dump(), created_by_admin_id=current_user.id, updated_by_admin_id=current_user.id)
+    db.add(c); db.flush()
+    _audit_admin_email_action(db, current_user, 'email_campaign', str(c.id), 'email_campaign_created', {'status': c.status, 'template_id': str(c.template_id)})
+    db.commit(); db.refresh(c); return c
+
+
+@router.get('/email/campaigns/{campaign_id}', response_model=EmailCampaignResponse)
+def get_email_campaign(campaign_id: str, _: str = Depends(require_admin), db: Session = Depends(get_db)):
+    c = db.query(EmailCampaign).filter(EmailCampaign.id == campaign_id).first()
+    if not c: raise HTTPException(status_code=404, detail='Campaign not found')
+    return c
+
+
+@router.patch('/email/campaigns/{campaign_id}', response_model=EmailCampaignResponse)
+def patch_email_campaign(campaign_id: str, payload: EmailCampaignPatchRequest, _: str = Depends(require_admin), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    c = db.query(EmailCampaign).filter(EmailCampaign.id == campaign_id).first()
+    if not c: raise HTTPException(status_code=404, detail='Campaign not found')
+    update = payload.model_dump(exclude_unset=True)
+    if c.status == 'archived' and update.get('status') != 'draft': raise HTTPException(status_code=400, detail='Archived campaigns are read-only')
+    if 'status' in update: _validate_campaign_status_transition(c.status, update['status'])
+    if 'template_id' in update: _ensure_active_template(db, str(update['template_id']))
+    for k,v in update.items(): setattr(c,k,v)
+    c.updated_by_admin_id = current_user.id
+    _audit_admin_email_action(db, current_user, 'email_campaign', str(c.id), 'email_campaign_updated', {'status': c.status})
+    db.commit(); db.refresh(c); return c
+
+
+@router.delete('/email/campaigns/{campaign_id}', response_model=EmailCampaignResponse)
+def archive_email_campaign(campaign_id: str, _: str = Depends(require_admin), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    c = db.query(EmailCampaign).filter(EmailCampaign.id == campaign_id).first()
+    if not c: raise HTTPException(status_code=404, detail='Campaign not found')
+    c.status = 'archived'; c.updated_by_admin_id = current_user.id
+    _audit_admin_email_action(db, current_user, 'email_campaign', str(c.id), 'email_campaign_archived', {'name': c.name})
+    db.commit(); db.refresh(c); return c
+
+
+@router.post('/email/campaigns/{campaign_id}/preview', response_model=EmailCampaignPreviewResponse)
+def preview_email_campaign(campaign_id: str, payload: EmailCampaignPreviewRequest, _: str = Depends(require_admin), db: Session = Depends(get_db)):
+    c = db.query(EmailCampaign).filter(EmailCampaign.id == campaign_id).first()
+    if not c: raise HTTPException(status_code=404, detail='Campaign not found')
+    t = _ensure_active_template(db, str(c.template_id))
+    return _render_campaign(c, t, payload.variables_json if isinstance(payload.variables_json, dict) else None)
+
+
+@router.post('/email/campaigns/{campaign_id}/test-send', response_model=AdminEmailTestSendResponse)
+def test_send_campaign(campaign_id: str, payload: EmailCampaignTestSendRequest, _: str = Depends(require_admin), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    c = db.query(EmailCampaign).filter(EmailCampaign.id == campaign_id).first()
+    if not c: raise HTTPException(status_code=404, detail='Campaign not found')
+    t = _ensure_active_template(db, str(c.template_id))
+    rendered = _render_campaign(c, t, payload.variables_json if isinstance(payload.variables_json, dict) else None)
+    service = EmailDeliveryService(db)
+    result = service.send_email(provider=payload.provider, to_email=payload.to_email, subject=rendered['subject'], html_body=rendered['html_body'], text_body=rendered['text_body'], template_id=str(t.id), campaign_id=str(c.id))
+    _audit_admin_email_action(db, current_user, 'email_campaign', str(c.id), 'email_campaign_test_send', {'provider': result['provider'], 'status': result['status'], 'to_email': payload.to_email})
+    db.commit()
+    return result
+
+
 @router.get("/llm-models", response_model=AdminLlmModelsResponse)
 def admin_llm_models(_: str = Depends(require_admin)):
     provider_configured = {

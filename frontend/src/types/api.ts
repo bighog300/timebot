@@ -633,6 +633,13 @@ export interface EmailTemplate { id: string; name: string; slug: string; categor
 export type EmailTemplateCreate = Omit<EmailTemplate,'id'|'created_by_admin_id'|'updated_by_admin_id'|'created_at'|'updated_at'>;
 export type EmailTemplatePatch = Partial<EmailTemplateCreate>;
 
+
+export interface EmailCampaign { id: string; name: string; template_id: string; audience_type: string; audience_filters_json?: Record<string, unknown> | null; status: 'draft'|'ready'|'archived'; subject_override?: string | null; preheader_override?: string | null; variables_json?: Record<string, unknown> | null; created_by_admin_id?: string | null; updated_by_admin_id?: string | null; created_at: string; updated_at: string; }
+export interface EmailCampaignCreate { name: string; template_id: string; audience_type: string; audience_filters_json?: Record<string, unknown> | null; status?: 'draft'|'ready'|'archived'; subject_override?: string | null; preheader_override?: string | null; variables_json?: Record<string, unknown> | null; }
+export type EmailCampaignPatch = Partial<EmailCampaignCreate>;
+export interface EmailCampaignPreviewResponse { subject: string; preheader?: string | null; html_body: string; text_body: string; missing_variables: string[]; }
+export interface EmailCampaignTestSendRequest { to_email: string; provider?: 'resend'|'sendgrid'; variables_json?: Record<string, unknown> | null; }
+
 export interface EmailTestSendRequest { provider?: 'resend'|'sendgrid'; to_email: string; subject?: string; html_body?: string; text_body?: string; }
 export interface EmailTestSendResult { status: string; provider: string; provider_message_id?: string | null; log_id: string; }
 export interface EmailSendLog { id: string; provider: string; recipient_email: string; from_email: string; from_name?: string | null; reply_to?: string | null; subject: string; status: 'queued'|'sent'|'failed'; provider_message_id?: string | null; error_message_sanitized?: string | null; created_at: string; sent_at?: string | null; failed_at?: string | null; }
