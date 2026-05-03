@@ -8,8 +8,8 @@ from app.models.relationships import DocumentRelationship
 
 
 class DocumentClusterService:
-    def list_clusters_for_user(self, db: Session, *, user_id: UUID) -> list[dict]:
-        documents = db.query(Document).filter(Document.user_id == user_id).all()
+    def list_clusters_for_workspace(self, db: Session, *, workspace_id: UUID) -> list[dict]:
+        documents = db.query(Document).filter(Document.workspace_id == workspace_id).all()
         if not documents:
             return []
 

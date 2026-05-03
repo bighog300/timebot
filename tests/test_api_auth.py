@@ -4,7 +4,7 @@ from uuid import uuid4
 
 from fastapi.testclient import TestClient
 
-from app.api.deps import get_current_user, get_db
+from app.api.deps import get_active_workspace, get_current_user, get_db
 from app.main import app
 from app.models.billing import Plan
 
@@ -105,6 +105,7 @@ def test_protected_route_requires_auth_and_allows_when_authenticated():
 
     app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(id=uuid4(), email='ok@example.com')
     app.dependency_overrides[get_db] = lambda: SimpleNamespace()
+    app.dependency_overrides[get_active_workspace] = lambda: SimpleNamespace(id=uuid4())
 
     from app.api.v1.documents import crud_document
     original = crud_document.get_review_queue

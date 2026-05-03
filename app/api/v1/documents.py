@@ -69,7 +69,7 @@ def list_document_clusters(
     current_user: User = Depends(get_current_user),
     active_workspace: Workspace = Depends(get_active_workspace),
 ):
-    return document_cluster_service.list_clusters_for_user(db, user_id=current_user.id)
+    return document_cluster_service.list_clusters_for_workspace(db, workspace_id=active_workspace.id)
 
 
 @router.get("/review-queue", response_model=List[DocumentResponse])
