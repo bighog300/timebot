@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StrictBool
 
 
 class AdminUserResponse(BaseModel):
@@ -104,6 +104,27 @@ class AdminUsageSummaryResponse(BaseModel):
 
 class AdminPlanUpdateRequest(BaseModel):
     plan_slug: str
+
+
+class AdminPlanResponse(BaseModel):
+    id: UUID
+    slug: str
+    name: str
+    price_monthly_cents: int
+    currency: str
+    limits_json: dict[str, int | float | None]
+    features_json: dict[str, bool]
+    is_active: bool
+
+    model_config = {"from_attributes": True}
+
+
+class AdminPlanPatchRequest(BaseModel):
+    name: str | None = None
+    price_monthly_cents: int | None = Field(default=None, ge=0)
+    limits_json: dict[str, int | float | None] | None = None
+    features_json: dict[str, StrictBool] | None = None
+    is_active: bool | None = None
 
 
 class AdminUsageOverrideRequest(BaseModel):
