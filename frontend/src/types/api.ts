@@ -606,3 +606,6 @@ export interface PromptExecutionSummary {
 }
 
 export interface AdminInvite { id: string; email: string; role: string; status: string; created_at: string; dev_invite_link?: string | null; }
+
+
+export type Workspace = { id: string; name: string; type: "personal" | "team"; owner_user_id?: string | null };

@@ -60,6 +60,7 @@ class Document(Base):
         UUID(as_uuid=True), ForeignKey("connections.id", ondelete="SET NULL"), index=True
     )
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), index=True)
+    workspace_id = Column(UUID(as_uuid=True), ForeignKey("workspaces.id", ondelete="CASCADE"), index=True, nullable=True)
 
     is_favorite = Column(Boolean, default=False, index=True)
     is_archived = Column(Boolean, default=False, index=True)
@@ -74,6 +75,7 @@ class Document(Base):
     user_category = relationship("Category", foreign_keys=[user_category_id], back_populates="documents_user")
     connection = relationship("Connection", back_populates="documents")
     owner = relationship("User", back_populates="documents")
+    workspace = relationship("Workspace")
     outgoing_relationships = relationship(
         "DocumentRelationship",
         foreign_keys="DocumentRelationship.source_doc_id",

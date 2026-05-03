@@ -30,6 +30,7 @@ class User(Base):
     connections = relationship("Connection", back_populates="owner")
     subscriptions = relationship("Subscription", back_populates="user", cascade="all, delete-orphan")
     invites_sent = relationship("UserInvite", back_populates="invited_by_user")
+    owned_workspaces = relationship("Workspace", foreign_keys="Workspace.owner_user_id")
 
     def __repr__(self):
         return f"<User(email='{self.email}', active={self.is_active})>"

@@ -15,6 +15,7 @@ def _ensure_role(user: User):
     return user
 from app.services.auth import auth_service
 from app.services.subscriptions import ensure_default_free_subscription
+from app.services.workspaces import workspace_service
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -35,6 +36,7 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(user)
     ensure_default_free_subscription(db, user.id)
+    workspace_service.ensure_personal_workspace(db, user)
     token = auth_service.create_access_token(user)
     return AuthResponse(access_token=token, user=_ensure_role(user))
 
@@ -80,4 +82,5 @@ def accept_invite(payload: InviteAcceptRequest, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(user)
     ensure_default_free_subscription(db, user.id)
+    workspace_service.ensure_personal_workspace(db, user)
     return AuthResponse(access_token=auth_service.create_access_token(user), user=_ensure_role(user))

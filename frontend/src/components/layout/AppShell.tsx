@@ -1,4 +1,7 @@
 import { type FormEvent, useEffect, useState } from 'react';
+import { api } from '@/services/api';
+import { WORKSPACE_STORAGE_KEY } from '@/services/http';
+import type { Workspace } from '@/types/api';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import {
   readOnboardingCompleted,
@@ -40,6 +43,8 @@ export function AppShell() {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingStep, setOnboardingStep] = useState<OnboardingStep>('welcome');
   const [selectedUseCase, setSelectedUseCase] = useState<string | null>(null);
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const [activeWorkspaceId, setActiveWorkspaceId] = useState<string>("");
 
   useEffect(() => {
     const completed = readOnboardingCompleted();
@@ -74,6 +79,16 @@ export function AppShell() {
 
   const navLinks = [...baseLinks, ...(user?.role === 'admin' ? adminLinks : [])];
 
+  useEffect(() => {
+    api.listWorkspaces().then((items) => {
+      setWorkspaces(items);
+      const stored = localStorage.getItem(WORKSPACE_STORAGE_KEY);
+      const chosen = items.find((w) => w.id === stored)?.id ?? items[0]?.id ?? "";
+      setActiveWorkspaceId(chosen);
+      if (chosen) localStorage.setItem(WORKSPACE_STORAGE_KEY, chosen);
+    }).catch(() => undefined);
+  }, []);
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 px-3 py-3 sm:px-4">
@@ -87,6 +102,7 @@ export function AppShell() {
           <button type="submit" className="rounded bg-slate-700 px-2 py-1.5 text-sm hover:bg-slate-600">Search</button>
         </form>
         <div className="flex items-center gap-3 text-sm text-slate-300">
+          <select value={activeWorkspaceId} onChange={(e)=>{setActiveWorkspaceId(e.target.value); localStorage.setItem(WORKSPACE_STORAGE_KEY, e.target.value);}} className="rounded border border-slate-700 bg-slate-900 px-2 py-1">{workspaces.map((w)=><option key={w.id} value={w.id}>{w.name}</option>)}</select>
           <span>{user?.email}</span>
           <button className="rounded bg-slate-700 px-2 py-1 hover:bg-slate-600" onClick={logout}>Logout</button>
         </div>
