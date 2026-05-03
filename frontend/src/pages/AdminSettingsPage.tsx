@@ -105,6 +105,14 @@ export function AdminPlansPage() {
   const resetDefaults = useResetAdminPlanDefaults();
   type PlanDraft = { id: string; slug: string; name: string; price_monthly_cents: number; limits_json: Record<string, number | null>; features_json: Record<string, boolean>; is_active: boolean };
   const [drafts, setDrafts] = useState<Record<string, PlanDraft>>({});
+  const validateDraft = (d: PlanDraft): string[] => {
+    const errors: string[] = [];
+    if (d.price_monthly_cents < 0) errors.push('Price must be >= 0.');
+    for (const [k, v] of Object.entries(d.limits_json || {})) {
+      if (v != null && v < 0) errors.push(`${k} cannot be negative.`);
+    }
+    return errors;
+  };
   if (plans.isLoading) return <Card>Loading plans & limits...</Card>;
   if (plans.isError || !plans.data?.length) return <Card>Unable to load plan settings.</Card>;
   return <Card><div className='space-y-3'><h2 className='text-lg'>Plans & limits</h2><p className='text-sm text-amber-300'>Changes affect enforcement immediately for users on this plan.</p>
@@ -112,15 +120,26 @@ export function AdminPlansPage() {
     {plans.data.filter((p)=>['free','pro','team'].includes(p.slug)).map((p)=>{
       const d: PlanDraft = drafts[p.id] ?? (p as PlanDraft);
       const storageGb = d.limits_json?.storage_bytes == null ? '' : String(Number(d.limits_json.storage_bytes)/(1024**3));
+      const errors = validateDraft(d);
       return <div key={p.id} className='rounded border border-slate-700 p-3 space-y-2'>
         <div className='font-semibold'>{p.slug}</div>
         <input className='bg-slate-900 p-1' value={d.name ?? ''} onChange={(e)=>setDrafts((prev)=>({...prev,[p.id]:{...d,name:e.target.value}}))} />
         <input type='number' min={0} className='bg-slate-900 p-1' value={d.price_monthly_cents ?? 0} onChange={(e)=>setDrafts((prev)=>({...prev,[p.id]:{...d,price_monthly_cents:Number(e.target.value)}}))} />
-        <input type='number' min={0} className='bg-slate-900 p-1' value={d.limits_json?.documents_per_month ?? ''} onChange={(e)=>setDrafts((prev)=>({...prev,[p.id]:{...d,limits_json:{...d.limits_json,documents_per_month:e.target.value===''?null:Number(e.target.value)}}}))} />
-        <input type='number' min={0} className='bg-slate-900 p-1' value={storageGb} onChange={(e)=>setDrafts((prev)=>({...prev,[p.id]:{...d,limits_json:{...d.limits_json,storage_bytes:e.target.value===''?null:Math.round(Number(e.target.value)*(1024**3))}}}))} />
-        <input type='number' min={0} className='bg-slate-900 p-1' value={d.limits_json?.processing_jobs_per_month ?? ''} onChange={(e)=>setDrafts((prev)=>({...prev,[p.id]:{...d,limits_json:{...d.limits_json,processing_jobs_per_month:e.target.value===''?null:Number(e.target.value)}}}))} />
+        <label className='block text-sm'>Documents / month
+          <input type='number' min={0} className='ml-2 bg-slate-900 p-1' value={d.limits_json?.documents_per_month ?? ''} onChange={(e)=>setDrafts((prev)=>({...prev,[p.id]:{...d,limits_json:{...d.limits_json,documents_per_month:e.target.value===''?null:Number(e.target.value)}}}))} />
+          <label className='ml-3 text-xs'><input type='checkbox' checked={d.limits_json?.documents_per_month == null} onChange={(e)=>setDrafts((prev)=>({...prev,[p.id]:{...d,limits_json:{...d.limits_json,documents_per_month:e.target.checked?null:(d.limits_json?.documents_per_month ?? 0)}}}))} /> Unlimited</label>
+        </label>
+        <label className='block text-sm'>Storage (GB)
+          <input type='number' min={0} className='ml-2 bg-slate-900 p-1' value={storageGb} onChange={(e)=>setDrafts((prev)=>({...prev,[p.id]:{...d,limits_json:{...d.limits_json,storage_bytes:e.target.value===''?null:Math.round(Number(e.target.value)*(1024**3))}}}))} />
+          <label className='ml-3 text-xs'><input type='checkbox' checked={d.limits_json?.storage_bytes == null} onChange={(e)=>setDrafts((prev)=>({...prev,[p.id]:{...d,limits_json:{...d.limits_json,storage_bytes:e.target.checked?null:(d.limits_json?.storage_bytes ?? 0)}}}))} /> Unlimited</label>
+        </label>
+        <label className='block text-sm'>Processing jobs / month
+          <input type='number' min={0} className='ml-2 bg-slate-900 p-1' value={d.limits_json?.processing_jobs_per_month ?? ''} onChange={(e)=>setDrafts((prev)=>({...prev,[p.id]:{...d,limits_json:{...d.limits_json,processing_jobs_per_month:e.target.value===''?null:Number(e.target.value)}}}))} />
+          <label className='ml-3 text-xs'><input type='checkbox' checked={d.limits_json?.processing_jobs_per_month == null} onChange={(e)=>setDrafts((prev)=>({...prev,[p.id]:{...d,limits_json:{...d.limits_json,processing_jobs_per_month:e.target.checked?null:(d.limits_json?.processing_jobs_per_month ?? 0)}}}))} /> Unlimited</label>
+        </label>
         {['insights_enabled','category_intelligence_enabled','relationship_detection_enabled'].map((k)=><label key={k} className='block'><input type='checkbox' checked={Boolean(d.features_json?.[k])} onChange={(e)=>setDrafts((prev)=>({...prev,[p.id]:{...d,features_json:{...d.features_json,[k]:e.target.checked}}}))} /> {k}</label>)}
-        <button className='rounded bg-emerald-700 px-2 py-1 text-sm' onClick={async()=>{ if (Object.values(d.limits_json ?? {}).some((v)=>typeof v==='number'&&v<0)) { pushToast('Limits cannot be negative','error'); return; } await updatePlan.mutateAsync({planId:p.id,payload:{name:d.name,price_monthly_cents:d.price_monthly_cents,limits_json:d.limits_json,features_json:d.features_json,is_active:d.is_active}}); pushToast('Plan updated'); }}>Save</button>
+        {errors.length > 0 && <div className='text-xs text-rose-300'>{errors.join(' ')}</div>}
+        <button disabled={errors.length > 0} className='rounded bg-emerald-700 px-2 py-1 text-sm disabled:opacity-50' onClick={async()=>{ if (!confirm(`Save plan changes for ${p.slug}?`)) return; await updatePlan.mutateAsync({planId:p.id,payload:{name:d.name,price_monthly_cents:d.price_monthly_cents,limits_json:d.limits_json,features_json:d.features_json,is_active:d.is_active}}); pushToast('Plan updated'); }}>Save</button>
       </div>;
     })}
   </div></Card>;

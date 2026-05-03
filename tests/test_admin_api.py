@@ -243,6 +243,8 @@ def test_invalid_plan_patch_rejected(client, test_user, db):
     free = next(p for p in client.get("/api/v1/admin/plans").json() if p["slug"] == "free")
     assert client.patch(f"/api/v1/admin/plans/{free['id']}", json={"limits_json": {"documents_per_month": -1}}).status_code == 422
     assert client.patch(f"/api/v1/admin/plans/{free['id']}", json={"features_json": {"insights_enabled": "yes"}}).status_code == 422
+    assert client.patch(f"/api/v1/admin/plans/{free['id']}", json={"limits_json": {"unknown_metric": 1}}).status_code == 422
+    assert client.patch(f"/api/v1/admin/plans/{free['id']}", json={"features_json": {"unknown_feature": True}}).status_code == 422
 
 
 def test_non_admin_cannot_list_prompt_execution_logs(client, test_user, db):

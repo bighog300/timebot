@@ -137,3 +137,16 @@ def test_enforcement_is_user_scoped(db):
         record_usage(db, user_a.id, "documents_per_month", 1)
     db.commit()
     enforce_limit(db, user_b.id, "documents_per_month", 1)
+
+
+def test_null_limit_is_treated_as_unlimited(db):
+    from app.services.subscriptions import seed_default_plans
+
+    seed_default_plans(db)
+    _set_plan_limits(db, "free", {"documents_per_month": None, "storage_bytes": 524288000, "processing_jobs_per_month": 10})
+    user = _mk_user(db, "unlimited@example.com")
+    _subscribe(db, user.id, "free")
+    for _ in range(250):
+        record_usage(db, user.id, "documents_per_month", 1)
+    db.commit()
+    enforce_limit(db, user.id, "documents_per_month", 1)
