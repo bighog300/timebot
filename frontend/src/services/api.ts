@@ -79,6 +79,7 @@ import type {
   CampaignRecipientPreview,
   CampaignSendRequest,
   CampaignSendResult,
+  CampaignSendStatus,
   EmailSuppression,
 } from '@/types/api';
 
@@ -254,6 +255,7 @@ export const api = {
   previewEmailCampaign: async (campaignId: string, payload: { variables_json?: Record<string, unknown> | null }): Promise<EmailCampaignPreviewResponse> => (await http.post(`/admin/email/campaigns/${campaignId}/preview`, payload)).data,
   previewCampaignRecipients: async (campaignId: string): Promise<CampaignRecipientPreview> => (await http.post(`/admin/email/campaigns/${campaignId}/recipients/preview`, {})).data,
   sendCampaign: async (campaignId: string, payload: CampaignSendRequest): Promise<CampaignSendResult> => (await http.post(`/admin/email/campaigns/${campaignId}/send`, payload)).data,
+  getCampaignSendStatus: async (campaignId: string): Promise<CampaignSendStatus> => (await http.get(`/admin/email/campaigns/${campaignId}/send-status`)).data,
   testSendCampaign: async (campaignId: string, payload: EmailCampaignTestSendRequest): Promise<EmailTestSendResult> => (await http.post(`/admin/email/campaigns/${campaignId}/test-send`, payload)).data,
   testSendEmail: async (payload: EmailTestSendRequest): Promise<EmailTestSendResult> => (await http.post('/admin/email/test-send', payload)).data,
   getEmailSendLogs: async (): Promise<EmailSendLog[]> => (await http.get('/admin/email/send-logs')).data,

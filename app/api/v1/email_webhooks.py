@@ -23,6 +23,8 @@ def _verify(provider:str, raw:bytes, sig:str|None, cfg:EmailProviderConfig):
     secret=email_secret_crypto.decrypt(cfg.webhook_secret_encrypted)
     if not sig:
         raise HTTPException(status_code=401, detail='Missing webhook signature')
+    # Current E5 webhook signature contract for both providers:
+    # header value must equal hex(HMAC_SHA256(raw_request_body, webhook_secret)).
     digest=hmac.new(secret.encode(), raw, hashlib.sha256).hexdigest()
     if not hmac.compare_digest(digest, sig.strip()):
         raise HTTPException(status_code=401, detail='Invalid webhook signature')
