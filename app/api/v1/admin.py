@@ -205,7 +205,10 @@ def list_user_subscriptions(_: str = Depends(require_admin), db: Session = Depen
 
 
 def _validate_limits_json(limits_json: dict) -> None:
+    allowed_keys = {"documents_per_month", "storage_bytes", "processing_jobs_per_month", "seats"}
     for key, value in limits_json.items():
+        if key not in allowed_keys:
+            raise HTTPException(status_code=422, detail=f"Unknown limit key '{key}'.")
         if value is None:
             continue
         if not isinstance(value, (int, float)) or value < 0:
@@ -213,7 +216,10 @@ def _validate_limits_json(limits_json: dict) -> None:
 
 
 def _validate_features_json(features_json: dict) -> None:
+    allowed_keys = {"basic_search", "chat", "priority_support", "team_workspace", "insights_enabled", "category_intelligence_enabled", "relationship_detection_enabled"}
     for key, value in features_json.items():
+        if key not in allowed_keys:
+            raise HTTPException(status_code=422, detail=f"Unknown feature key '{key}'.")
         if not isinstance(value, bool):
             raise HTTPException(status_code=422, detail=f"Invalid feature flag for '{key}'. Expected boolean.")
 

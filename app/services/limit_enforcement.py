@@ -13,6 +13,8 @@ from app.services.usage import get_usage_total
 
 logger = logging.getLogger(__name__)
 
+UNLIMITED_LIMIT = None
+
 
 def _current_month_window() -> tuple[datetime, datetime]:
     now = datetime.now(timezone.utc)
@@ -33,14 +35,55 @@ def _current_period_window(db: Session, user_id: UUID) -> tuple[datetime, dateti
 
 
 def _plan_limit(db: Session, user_id: UUID, metric: str):
-    ensure_default_free_subscription(db, user_id)
-    subscription = get_user_subscription(db, user_id)
-    limits = (subscription.plan.limits_json if subscription and subscription.plan else {}) or {}
-    plan_limit = limits.get(metric)
-    overrides = (subscription.limit_overrides_json if subscription else {}) or {}
+    effective = get_effective_plan(db, user_id)
+    overrides = (effective.get("limit_overrides") or {})
     if metric in overrides:
         return overrides[metric]
-    return plan_limit
+    return (effective.get("limits") or {}).get(metric)
+
+
+def get_user_plan(db: Session, user_id: UUID):
+    ensure_default_free_subscription(db, user_id)
+    subscription = get_user_subscription(db, user_id)
+    return subscription.plan if subscription else None
+
+
+def get_workspace_plan(db: Session, workspace) -> dict:
+    # Workspace-scoped plans are not yet first-class in the current schema.
+    # Fall back to owner/user plan semantics for consistent enforcement.
+    return get_effective_plan(db, workspace.owner_id)
+
+
+def get_effective_plan(db: Session, subject) -> dict:
+    user_id = subject if isinstance(subject, UUID) else getattr(subject, "id", subject)
+    ensure_default_free_subscription(db, user_id)
+    subscription = get_user_subscription(db, user_id)
+    plan = subscription.plan if subscription else None
+    return {
+        "plan": plan,
+        "limits": (plan.limits_json if plan else {}) or {},
+        "features": (plan.features_json if plan else {}) or {},
+        "limit_overrides": (subscription.limit_overrides_json if subscription else {}) or {},
+        "usage_credits": (subscription.usage_credits_json if subscription else {}) or {},
+        "subscription": subscription,
+    }
+
+
+def check_limit(db: Session, subject, limit_key: str, quantity: int = 1) -> bool:
+    limit = _plan_limit(db, subject if isinstance(subject, UUID) else subject.id, limit_key)
+    if limit is UNLIMITED_LIMIT:
+        return True
+    enforce_limit(db, subject if isinstance(subject, UUID) else subject.id, limit_key, quantity=quantity)
+    return True
+
+
+def assert_limit(db: Session, subject, limit_key: str, quantity: int = 1) -> None:
+    enforce_limit(db, subject if isinstance(subject, UUID) else subject.id, limit_key, quantity=quantity)
+
+
+def has_feature(db: Session, subject, feature_key: str) -> bool:
+    effective = get_effective_plan(db, subject if isinstance(subject, UUID) else subject.id)
+    return bool((effective.get("features") or {}).get(feature_key, False))
 
 
 def enforce_limit(db: Session, user_id: UUID, metric: str, quantity: int = 1) -> None:
@@ -74,10 +117,7 @@ def enforce_limit(db: Session, user_id: UUID, metric: str, quantity: int = 1) ->
 
 
 def enforce_feature(db: Session, user_id: UUID, feature: str) -> None:
-    ensure_default_free_subscription(db, user_id)
-    subscription = get_user_subscription(db, user_id)
-    features = (subscription.plan.features_json if subscription and subscription.plan else {}) or {}
-    if not bool(features.get(feature, False)):
+    if not has_feature(db, user_id, feature):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={
