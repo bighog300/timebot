@@ -28,7 +28,7 @@ const baseLinks = [
   ['/settings', 'Settings'],
 ] as const;
 
-const adminLinks = [['/admin', 'Admin'], ['/admin/users', 'Users'], ['/admin/subscriptions', 'Subscriptions'], ['/admin/billing', 'Billing'], ['/admin/audit', 'Audit']] as const;
+const adminLinks = [['/admin', 'Admin Overview'], ['/admin/users', 'Users'], ['/admin/settings', 'Settings']] as const;
 
 export function AppShell() {
   const { toasts, dismissToast } = useUIStore();

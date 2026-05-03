@@ -1,4 +1,4 @@
-import { Link, NavLink, Outlet, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Card } from '@/components/ui/Card';
 import { useUIStore } from '@/store/uiStore';
 import {
@@ -9,20 +9,8 @@ import {
   useAdminUpdateUsageControls,
   useAdminCancelOrDowngrade,
   useAdminSystemStatus,
+  useAdminLlmModels,
 } from '@/hooks/useApi';
-
-export function AdminSettingsPage() {
-  return <div className='space-y-4'>
-    <h1 className='text-xl font-semibold'>Admin Settings</h1>
-    <div className='flex flex-wrap gap-2 text-sm'>
-      <NavLink to='/admin/subscriptions' className='rounded border border-slate-700 px-3 py-1.5'>Subscriptions</NavLink>
-      <NavLink to='/admin/users' className='rounded border border-slate-700 px-3 py-1.5'>Users</NavLink>
-      <NavLink to='/admin/billing' className='rounded border border-slate-700 px-3 py-1.5'>Billing/System</NavLink>
-      <NavLink to='/admin/audit' className='rounded border border-slate-700 px-3 py-1.5'>Audit</NavLink>
-    </div>
-    <Outlet />
-  </div>;
-}
 
 export function AdminSubscriptionsPage() {
   const { pushToast } = useUIStore();
@@ -101,4 +89,22 @@ export function AdminAuditPage() {
     </div>
     <div className='mt-3 flex gap-2'><button className='rounded bg-slate-700 px-2 py-1' onClick={()=>navigate(`?page=${Math.max(0, page-1)}`)}>Prev</button><button className='rounded bg-slate-700 px-2 py-1' onClick={()=>navigate(`?page=${page+1}`)}>Next</button></div>
   </Card>;
+}
+
+
+export function AdminSystemPage() { return <AdminBillingPage />; }
+
+export function AdminPlansPage() {
+  const subs = useAdminSubscriptions();
+  if (subs.isLoading) return <Card>Loading plans & limits...</Card>;
+  if (subs.isError) return <Card>Editable plan limits are not yet exposed by the backend.</Card>;
+  if (!subs.data?.length) return <Card>Editable plan limits are not yet exposed by the backend.</Card>;
+  return <Card><div className='space-y-2'><h2 className='text-lg'>Plans & limits</h2><p className='text-sm text-slate-300'>Editable plan limits are not yet exposed by the backend.</p><div className='overflow-x-auto'><table className='w-full min-w-[42rem] text-sm'><thead><tr className='text-left'><th>Email</th><th>Plan</th><th>Status</th><th>Credits</th><th>Overrides</th></tr></thead><tbody>{subs.data.map((s)=><tr key={s.subscription_id} className='border-t border-slate-800'><td>{s.email}</td><td>{s.plan_slug}</td><td>{s.status}</td><td>{JSON.stringify(s.usage_credits)}</td><td>{JSON.stringify(s.limit_overrides)}</td></tr>)}</tbody></table></div></div></Card>;
+}
+
+export function AdminLlmProvidersPage() {
+  const llm = useAdminLlmModels();
+  if (llm.isLoading) return <Card>Loading LLM providers...</Card>;
+  if (llm.isError || !llm.data) return <Card>Failed loading LLM providers.</Card>;
+  return <Card><div className='space-y-2'><h2 className='text-lg'>LLM providers</h2><div className='overflow-x-auto'><table className='w-full min-w-[42rem] text-sm'><thead><tr className='text-left'><th>Provider</th><th>Configured</th><th>Available models</th></tr></thead><tbody>{llm.data.providers.map((provider)=><tr key={provider.id} className='border-t border-slate-800'><td>{provider.name}</td><td>{provider.configured ? 'Yes' : 'No'}</td><td>{provider.models.map((model)=>model.name).join(', ') || 'None'}</td></tr>)}</tbody></table></div><p className='text-xs text-slate-400'>API keys and secrets are only stored in environment configuration and are never shown here.</p></div></Card>;
 }

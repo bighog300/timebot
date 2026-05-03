@@ -10,10 +10,10 @@ vi.mock('@/store/uiStore', () => ({ useUIStore: () => ({ toasts: [], dismissToas
 import { useAuth } from '@/auth/AuthContext';
 
 describe('AppShell admin nav', () => {
-  it('shows admin users link only for admin', () => {
+  it('shows admin settings/users links only for admin', () => {
     vi.mocked(useAuth).mockReturnValue({ user: { email: 'a', role: 'admin' }, logout: vi.fn() } as never);
     const { rerender } = render(<MemoryRouter><AppShell /></MemoryRouter>);
-    expect(screen.getAllByText('Users').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Settings').length).toBeGreaterThan(0);
 
     vi.mocked(useAuth).mockReturnValue({ user: { email: 'b', role: 'user' }, logout: vi.fn() } as never);
     rerender(<MemoryRouter><AppShell /></MemoryRouter>);
