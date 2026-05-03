@@ -133,3 +133,6 @@ class PromptExecutionSummaryResponse(BaseModel):
     cost_by_provider: dict[str, float]
     cost_by_model: dict[str, float]
     pricing_unknown_count: int
+    calls_by_source: dict[str, int]
+    failures_by_provider: dict[str, int]
+    fallback_by_provider: dict[str, int]

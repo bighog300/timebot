@@ -230,9 +230,9 @@ export function useBulkDismissReviewItems() {
   });
 }
 
-export function useAdminPromptExecutionSummary() {
+export function useAdminPromptExecutionSummary(filters: { provider?: string; model?: string; source?: string; success?: boolean; fallback_used?: boolean; created_after?: string; created_before?: string } = {}) {
   const authReady = useAuthReady();
-  return useQuery({ queryKey: [...keys.adminPromptExecutions, "summary"], queryFn: api.getPromptExecutionSummary, enabled: authReady });
+  return useQuery({ queryKey: [...keys.adminPromptExecutions, "summary", filters], queryFn: () => api.getPromptExecutionSummary(filters), enabled: authReady });
 }
 
 export function useReviewMetrics() {

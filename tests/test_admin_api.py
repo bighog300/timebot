@@ -244,3 +244,41 @@ def test_prompt_execution_summary_includes_costs(client, test_user, db):
     payload = r.json()
     assert 'total_estimated_cost_usd' in payload
     assert payload['pricing_unknown_count'] >= 1
+
+
+def test_prompt_execution_summary_breakdowns_and_filters(client, test_user, db):
+    from app.models.prompt_execution_log import PromptExecutionLog
+
+    test_user.role = 'admin'
+    db.commit()
+    db.add(PromptExecutionLog(provider='openai', model='gpt-4o-mini', fallback_used=True, success=False, source='audit', pricing_known=True, estimated_cost_usd=0.5, total_tokens=50))
+    db.add(PromptExecutionLog(provider='gemini', model='gemini-1.5-pro', fallback_used=False, success=True, source='job', pricing_known=True, estimated_cost_usd=0.25, total_tokens=25))
+    db.commit()
+
+    r = client.get('/api/v1/admin/prompt-executions/summary', params={'provider': 'openai'})
+    assert r.status_code == 200
+    payload = r.json()
+    assert payload['total_calls'] == 1
+    assert payload['calls_by_source']['audit'] == 1
+    assert payload['failures_by_provider']['openai'] == 1
+    assert payload['fallback_by_provider']['openai'] == 1
+
+
+def test_prompt_execution_summary_empty_safe_values(client, test_user, db):
+    test_user.role = 'admin'
+    db.commit()
+    r = client.get('/api/v1/admin/prompt-executions/summary')
+    assert r.status_code == 200
+    payload = r.json()
+    assert payload['total_calls'] == 0
+    assert payload['success_rate'] == 0
+    assert payload['fallback_rate'] == 0
+    assert payload['total_tokens'] == 0
+    assert payload['total_estimated_cost_usd'] == 0
+
+
+def test_non_admin_cannot_access_prompt_execution_summary(client, test_user, db):
+    test_user.role = 'viewer'
+    db.commit()
+    r = client.get('/api/v1/admin/prompt-executions/summary')
+    assert r.status_code == 403
