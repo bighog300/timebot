@@ -33,6 +33,9 @@ from app.schemas.admin import (
     ProcessingEventResponse,
     AdminSystemStatusFeaturesResponse,
     AdminSystemStatusResponse,
+    AdminLlmModelsResponse,
+    LlmProviderCatalogResponse,
+    LlmModelOptionResponse,
 )
 from app.services.limit_enforcement import _current_period_window
 from app.services.subscriptions import ensure_default_free_subscription, seed_default_plans
@@ -48,6 +51,26 @@ from app.services.openai_client import APIError, openai_client_service
 from app.services.prompt_templates import activate_prompt_template
 
 router = APIRouter(prefix="/admin", tags=["admin"])
+
+_LLM_PROVIDER_CATALOG: list[dict[str, object]] = [
+    {
+        "id": "openai",
+        "name": "OpenAI",
+        "models": [
+            {"id": "gpt-4.1", "name": "GPT-4.1"},
+            {"id": "gpt-4.1-mini", "name": "GPT-4.1 Mini"},
+            {"id": "gpt-4o-mini", "name": "GPT-4o Mini"},
+        ],
+    },
+    {
+        "id": "gemini",
+        "name": "Gemini",
+        "models": [
+            {"id": "gemini-1.5-pro", "name": "Gemini 1.5 Pro"},
+            {"id": "gemini-1.5-flash", "name": "Gemini 1.5 Flash"},
+        ],
+    },
+]
 
 
 def _audit_admin_monetization_action(db: Session, *, current_user: User, target_user: User, action: str, details: dict) -> None:
@@ -66,6 +89,24 @@ def require_admin(role: str = Depends(get_current_user_role)) -> str:
     if role != "admin":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
     return role
+
+
+@router.get("/llm-models", response_model=AdminLlmModelsResponse)
+def admin_llm_models(_: str = Depends(require_admin)):
+    provider_configured = {
+        "openai": bool(settings.OPENAI_API_KEY.strip()),
+        "gemini": bool(settings.GEMINI_API_KEY.strip()),
+    }
+    providers = [
+        LlmProviderCatalogResponse(
+            id=provider["id"],  # type: ignore[index]
+            name=provider["name"],  # type: ignore[index]
+            configured=provider_configured.get(provider["id"], False),  # type: ignore[index]
+            models=[LlmModelOptionResponse(**model) for model in provider["models"]],  # type: ignore[index]
+        )
+        for provider in _LLM_PROVIDER_CATALOG
+    ]
+    return AdminLlmModelsResponse(providers=providers)
 
 
 @router.get("/users", response_model=AdminUsersPageResponse)

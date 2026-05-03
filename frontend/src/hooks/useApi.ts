@@ -56,6 +56,7 @@ export const keys = {
   adminUsageSummary: (userId: string) => ['admin-usage-summary', userId] as const,
   adminSystemStatus: ['admin-system-status'] as const,
   adminPrompts: ['admin-prompts'] as const,
+  adminLlmModels: ['admin-llm-models'] as const,
   chatbotSettings: ['chatbot-settings'] as const,
   chatSessions: ['chat-sessions'] as const,
   chatSession: (sessionId: string) => ['chat-session', sessionId] as const,
@@ -611,6 +612,7 @@ export function useGmailImport() {
 
 
 export function useAdminPromptTemplates() { const authReady = useAuthReady(); return useQuery({ queryKey: keys.adminPrompts, queryFn: api.listPromptTemplates, enabled: authReady }); }
+export function useAdminLlmModels() { const authReady = useAuthReady(); return useQuery({ queryKey: keys.adminLlmModels, queryFn: api.getAdminLlmModels, enabled: authReady }); }
 
 export function useCreatePromptTemplate() {
   const qc = useQueryClient();

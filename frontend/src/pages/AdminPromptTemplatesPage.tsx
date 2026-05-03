@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useActivatePromptTemplate, useAdminPromptTemplates, useCreatePromptTemplate, useTestPromptTemplate, useUpdatePromptTemplate } from '@/hooks/useApi';
+import { useActivatePromptTemplate, useAdminLlmModels, useAdminPromptTemplates, useCreatePromptTemplate, useTestPromptTemplate, useUpdatePromptTemplate } from '@/hooks/useApi';
 import { getErrorDetail } from '@/services/api';
 import { useUIStore } from '@/store/uiStore';
 import type { PromptTemplateType } from '@/types/api';
@@ -8,21 +8,25 @@ const promptTypes: PromptTemplateType[] = ['chat', 'retrieval', 'report', 'timel
 
 export function AdminPromptTemplatesPage() {
   const prompts = useAdminPromptTemplates();
+  const llmModels = useAdminLlmModels();
   const createPrompt = useCreatePromptTemplate();
   const updatePrompt = useUpdatePromptTemplate();
   const activatePrompt = useActivatePromptTemplate();
   const testPrompt = useTestPromptTemplate();
   const { pushToast } = useUIStore();
-  const [createForm, setCreateForm] = useState({ prompt_type: 'chat' as PromptTemplateType, name: '', content: '', provider: 'openai' as const, model: 'gpt-4o-mini', temperature: 0.2, max_tokens: 800, top_p: 1, enabled: true, is_default: false });
+  const [createForm, setCreateForm] = useState<{ prompt_type: PromptTemplateType; name: string; content: string; provider: 'openai' | 'gemini'; model: string; temperature: number; max_tokens: number; top_p: number; enabled: boolean; is_default: boolean }>({ prompt_type: 'chat', name: '', content: '', provider: 'openai', model: 'gpt-4o-mini', temperature: 0.2, max_tokens: 800, top_p: 1, enabled: true, is_default: false });
   const [selectedId, setSelectedId] = useState<string>('');
   const selectedPrompt = useMemo(() => prompts.data?.find((item) => item.id === selectedId) ?? null, [prompts.data, selectedId]);
   const [editForm, setEditForm] = useState({ name: '', content: '' });
-  const [testForm, setTestForm] = useState({ prompt_type: 'chat' as PromptTemplateType, prompt_content: '', sample_context: '', provider: 'openai' as const, model: 'gpt-4o-mini', temperature: 0.2, max_tokens: 800, top_p: 1 });
+  const [testForm, setTestForm] = useState<{ prompt_type: PromptTemplateType; prompt_content: string; sample_context: string; provider: 'openai' | 'gemini'; model: string; temperature: number; max_tokens: number; top_p: number }>({ prompt_type: 'chat', prompt_content: '', sample_context: '', provider: 'openai', model: 'gpt-4o-mini', temperature: 0.2, max_tokens: 800, top_p: 1 });
   const [preview, setPreview] = useState('');
   const [previewError, setPreviewError] = useState('');
+  const providerCatalog = llmModels.data?.providers ?? [];
+  const getModelsForProvider = (providerId: 'openai' | 'gemini') => providerCatalog.find((provider) => provider.id === providerId)?.models ?? [];
 
-  if (prompts.isLoading) return <div>Loading prompt templates...</div>;
-  if (prompts.isError) return <div>Failed to load prompt templates</div>;
+
+  if (prompts.isLoading || llmModels.isLoading) return <div>Loading prompt templates...</div>;
+  if (prompts.isError || llmModels.isError) return <div>Failed to load prompt templates</div>;
 
   return <div className='space-y-4'>
     <h1 className='text-xl font-semibold'>Prompt Templates</h1>
@@ -41,8 +45,16 @@ export function AdminPromptTemplatesPage() {
       <input placeholder='Template name' value={createForm.name} onChange={(e) => setCreateForm((v) => ({ ...v, name: e.target.value }))} className='w-full rounded border border-slate-700 bg-slate-900 p-2 text-sm' />
       
       <div className='grid grid-cols-2 gap-2'>
-      <select value={createForm.provider} onChange={(e) => setCreateForm((v) => ({ ...v, provider: e.target.value as 'openai'|'gemini' }))} className='rounded border border-slate-700 bg-slate-900 p-2 text-sm'><option value='openai'>openai</option><option value='gemini'>gemini</option></select>
-      <input placeholder='Model' value={createForm.model} onChange={(e)=>setCreateForm((v)=>({...v, model:e.target.value}))} className='rounded border border-slate-700 bg-slate-900 p-2 text-sm'/>
+      <select value={createForm.provider} onChange={(e) => {
+        const provider = e.target.value as 'openai' | 'gemini';
+        const nextModels = getModelsForProvider(provider);
+        setCreateForm((v) => ({ ...v, provider, model: nextModels[0]?.id ?? '' }));
+      }} className='rounded border border-slate-700 bg-slate-900 p-2 text-sm'>
+        {providerCatalog.map((provider) => <option key={provider.id} value={provider.id} disabled={!provider.configured}>{provider.name}{provider.configured ? '' : ' (Unavailable)'}</option>)}
+      </select>
+      <select value={createForm.model} onChange={(e)=>setCreateForm((v)=>({...v, model:e.target.value}))} className='rounded border border-slate-700 bg-slate-900 p-2 text-sm'>
+        {getModelsForProvider(createForm.provider).map((model)=> <option key={model.id} value={model.id}>{model.name}</option>)}
+      </select>
       </div>
       <textarea placeholder='Prompt content' value={createForm.content} onChange={(e) => setCreateForm((v) => ({ ...v, content: e.target.value }))} className='h-40 w-full rounded border border-slate-700 bg-slate-900 p-2 text-sm' />
       <button className='w-full rounded bg-emerald-700 px-3 py-2 text-sm sm:w-auto' onClick={async () => { try { await createPrompt.mutateAsync(createForm); pushToast('Prompt template created'); setCreateForm({ prompt_type: 'chat', name: '', content: '', provider: 'openai', model: 'gpt-4o-mini', temperature: 0.2, max_tokens: 800, top_p: 1, enabled: true, is_default: false }); } catch (e) { pushToast(getErrorDetail(e), 'error'); } }}>Create template</button>

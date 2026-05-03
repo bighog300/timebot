@@ -391,6 +391,9 @@ export interface PromptTemplateCreateRequest { prompt_type: PromptTemplateType; 
 export interface PromptTemplateUpdateRequest { name?: string; content?: string; provider?: "openai"|"gemini"; model?: string; temperature?: number; max_tokens?: number; top_p?: number; enabled?: boolean; is_default?: boolean; }
 export interface PromptTemplateTestRequest { prompt_type: PromptTemplateType; prompt_content: string; sample_context: string; provider: "openai"|"gemini"; model: string; temperature: number; max_tokens: number; top_p: number; }
 export interface PromptTemplateTestResponse { preview: string; latency_ms: number | null; usage_tokens: number | null; }
+export interface LlmModelOption { id: string; name: string; }
+export interface LlmProviderCatalog { id: 'openai' | 'gemini'; name: string; configured: boolean; models: LlmModelOption[]; }
+export interface AdminLlmModelsResponse { providers: LlmProviderCatalog[]; }
 
 
 export interface ChatbotSettings {
@@ -561,4 +564,3 @@ export interface AdminSystemStatus {
     relationship_detection_enabled: boolean;
   };
 }
-
