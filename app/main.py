@@ -28,6 +28,7 @@ from app.api.v1 import (
     reports,
     gmail_imports,
     monetization,
+    workspaces,
 )
 
 logger = logging.getLogger(__name__)
@@ -133,7 +134,7 @@ app.add_middleware(
     allow_origins=origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With"],
+    allow_headers=["Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With", "X-Workspace-ID"],
 )
 
 
@@ -195,3 +196,5 @@ def root():
         "health": "/health",
         "version": settings.VERSION,
     }
+
+app.include_router(workspaces.router, prefix="/api/v1")

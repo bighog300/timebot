@@ -35,7 +35,7 @@ _IMAGE_EMPTY_TEXT_MESSAGE = "No readable text was extracted from this image."
 
 class DocumentProcessor:
     async def process_upload(
-        self, db: Session, file: UploadFile, user: User, source: str = "upload"
+        self, db: Session, file: UploadFile, user: User, workspace_id, source: str = "upload"
     ) -> Document:
         self._validate(file)
 
@@ -61,6 +61,7 @@ class DocumentProcessor:
             source=source,
             user_id=user.id,
             processing_status="queued",
+            workspace_id=workspace_id,
         )
         db.add(document)
         db.commit()

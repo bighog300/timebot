@@ -56,6 +56,7 @@ import type {
   AdminLlmModelsResponse,
   AdminInvite,
   AdminPlan,
+  Workspace,
 } from '@/types/api';
 
 
@@ -78,6 +79,7 @@ export function getErrorDetail(error: unknown): string {
 }
 
 export const api = {
+  listWorkspaces: async (): Promise<Workspace[]> => (await http.get("/workspaces")).data,
 
   getChatbotSettings: async (): Promise<ChatbotSettings> => (await http.get('/admin/chatbot-settings')).data,
   updateChatbotSettings: async (payload: ChatbotSettings): Promise<ChatbotSettings> => (await http.put('/admin/chatbot-settings', payload)).data,

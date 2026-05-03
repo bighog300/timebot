@@ -1,4 +1,5 @@
 from app.models.user import User, UserInvite
+from app.models.workspace import Workspace, WorkspaceInvite, WorkspaceMember
 from app.models.category import Category
 from app.models.document import Document
 from app.models.intelligence import (
@@ -29,6 +30,9 @@ from app.models.relationships import (
 __all__ = [
     "User",
     "UserInvite",
+    "Workspace",
+    "WorkspaceMember",
+    "WorkspaceInvite",
     "AdminAuditEvent",
     "DocumentProcessingEvent",
     "UsageEvent",

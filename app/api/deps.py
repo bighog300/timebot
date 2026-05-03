@@ -34,3 +34,21 @@ def require_editor_or_admin(role: str = Depends(get_current_user_role)) -> str:
 
 
 __all__ = ["get_db", "get_current_user", "get_current_user_role", "require_editor_or_admin"]
+
+
+from fastapi import Header
+from app.services.workspaces import workspace_service
+from app.models.workspace import Workspace
+
+
+def get_active_workspace(
+    x_workspace_id: str | None = Header(default=None, alias="X-Workspace-ID"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Workspace:
+    personal = workspace_service.ensure_personal_workspace(db, current_user)
+    if not x_workspace_id:
+        return personal
+    workspace_service.require_member(db, x_workspace_id, current_user.id)
+    ws = db.query(Workspace).filter(Workspace.id == x_workspace_id).first()
+    return ws or personal

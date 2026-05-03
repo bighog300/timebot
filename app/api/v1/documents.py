@@ -6,9 +6,10 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, get_db
+from app.api.deps import get_active_workspace, get_current_user, get_db
 from app.crud import document as crud_document
 from app.models.user import User
+from app.models.workspace import Workspace
 from app.schemas.document import (
     DocumentClusterResponse,
     DocumentResponse,
@@ -44,8 +45,9 @@ def list_documents(
     include_archived: bool = False,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    active_workspace: Workspace = Depends(get_active_workspace),
 ):
-    return crud_document.get_documents(db, user=current_user, skip=skip, limit=limit, include_archived=include_archived)
+    return crud_document.get_documents(db, user=current_user, workspace_id=active_workspace.id, skip=skip, limit=limit, include_archived=include_archived)
 
 
 @router.get("/search", response_model=DocumentSearchResponse)
@@ -55,8 +57,9 @@ def search_documents(
     limit: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    active_workspace: Workspace = Depends(get_active_workspace),
 ):
-    results = crud_document.search_documents(db, user=current_user, query=query, skip=skip, limit=limit)
+    results = crud_document.search_documents(db, user=current_user, workspace_id=active_workspace.id, query=query, skip=skip, limit=limit)
     return DocumentSearchResponse(documents=results, total=len(results), query=query)
 
 
@@ -64,6 +67,7 @@ def search_documents(
 def list_document_clusters(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    active_workspace: Workspace = Depends(get_active_workspace),
 ):
     return document_cluster_service.list_clusters_for_user(db, user_id=current_user.id)
 
@@ -75,13 +79,14 @@ def get_review_queue(
     limit: int = Query(50, ge=1, le=200),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    active_workspace: Workspace = Depends(get_active_workspace),
 ):
-    return crud_document.get_review_queue(db, user=current_user, status=status, skip=skip, limit=limit)
+    return crud_document.get_review_queue(db, user=current_user, workspace_id=active_workspace.id, status=status, skip=skip, limit=limit)
 
 
 @router.get("/{document_id}", response_model=DocumentResponse)
 def get_document(document_id: UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    document = crud_document.get_document(db, id=document_id, user=current_user)
+    document = crud_document.get_document(db, id=document_id, user=current_user, workspace_id=active_workspace.id)
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
     return document
@@ -95,8 +100,9 @@ def list_document_relationships(
     limit: int = Query(50, ge=1, le=200),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    active_workspace: Workspace = Depends(get_active_workspace),
 ):
-    document = crud_document.get_document(db, id=document_id, user=current_user)
+    document = crud_document.get_document(db, id=document_id, user=current_user, workspace_id=active_workspace.id)
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
     items = relationship_review_service.list_for_document(
@@ -134,7 +140,7 @@ def list_document_relationships(
 def update_document(
     document_id: UUID, document_in: DocumentUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
 ):
-    document = crud_document.get_document(db, id=document_id, user=current_user)
+    document = crud_document.get_document(db, id=document_id, user=current_user, workspace_id=active_workspace.id)
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
     return crud_document.update_document(db, db_obj=document, obj_in=document_in)
@@ -142,19 +148,19 @@ def update_document(
 
 @router.delete("/{document_id}")
 def delete_document(document_id: UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    document = crud_document.get_document(db, id=document_id, user=current_user)
+    document = crud_document.get_document(db, id=document_id, user=current_user, workspace_id=active_workspace.id)
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
 
     from app.services.storage import storage
     storage.delete_file(document.original_path)
-    crud_document.delete_document(db, id=document_id, user=current_user)
+    crud_document.delete_document(db, id=document_id, user=current_user, workspace_id=active_workspace.id)
     return {"message": "Document deleted", "id": str(document_id)}
 
 
 @router.post("/{document_id}/reprocess")
 def reprocess_document(document_id: UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    document = crud_document.get_document(db, id=document_id, user=current_user)
+    document = crud_document.get_document(db, id=document_id, user=current_user, workspace_id=active_workspace.id)
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
 
@@ -190,8 +196,9 @@ def review_document(
     review_in: DocumentReviewRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    active_workspace: Workspace = Depends(get_active_workspace),
 ):
-    document = crud_document.get_document(db, id=document_id, user=current_user)
+    document = crud_document.get_document(db, id=document_id, user=current_user, workspace_id=active_workspace.id)
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
 
@@ -215,7 +222,7 @@ def review_document(
 
 @router.get("/{document_id}/intelligence", response_model=DocumentIntelligenceResponse | None)
 def get_document_intelligence(document_id: UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    document = crud_document.get_document(db, id=document_id, user=current_user)
+    document = crud_document.get_document(db, id=document_id, user=current_user, workspace_id=active_workspace.id)
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
     intelligence = document_intelligence_service.get_for_document(db, document)
@@ -224,7 +231,7 @@ def get_document_intelligence(document_id: UUID, db: Session = Depends(get_db), 
 
 @router.post("/{document_id}/intelligence/regenerate", response_model=DocumentIntelligenceResponse)
 def regenerate_document_intelligence(document_id: UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    document = crud_document.get_document(db, id=document_id, user=current_user)
+    document = crud_document.get_document(db, id=document_id, user=current_user, workspace_id=active_workspace.id)
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
     if not openai_client_service.enabled:
@@ -254,8 +261,9 @@ def patch_document_intelligence(
     intelligence_in: DocumentIntelligenceUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    active_workspace: Workspace = Depends(get_active_workspace),
 ):
-    document = crud_document.get_document(db, id=document_id, user=current_user)
+    document = crud_document.get_document(db, id=document_id, user=current_user, workspace_id=active_workspace.id)
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
     intelligence = document_intelligence_service.get_for_document(db, document)
@@ -271,7 +279,7 @@ def patch_document_intelligence(
 
 @router.post("/{document_id}/category/approve", response_model=DocumentResponse)
 def approve_document_category(document_id: UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    document = crud_document.get_document(db, id=document_id, user=current_user)
+    document = crud_document.get_document(db, id=document_id, user=current_user, workspace_id=active_workspace.id)
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
     intelligence = document_intelligence_service.get_for_document(db, document)
@@ -297,8 +305,9 @@ def override_document_category(
     override_in: CategoryOverrideRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    active_workspace: Workspace = Depends(get_active_workspace),
 ):
-    document = crud_document.get_document(db, id=document_id, user=current_user)
+    document = crud_document.get_document(db, id=document_id, user=current_user, workspace_id=active_workspace.id)
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
     intelligence = document_intelligence_service.get_for_document(db, document)
@@ -321,8 +330,9 @@ def get_document_review_audit(
     limit: int = Query(100, ge=1, le=500),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    active_workspace: Workspace = Depends(get_active_workspace),
 ):
-    document = crud_document.get_document(db, id=document_id, user=current_user)
+    document = crud_document.get_document(db, id=document_id, user=current_user, workspace_id=active_workspace.id)
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
     return review_audit_service.list_events(
