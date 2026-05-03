@@ -45,6 +45,7 @@ from app.schemas.admin import (
 )
 from app.services.limit_enforcement import _current_period_window
 from app.services.subscriptions import ensure_default_free_subscription, seed_default_plans
+from app.services.auth import auth_service
 from app.services.usage import get_usage_summary
 from app.schemas.prompt_template import (
     PromptTemplateCreate,
@@ -366,6 +367,40 @@ def create_invite(payload: AdminInviteCreateRequest, _: str = Depends(require_ad
     db.commit()
     return {"id": str(invite.id), "invite_link": f"/accept-invite?token={token}"}
 
+
+
+
+@router.post("/users/invites/{invite_id}/resend")
+def resend_invite(invite_id: str, _: str = Depends(require_admin), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    invite = db.query(UserInvite).filter(UserInvite.id == invite_id).first()
+    if not invite:
+        raise HTTPException(status_code=404, detail="Invite not found")
+    if invite.accepted_at or invite.canceled_at:
+        raise HTTPException(status_code=400, detail="Invite is no longer active")
+    if db.query(User).filter(User.email == invite.email.lower()).first():
+        raise HTTPException(status_code=400, detail="User already exists")
+    token = secrets.token_urlsafe(32)
+    invite.token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    invite.expires_at = datetime.now(timezone.utc) + timedelta(days=7)
+    _audit_user_action(db, current_user, None, "invite_resent", {"email": invite.email, "invite_id": str(invite.id)})
+    db.commit()
+    return {"id": str(invite.id), "invite_link": f"/accept-invite?token={token}"}
+
+
+@router.post("/users/invites/{invite_id}/cancel")
+def cancel_invite(invite_id: str, _: str = Depends(require_admin), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    invite = db.query(UserInvite).filter(UserInvite.id == invite_id).first()
+    if not invite:
+        raise HTTPException(status_code=404, detail="Invite not found")
+    if invite.accepted_at:
+        raise HTTPException(status_code=400, detail="Invite is already accepted")
+    if invite.canceled_at:
+        raise HTTPException(status_code=400, detail="Invite already canceled")
+    invite.canceled_at = datetime.now(timezone.utc)
+    _audit_user_action(db, current_user, None, "invite_canceled", {"email": invite.email, "invite_id": str(invite.id)})
+    db.commit()
+    db.refresh(invite)
+    return invite
 
 @router.get("/users/invites", response_model=list[AdminInviteResponse])
 def list_invites(_: str = Depends(require_admin), db: Session = Depends(get_db)):
