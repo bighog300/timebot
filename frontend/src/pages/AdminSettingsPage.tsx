@@ -18,6 +18,7 @@ import {
   useResetAdminPlanDefaults,
 } from '@/hooks/useApi';
 import { useState } from 'react';
+import { getErrorDetail } from '@/services/api';
 
 export function AdminSubscriptionsPage() {
   const { pushToast } = useUIStore();
@@ -160,7 +161,7 @@ export function AdminPlansPage() {
         </label>
         {['insights_enabled','category_intelligence_enabled','relationship_detection_enabled'].map((k)=><label key={k} className='block'><input type='checkbox' checked={Boolean(d.features_json?.[k])} onChange={(e)=>setDrafts((prev)=>({...prev,[p.id]:{...d,features_json:{...d.features_json,[k]:e.target.checked}}}))} /> {k}</label>)}
         {errors.length > 0 && <div className='text-xs text-rose-300'>{errors.join(' ')}</div>}
-        <button disabled={errors.length > 0} className='rounded bg-emerald-700 px-2 py-1 text-sm disabled:opacity-50' onClick={async()=>{ if (!confirm(`Save plan changes for ${p.slug}?`)) return; await updatePlan.mutateAsync({planId:p.id,payload:{name:d.name,price_monthly_cents:d.price_monthly_cents,limits_json:d.limits_json,features_json:d.features_json,is_active:d.is_active}}); pushToast('Plan updated'); }}>Save</button>
+        <button disabled={errors.length > 0} className='rounded bg-emerald-700 px-2 py-1 text-sm disabled:opacity-50' onClick={async()=>{ if (!confirm(`Save plan changes for ${p.slug}?`)) return; try { await updatePlan.mutateAsync({planId:p.id,payload:{name:d.name,price_monthly_cents:d.price_monthly_cents,limits_json:d.limits_json,features_json:d.features_json,is_active:d.is_active}}); pushToast('Plan updated'); } catch (error) { pushToast(`Failed to update plan: ${getErrorDetail(error)}`, 'error'); } }}>Save</button>
       </div>;
     })}
   </div></Card>;
