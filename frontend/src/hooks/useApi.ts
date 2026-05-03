@@ -234,7 +234,7 @@ export function useBulkDismissReviewItems() {
   });
 }
 
-export function useAdminPromptExecutionSummary(filters: { provider?: string; model?: string; source?: string; success?: boolean; fallback_used?: boolean; created_after?: string; created_before?: string } = {}) {
+export function useAdminPromptExecutionSummary(filters: { provider?: string; model?: string; source?: string; purpose?: string; actor_user_id?: string; success?: boolean; fallback_used?: boolean; created_after?: string; created_before?: string } = {}) {
   const authReady = useAuthReady();
   return useQuery({ queryKey: [...keys.adminPromptExecutions, "summary", filters], queryFn: () => api.getPromptExecutionSummary(filters), enabled: authReady });
 }

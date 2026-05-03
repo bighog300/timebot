@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy.exc import OperationalError, ProgrammingError
 from sqlalchemy import func
@@ -10,6 +10,9 @@ from sqlalchemy.orm import Session
 
 from app.models.prompt_template import PromptTemplate
 from app.models.prompt_execution_log import PromptExecutionLog
+from app.models.chat import ChatbotSettings
+from app.models.messaging import Notification
+from app.models.user import User
 from app.services.default_prompt_templates import DEFAULT_PROMPT_TEMPLATES
 from app.services.llm_pricing import estimate_llm_cost
 
@@ -168,6 +171,19 @@ def run_prompt_with_fallback(prompt_template: PromptTemplate, user_input: str, d
     if not prompt_template.fallback_enabled:
         raise RuntimeError(primary_error)
 
+    reason = (primary_error or "").lower()
+    should_retry = (
+        ("rate limit" in reason and prompt_template.retry_on_rate_limit is not False)
+        or ("validation" in reason and prompt_template.retry_on_validation_error is True)
+        or (prompt_template.retry_on_provider_errors is not False and "rate limit" not in reason and "validation" not in reason)
+    )
+    if not should_retry:
+        raise RuntimeError(primary_error)
+
+    max_attempts = prompt_template.max_fallback_attempts if prompt_template.max_fallback_attempts is not None else 1
+    if max_attempts <= 0:
+        raise RuntimeError(primary_error)
+
     fallback_provider = prompt_template.fallback_provider or prompt_template.provider
     fallback_model = prompt_template.fallback_model or prompt_template.model
     fallback_payload = {**request_payload, "model": fallback_model}
@@ -203,10 +219,53 @@ def record_prompt_execution(db: Session, **kwargs) -> PromptExecutionLog:
     db.add(row)
     db.commit()
     db.refresh(row)
+    _evaluate_cost_thresholds(db, row)
     return row
 
 
-def list_prompt_executions(db: Session, *, prompt_template_id=None, provider=None, model=None, success=None, fallback_used=None, source=None, limit: int = 100, offset: int = 0):
+def _create_admin_threshold_notifications(db: Session, title: str, body: str, metadata: dict) -> None:
+    admin_ids = db.query(User.id).filter(User.role == "admin", User.is_active.is_(True)).all()
+    for (admin_id,) in admin_ids:
+        db.add(Notification(user_id=admin_id, type="prompt_cost_threshold", title=title, body=body, metadata_json=metadata))
+    db.commit()
+
+
+def _evaluate_cost_thresholds(db: Session, row: PromptExecutionLog) -> None:
+    if row.estimated_cost_usd is None:
+        return
+    settings = db.query(ChatbotSettings).order_by(ChatbotSettings.created_at.asc()).first()
+    if not settings:
+        return
+    now = datetime.now(timezone.utc)
+    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    threshold_hits: list[tuple[str, float, float]] = []
+
+    if settings.prompt_daily_cost_threshold_usd is not None:
+        daily_total = db.query(func.coalesce(func.sum(PromptExecutionLog.estimated_cost_usd), 0)).filter(PromptExecutionLog.created_at >= day_start).scalar() or 0
+        if float(daily_total) > settings.prompt_daily_cost_threshold_usd:
+            threshold_hits.append(("daily", settings.prompt_daily_cost_threshold_usd, float(daily_total)))
+
+    if settings.prompt_monthly_cost_threshold_usd is not None:
+        monthly_total = db.query(func.coalesce(func.sum(PromptExecutionLog.estimated_cost_usd), 0)).filter(PromptExecutionLog.created_at >= month_start).scalar() or 0
+        if float(monthly_total) > settings.prompt_monthly_cost_threshold_usd:
+            threshold_hits.append(("monthly", settings.prompt_monthly_cost_threshold_usd, float(monthly_total)))
+
+    if settings.prompt_user_cost_threshold_usd is not None and row.actor_user_id:
+        user_total = db.query(func.coalesce(func.sum(PromptExecutionLog.estimated_cost_usd), 0)).filter(PromptExecutionLog.created_at >= month_start, PromptExecutionLog.actor_user_id == row.actor_user_id).scalar() or 0
+        if float(user_total) > settings.prompt_user_cost_threshold_usd:
+            threshold_hits.append(("user", settings.prompt_user_cost_threshold_usd, float(user_total)))
+
+    for scope, threshold, current in threshold_hits:
+        _create_admin_threshold_notifications(
+            db,
+            title=f"Prompt cost threshold exceeded ({scope})",
+            body=f"Current {scope} prompt cost ${current:.4f} exceeded configured threshold ${threshold:.4f}.",
+            metadata={"scope": scope, "threshold_usd": threshold, "current_usd": current, "execution_id": str(row.id)},
+        )
+
+
+def list_prompt_executions(db: Session, *, prompt_template_id=None, provider=None, model=None, purpose=None, actor_user_id=None, success=None, fallback_used=None, source=None, limit: int = 100, offset: int = 0):
     q = db.query(PromptExecutionLog)
     if prompt_template_id:
         q = q.filter(PromptExecutionLog.prompt_template_id == prompt_template_id)

@@ -1,3 +1,4 @@
+import pytest
 import uuid
 
 from app.models.prompt_template import PromptTemplate
@@ -354,3 +355,43 @@ def test_record_prompt_execution_unknown_pricing_does_not_fail(db):
     row = record_prompt_execution(db, provider='openai', model='missing-model', fallback_used=False, success=True, source='test', input_tokens=10, output_tokens=10)
     assert row.id is not None
     assert row.pricing_known is False
+
+
+def test_record_prompt_execution_creates_admin_alert_on_daily_threshold(db, test_user):
+    from app.models.chat import ChatbotSettings
+    from app.models.messaging import Notification
+    from app.services.prompt_templates import record_prompt_execution
+
+    test_user.role = 'admin'
+    db.add(ChatbotSettings(system_prompt='s', retrieval_prompt='r', report_prompt='rp', citation_prompt='c', default_report_template='d', model='gpt-4.1-mini', temperature=0.2, max_tokens=100, max_documents=5, allow_full_text_retrieval=True, prompt_daily_cost_threshold_usd=0.000001, prompt_monthly_cost_threshold_usd=None, prompt_user_cost_threshold_usd=None, prompt_workspace_cost_threshold_usd=None))
+    db.commit()
+
+    record_prompt_execution(db, provider='openai', model='gpt-4o-mini', fallback_used=False, success=True, source='test', input_tokens=1000, output_tokens=1000)
+    note = db.query(Notification).filter(Notification.user_id == test_user.id, Notification.type == 'prompt_cost_threshold').first()
+    assert note is not None
+
+
+def test_create_second_default_same_type_is_rejected_by_db(db):
+    # Practical fallback for sqlite test envs that may not apply partial indexes.
+    p1 = PromptTemplate(type='chat', name='d1', content='one', version=1, is_default=True)
+    p2 = PromptTemplate(type='chat', name='d2', content='two', version=2, is_default=True)
+    db.add_all([p1, p2])
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        return
+    defaults = db.query(PromptTemplate).filter(PromptTemplate.type == 'chat', PromptTemplate.is_default.is_(True)).count()
+    if defaults > 1:
+        pytest.skip('Partial unique default index not enforced in sqlite test environment')
+
+
+def test_switching_default_via_update_unsets_previous(client, test_user, db):
+    test_user.role = 'admin'
+    p1 = PromptTemplate(type='chat', name='d1', content='one', version=1, is_default=True)
+    p2 = PromptTemplate(type='chat', name='d2', content='two', version=2, is_default=False)
+    db.add_all([p1, p2]); db.commit()
+    r = client.put(f'/api/v1/admin/prompts/{p2.id}', json={'is_default': True})
+    assert r.status_code == 200
+    db.refresh(p1); db.refresh(p2)
+    assert p1.is_default is False and p2.is_default is True

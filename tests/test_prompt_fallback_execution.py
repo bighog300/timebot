@@ -51,6 +51,36 @@ def test_run_prompt_dual_failure_raises(monkeypatch):
         run_prompt_with_fallback(_template(), "hello", db=None)
 
 
+def test_run_prompt_fallback_respects_max_attempts_zero(monkeypatch):
+    monkeypatch.setattr("app.services.openai_client.openai_client_service.generate_completion_for_provider", lambda *_: (_ for _ in ()).throw(MockLLMError("provider failure")))
+    with pytest.raises(RuntimeError):
+        run_prompt_with_fallback(_template(max_fallback_attempts=0), "hello", db=None)
+
+
+def test_run_prompt_fallback_respects_retry_flags(monkeypatch):
+    monkeypatch.setattr("app.services.openai_client.openai_client_service.generate_completion_for_provider", lambda *_: (_ for _ in ()).throw(MockLLMError("validation error")))
+    with pytest.raises(RuntimeError):
+        run_prompt_with_fallback(_template(retry_on_provider_errors=False, retry_on_validation_error=False), "hello", db=None)
+
+
+def test_run_prompt_fallback_reason_recorded(db, monkeypatch):
+    calls = []
+    t = _template()
+    db.add(t)
+    db.commit()
+    def fake(provider, _payload):
+        calls.append(provider)
+        if provider == "openai":
+            raise MockLLMError("provider failure")
+        return SimpleNamespace(text="ok")
+    monkeypatch.setattr("app.services.openai_client.openai_client_service.generate_completion_for_provider", fake)
+    run_prompt_with_fallback(t, "hello", db=db, user_id=None, source="test", purpose="chat")
+    from app.models.prompt_execution_log import PromptExecutionLog
+    row = db.query(PromptExecutionLog).order_by(PromptExecutionLog.created_at.desc()).first()
+    assert row.fallback_used is True
+    assert row.fallback_reason == "primary_error"
+
+
 def test_runtime_path_uses_fallback_template_provider(db, monkeypatch):
     analyzer = AIAnalyzer()
     monkeypatch.setattr("app.services.ai_analyzer.settings.OPENAI_API_KEY", "test-key")
