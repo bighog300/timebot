@@ -33,7 +33,8 @@ export function useLiveEvents() {
     let ws: WebSocket | null = null;
 
     try {
-      ws = new WebSocket(`${env.wsBaseUrl}/api/v1/ws/all`);
+      const encodedToken = encodeURIComponent(token);
+      ws = new WebSocket(`${env.wsBaseUrl}/api/v1/ws/all?token=${encodedToken}`);
     } catch {
       return () => {};
     }

@@ -71,6 +71,12 @@ async def ws_document(websocket: WebSocket, document_id: str):
         manager.disconnect(websocket, channel)
 
 
+
+
+@router.get("/all")
+def ws_all_upgrade_hint():
+    return {"detail": "This endpoint is WebSocket-only. Connect via ws(s)://.../api/v1/ws/all"}
+
 @router.websocket("/all")
 async def ws_all(websocket: WebSocket):
     db = _get_ws_db()
