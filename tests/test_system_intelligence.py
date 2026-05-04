@@ -4,7 +4,7 @@ from fastapi.testclient import TestClient
 from app.main import app
 from app.api.deps import get_db, get_current_user
 from app.models.document import Document
-from app.models.system_intelligence import SystemIntelligenceAuditLog, SystemIntelligenceChunk, SystemIntelligenceDocument, SystemIntelligenceWebReference
+from app.models.system_intelligence import SystemIntelligenceAuditLog, SystemIntelligenceChunk, SystemIntelligenceDocument, SystemIntelligenceSubmission, SystemIntelligenceWebReference
 from app.models.user import User
 from app.models.workspace import Workspace, WorkspaceMember
 from app.services.auth import auth_service
@@ -60,6 +60,17 @@ def test_workspace_member_can_recommend(db):
         assert resp.status_code == 200
 
 
+def test_user_can_withdraw_submission(db):
+    user = _mk_user(db, 'withdraw@example.com', 'editor')
+    doc = _mk_doc(db, user)
+    with _client_with_user(db, user) as c:
+        sub = c.post('/api/v1/system-intelligence/submissions', json={'source_document_id': str(doc.id), 'title': 'Withdraw me'}).json()
+        resp = c.post(f"/api/v1/system-intelligence/submissions/{sub['id']}/withdraw")
+        assert resp.status_code == 200
+    db_sub = db.query(SystemIntelligenceSubmission).filter(SystemIntelligenceSubmission.id == sub['id']).first()
+    assert db_sub.status == 'withdrawn'
+
+
 def test_admin_approval_creates_system_doc_and_chunks_and_audit(db):
     user = _mk_user(db, 'user@example.com', 'editor')
     admin = _mk_user(db, 'admin@example.com', 'admin')
@@ -84,6 +95,34 @@ def test_approval_fails_if_missing_source_content(db):
     with _client_with_user(db, admin) as c:
         resp = c.post(f"/api/v1/admin/system-intelligence/submissions/{sub['id']}/approve", json={'admin_notes': 'ok'})
         assert resp.status_code == 400
+
+
+def test_admin_preview_source(db):
+    user = _mk_user(db, 'preview-user@example.com', 'editor')
+    admin = _mk_user(db, 'preview-admin@example.com', 'admin')
+    doc = _mk_doc(db, user, text='preview content words')
+    with _client_with_user(db, user) as c:
+        sub = c.post('/api/v1/system-intelligence/submissions', json={'source_document_id': str(doc.id), 'title': 'User Rec'}).json()
+    with _client_with_user(db, admin) as c:
+        resp = c.get(f"/api/v1/admin/system-intelligence/submissions/{sub['id']}/preview")
+        assert resp.status_code == 200
+        payload = resp.json()
+        assert payload['word_count'] > 0
+        assert 'preview content' in (payload.get('raw_text_preview') or '')
+
+
+def test_admin_approval_with_redacted_text_override(db):
+    user = _mk_user(db, 'redact-user@example.com', 'editor')
+    admin = _mk_user(db, 'redact-admin@example.com', 'admin')
+    doc = _mk_doc(db, user, text='ssn 111-22-3333 secret')
+    with _client_with_user(db, user) as c:
+        sub = c.post('/api/v1/system-intelligence/submissions', json={'source_document_id': str(doc.id), 'title': 'User Rec'}).json()
+    with _client_with_user(db, admin) as c:
+        approved = c.post(f"/api/v1/admin/system-intelligence/submissions/{sub['id']}/approve", json={'admin_notes': 'ok', 'approved_text_override': 'redacted safe text'}).json()
+    sid = approved['resulting_system_document_id']
+    created = db.query(SystemIntelligenceDocument).filter(SystemIntelligenceDocument.id == sid).first()
+    assert created is not None
+    assert created.metadata_json.get('edited_or_redacted') is True
 
 
 def test_admin_rejection_requires_notes_and_stores_fields(db):

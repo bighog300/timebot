@@ -69,6 +69,7 @@ class SystemIntelligenceSubmissionModeration(BaseModel):
     category: str | None = None
     jurisdiction: str | None = None
     status: str | None = None
+    approved_text_override: str | None = None
 
 
 class SystemIntelligenceSubmissionResponse(BaseModel):
@@ -90,6 +91,22 @@ class SystemIntelligenceSubmissionResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class SystemIntelligenceSubmissionAdminResponse(SystemIntelligenceSubmissionResponse):
+    source_document_filename: str | None = None
+    source_document_owner_email: str | None = None
+    source_document_workspace_title: str | None = None
+    source_document_processing_status: str | None = None
+
+
+class SystemIntelligenceSubmissionPreviewResponse(BaseModel):
+    submission: SystemIntelligenceSubmissionResponse
+    source_document_metadata: dict | None = None
+    raw_text_preview: str | None = None
+    word_count: int = 0
+    extraction_status: str | None = None
+    warnings: list[str] = []
 
 
 class SystemIntelligenceWebReferenceCreate(BaseModel):
