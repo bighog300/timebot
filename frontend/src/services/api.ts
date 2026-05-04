@@ -40,6 +40,7 @@ import type {
   GmailPreviewResponse,
   GmailImportResponse,
   PromptTemplate,
+  PromptTemplateType,
   PromptTemplateCreateRequest,
   PromptTemplateUpdateRequest,
   PromptTemplateTestRequest,
@@ -100,6 +101,18 @@ export function getErrorDetail(error: unknown): string {
     return error.message;
   }
   return error instanceof Error ? error.message : 'Unexpected error';
+}
+
+
+
+type LegacyPromptTemplate = PromptTemplate & { prompt_type?: PromptTemplateType };
+
+function normalizePromptTemplate(payload: LegacyPromptTemplate): PromptTemplate {
+  if (payload.type) return payload;
+  if (payload.prompt_type) {
+    return { ...payload, type: payload.prompt_type };
+  }
+  return payload;
 }
 
 const ALLOWED_PLAN_LIMIT_KEYS = ['documents_per_month', 'storage_bytes', 'processing_jobs_per_month', 'seats'] as const;
@@ -305,7 +318,7 @@ export const api = {
   listEmailSuppressions: async (): Promise<EmailSuppression[]> => (await http.get('/admin/email/suppressions')).data,
   addEmailSuppression: async (payload: {email: string; reason: 'unsubscribe'|'bounce'|'complaint'|'manual'; source?: string}): Promise<EmailSuppression> => (await http.post('/admin/email/suppressions', payload)).data,
   removeEmailSuppression: async (email: string): Promise<void> => { await http.delete(`/admin/email/suppressions/${encodeURIComponent(email)}`); },
-  listPromptTemplates: async (): Promise<PromptTemplate[]> => (await http.get('/admin/prompts')).data,
+  listPromptTemplates: async (): Promise<PromptTemplate[]> => ((await http.get('/admin/prompts')).data as LegacyPromptTemplate[]).map(normalizePromptTemplate),
   createPromptTemplate: async (payload: PromptTemplateCreateRequest): Promise<PromptTemplate> => (await http.post('/admin/prompts', payload)).data,
   updatePromptTemplate: async (promptId: string, payload: PromptTemplateUpdateRequest): Promise<PromptTemplate> => (await http.put(`/admin/prompts/${promptId}`, payload)).data,
   activatePromptTemplate: async (promptId: string): Promise<PromptTemplate> => (await http.post(`/admin/prompts/${promptId}/activate`)).data,
