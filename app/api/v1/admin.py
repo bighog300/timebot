@@ -46,6 +46,9 @@ from app.schemas.admin import (
     EmailTemplateCreateRequest,
     EmailTemplatePatchRequest,
     EmailTemplateResponse,
+    EmailTemplatePreviewRequest,
+    EmailTemplatePreviewResponse,
+    EmailTemplateTestSendRequest,
     EmailCampaignCreateRequest,
     EmailCampaignPatchRequest,
     EmailCampaignResponse,
@@ -91,7 +94,7 @@ from app.services.error_sanitizer import sanitize_processing_error
 from app.services.email_secrets import email_secret_crypto
 from app.workers.tasks import enqueue_campaign_recipient_send
 from app.services.email_delivery import EmailDeliveryService
-from app.services.email_render import render_campaign_content
+from app.services.email_render import VAR_RE, render_campaign_content, render_simple_template
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -291,6 +294,24 @@ def _resolve_campaign_recipients(db: Session, campaign: EmailCampaign) -> dict:
     return {'total': len(candidates), 'sendable': sendable, 'suppressed': sup, 'invalid': invalid, 'duplicates': dup}
 
 
+
+
+def _render_template_preview(subject: str, preheader: str | None, html_body: str, text_body: str | None, variables_json: dict | list | None) -> dict:
+    variables = variables_json if isinstance(variables_json, dict) else {}
+    rendered_subject, m1 = render_simple_template(subject or '', variables)
+    rendered_preheader, m2 = render_simple_template(preheader or '', variables)
+    rendered_html, m3 = render_simple_template(html_body or '', variables)
+    rendered_text, m4 = render_simple_template(text_body or '', variables)
+    all_content = '\n'.join([subject or '', preheader or '', html_body or '', text_body or ''])
+    detected = sorted(set(VAR_RE.findall(all_content)))
+    return {
+        'subject': rendered_subject,
+        'preheader': rendered_preheader or None,
+        'html_body': rendered_html,
+        'text_body': rendered_text,
+        'detected_variables': detected,
+        'missing_variables': sorted(set(m1 + m2 + m3 + m4)),
+    }
 @router.get('/email/templates', response_model=list[EmailTemplateResponse])
 def list_email_templates(_: str = Depends(require_admin), db: Session = Depends(get_db)):
     return db.query(EmailTemplate).order_by(EmailTemplate.updated_at.desc()).all()
@@ -332,6 +353,37 @@ def archive_email_template(template_id: str, _: str = Depends(require_admin), db
     t.status = 'archived'; t.updated_by_admin_id = current_user.id
     _audit_admin_email_action(db, current_user, 'email_template', str(t.id), 'email_template_archived', {'slug': t.slug})
     db.commit(); db.refresh(t); return t
+
+
+
+@router.post('/email/templates/preview', response_model=EmailTemplatePreviewResponse)
+def preview_email_template(payload: EmailTemplatePreviewRequest, _: str = Depends(require_admin)):
+    return _render_template_preview(payload.subject, payload.preheader, payload.html_body, payload.text_body, payload.variables_json)
+
+
+@router.post('/email/templates/{template_id}/duplicate', response_model=EmailTemplateResponse, status_code=201)
+def duplicate_email_template(template_id: str, _: str = Depends(require_admin), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    t = db.query(EmailTemplate).filter(EmailTemplate.id == template_id).first()
+    if not t:
+        raise HTTPException(status_code=404, detail='Template not found')
+    base_slug = f"{t.slug}-copy"
+    slug = base_slug
+    n = 2
+    while db.query(EmailTemplate).filter(EmailTemplate.slug == slug).first():
+        slug = f"{base_slug}-{n}"
+        n += 1
+    dup = EmailTemplate(name=f"{t.name} (Copy)", slug=slug, category=t.category, status='draft', subject=t.subject, preheader=t.preheader, html_body=t.html_body, text_body=t.text_body, variables_json=t.variables_json, created_by_admin_id=current_user.id, updated_by_admin_id=current_user.id)
+    db.add(dup); db.flush()
+    _audit_admin_email_action(db, current_user, 'email_template', str(dup.id), 'email_template_duplicated', {'source_template_id': str(t.id), 'slug': dup.slug})
+    db.commit(); db.refresh(dup); return dup
+
+
+@router.post('/email/templates/test-send', response_model=AdminEmailTestSendResponse)
+def test_send_email_template(payload: EmailTemplateTestSendRequest, _: str = Depends(require_admin), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    rendered = _render_template_preview(payload.subject, payload.preheader, payload.html_body, payload.text_body, payload.variables_json)
+    result = EmailDeliveryService(db).send_email(provider=payload.provider, to_email=payload.to_email, subject=rendered['subject'], html_body=rendered['html_body'], text_body=rendered['text_body'])
+    _audit_admin_email_action(db, current_user, 'email_test_send', result['log_id'], 'email_template_test_send', {'provider': result['provider'], 'status': result['status'], 'to_email': payload.to_email})
+    return result
 
 @router.get('/email/campaigns', response_model=list[EmailCampaignResponse])
 def list_email_campaigns(limit: int = Query(50, ge=1, le=200), _: str = Depends(require_admin), db: Session = Depends(get_db)):

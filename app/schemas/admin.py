@@ -306,6 +306,34 @@ class EmailTemplateResponse(BaseModel):
 
     model_config = {"from_attributes": True}
 
+
+
+class EmailTemplatePreviewRequest(BaseModel):
+    subject: str
+    preheader: str | None = None
+    html_body: str
+    text_body: str | None = None
+    variables_json: dict | list | None = None
+
+
+class EmailTemplatePreviewResponse(BaseModel):
+    subject: str
+    preheader: str | None
+    html_body: str
+    text_body: str
+    detected_variables: list[str]
+    missing_variables: list[str]
+
+
+class EmailTemplateTestSendRequest(BaseModel):
+    provider: str | None = Field(default=None, pattern="^(resend|sendgrid)$")
+    to_email: str
+    subject: str
+    preheader: str | None = None
+    html_body: str
+    text_body: str | None = None
+    variables_json: dict | list | None = None
+
 class EmailCampaignCreateRequest(BaseModel):
     name: str
     template_id: UUID

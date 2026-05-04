@@ -668,6 +668,10 @@ export type EmailTemplateCreate = Omit<EmailTemplate,'id'|'created_by_admin_id'|
 export type EmailTemplatePatch = Partial<EmailTemplateCreate>;
 
 
+
+export interface EmailTemplatePreviewRequest { subject: string; preheader?: string | null; html_body: string; text_body?: string | null; variables_json?: Record<string, unknown> | null; }
+export interface EmailTemplatePreviewResponse { subject: string; preheader?: string | null; html_body: string; text_body: string; detected_variables: string[]; missing_variables: string[]; }
+export interface EmailTemplateTestSendRequest { provider?: 'resend'|'sendgrid'; to_email: string; subject: string; preheader?: string | null; html_body: string; text_body?: string | null; variables_json?: Record<string, unknown> | null; }
 export interface EmailCampaign { id: string; name: string; template_id: string; audience_type: string; audience_filters_json?: Record<string, unknown> | null; status: 'draft'|'ready'|'archived'; subject_override?: string | null; preheader_override?: string | null; variables_json?: Record<string, unknown> | null; created_by_admin_id?: string | null; updated_by_admin_id?: string | null; created_at: string; updated_at: string; }
 export interface EmailCampaignCreate { name: string; template_id: string; audience_type: string; audience_filters_json?: Record<string, unknown> | null; status?: 'draft'|'ready'|'archived'; subject_override?: string | null; preheader_override?: string | null; variables_json?: Record<string, unknown> | null; }
 export type EmailCampaignPatch = Partial<EmailCampaignCreate>;
