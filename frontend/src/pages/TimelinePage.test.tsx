@@ -34,7 +34,9 @@ const mockMatchMedia = (matches: boolean) => {
 };
 
 function renderPage() {
-  const qc = new QueryClient();
+  const qc = new QueryClient({
+    defaultOptions: { queries: { gcTime: 0 }, mutations: { gcTime: 0 } },
+  });
   return render(
     <QueryClientProvider client={qc}>
       <MemoryRouter>

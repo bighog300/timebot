@@ -22,7 +22,9 @@ vi.mock('@/hooks/useApi', () => ({
 }));
 
 const renderPage = (initialPath = '/documents') => {
-  const queryClient = new QueryClient();
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { gcTime: 0 }, mutations: { gcTime: 0 } },
+  });
   return render(
     <MemoryRouter initialEntries={[initialPath]}>
       <QueryClientProvider client={queryClient}>
