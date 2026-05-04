@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '@/services/api';
 import { Button } from '@/components/ui/Button';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
@@ -65,6 +65,7 @@ function toFriendlySignalLabel(signal: string) {
 export function DocumentDetailPage() {
   const { id = '' } = useParams();
   const qc = useQueryClient();
+  const navigate = useNavigate();
   const pushToast = useUIStore((s) => s.pushToast);
   const documentQuery = useQuery({
     queryKey: ['document', id],
@@ -141,7 +142,7 @@ export function DocumentDetailPage() {
       qc.invalidateQueries({ queryKey: ['insights-structured'] });
       qc.invalidateQueries({ queryKey: ['document-clusters'] });
       pushToast('Document deleted');
-      window.location.href = '/documents';
+      navigate('/documents');
     },
     onError: () => pushToast('Failed to delete document'),
   });
