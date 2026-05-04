@@ -60,6 +60,19 @@ def test_workspace_invite_accept_creates_membership_and_non_admin_cannot_invite_
     app.dependency_overrides.clear()
 
 
+def test_workspace_invite_email_mismatch_blocked(client, db, test_user):
+    ws = client.post('/api/v1/workspaces', json={'name': 'Team'}).json()
+    created = client.post(f'/api/v1/workspaces/{ws["id"]}/invites', json={"email": "a@example.com", "role": "member"})
+    token = created.json()["dev_invite_link"].split("/invites/")[1].split("/accept")[0]
+    other = _mk_user(db, "b@example.com")
+    app.dependency_overrides[get_db] = lambda: db
+    app.dependency_overrides[get_current_user] = lambda: other
+    with TestClient(app) as local_client:
+        denied = local_client.post(f'/api/v1/workspaces/invites/{token}/accept')
+    assert denied.status_code == 400
+    app.dependency_overrides.clear()
+
+
 def test_document_access_isolation_and_membership(client, db, test_user):
     ws = client.post('/api/v1/workspaces', json={'name': 'Shared'}).json()
     other = _mk_user(db, "other@example.com")

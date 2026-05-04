@@ -41,10 +41,30 @@ class WorkspaceService:
         return member
 
     def create_invite(self, db: Session, workspace_id, email: str, role: str, invited_by_user_id):
+        role = role.lower().strip()
+        if role not in {"member", "admin"}:
+            raise HTTPException(status_code=400, detail="Invalid invite role. Allowed roles: member, admin")
+        normalized_email = email.lower().strip()
+        existing_member = (
+            db.query(WorkspaceMember)
+            .join(User, User.id == WorkspaceMember.user_id)
+            .filter(WorkspaceMember.workspace_id == workspace_id, User.email == normalized_email)
+            .first()
+        )
+        if existing_member:
+            raise HTTPException(status_code=400, detail="User is already a workspace member")
+        existing_invite = db.query(WorkspaceInvite).filter(
+            WorkspaceInvite.workspace_id == workspace_id,
+            WorkspaceInvite.email == normalized_email,
+            WorkspaceInvite.accepted_at.is_(None),
+            WorkspaceInvite.canceled_at.is_(None),
+        ).first()
+        if existing_invite:
+            raise HTTPException(status_code=400, detail="An active invite already exists for this email")
         token = secrets.token_urlsafe(24)
         invite = WorkspaceInvite(
             workspace_id=workspace_id,
-            email=email.lower(),
+            email=normalized_email,
             role=role,
             token_hash=hashlib.sha256(token.encode("utf-8")).hexdigest(),
             invited_by_user_id=invited_by_user_id,

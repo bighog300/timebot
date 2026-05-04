@@ -49,6 +49,7 @@ class WorkspaceInvite(Base):
     token_hash = Column(String(128), nullable=False, unique=True, index=True)
     invited_by_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     accepted_at = Column(TIMESTAMP(timezone=True), nullable=True)
+    canceled_at = Column(TIMESTAMP(timezone=True), nullable=True)
     expires_at = Column(TIMESTAMP(timezone=True), nullable=False)
     created_at = Column(TIMESTAMP(timezone=True), nullable=False, default=func.now())
     updated_at = Column(TIMESTAMP(timezone=True), nullable=False, default=func.now(), onupdate=func.now())

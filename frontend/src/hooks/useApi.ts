@@ -299,6 +299,14 @@ export function useRemoveWorkspaceMember(workspaceId: string) {
     onSuccess: () => qc.invalidateQueries({ queryKey: keys.workspaceDetail(workspaceId) }),
   });
 }
+export function useResendWorkspaceInvite(workspaceId: string) {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: (inviteId: string) => api.resendWorkspaceInvite(workspaceId, inviteId), onSuccess: () => qc.invalidateQueries({ queryKey: keys.workspaceDetail(workspaceId) }) });
+}
+export function useCancelWorkspaceInvite(workspaceId: string) {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: (inviteId: string) => api.cancelWorkspaceInvite(workspaceId, inviteId), onSuccess: () => qc.invalidateQueries({ queryKey: keys.workspaceDetail(workspaceId) }) });
+}
 
 export function useRelationshipReviews(status: 'pending' | 'confirmed' | 'dismissed') {
   const authReady = useAuthReady();
