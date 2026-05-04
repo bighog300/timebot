@@ -154,3 +154,29 @@ def test_web_reference_admin_approval_and_retrieval_filters(db):
     assert "https://justice.gov.za/a" in urls
     assert "https://justice.gov.za/b" not in urls
     assert "https://bad.example/u" not in urls
+
+
+def test_non_admin_blocked_from_admin_system_intelligence_endpoints(db):
+    user = _mk_user(db, "plain@example.com", "editor")
+    with _client_with_user(db, user) as c:
+        resp = c.get("/api/v1/admin/system-intelligence/documents")
+        assert resp.status_code == 403
+        resp = c.get("/api/v1/admin/system-intelligence/submissions")
+        assert resp.status_code == 403
+        resp = c.get("/api/v1/admin/system-intelligence/web-references")
+        assert resp.status_code == 403
+
+
+def test_delete_web_reference_is_soft_delete_and_excluded_from_retrieval(db):
+    admin = _mk_user(db, "admin-delete@example.com", "admin")
+    user = _mk_user(db, "user-delete@example.com", "editor")
+    with _client_with_user(db, admin) as c:
+        created = c.post("/api/v1/admin/system-intelligence/web-references", json={"title": "Delete Me", "url": "https://justice.gov.za/delete", "source_domain": "justice.gov.za"}).json()
+        c.post(f"/api/v1/admin/system-intelligence/web-references/{created['id']}/approve")
+        c.delete(f"/api/v1/admin/system-intelligence/web-references/{created['id']}")
+    row = db.query(SystemIntelligenceWebReference).filter(SystemIntelligenceWebReference.id == created["id"]).first()
+    assert row is not None
+    assert row.status == "deleted"
+    ctx = retrieve_chat_context(db=db, user_id=str(user.id), query="justice", document_ids=[], include_timeline=False, include_full_text=False, max_documents=5)
+    urls = {item["url"] for item in ctx["legal_web_refs"]}
+    assert "https://justice.gov.za/delete" not in urls

@@ -91,6 +91,10 @@ def retrieve_chat_context(
     include_timeline: bool,
     include_full_text: bool,
     max_documents: int,
+    assistant_type: str | None = None,
+    category: str | None = None,
+    jurisdiction: str | None = None,
+    legal_area: str | None = None,
     session_id: Any | None = None,
 ) -> dict[str, Any]:
 
@@ -253,19 +257,32 @@ def retrieve_chat_context(
     related_insights.sort(key=lambda item: (severity_rank.get(str(item.get("severity", "")).lower(), 99), str(item.get("title", "")).lower()))
     insights_payload = related_insights[:5]
 
-    system_docs = db.query(SystemIntelligenceDocument).filter(SystemIntelligenceDocument.status == "active", SystemIntelligenceDocument.index_status == "indexed").order_by(SystemIntelligenceDocument.created_at.desc()).limit(10).all()
+    system_docs_q = db.query(SystemIntelligenceDocument).filter(
+        SystemIntelligenceDocument.status == "active",
+        SystemIntelligenceDocument.index_status == "indexed",
+    )
+    if category:
+        system_docs_q = system_docs_q.filter(SystemIntelligenceDocument.category == category)
+    if jurisdiction:
+        system_docs_q = system_docs_q.filter(SystemIntelligenceDocument.jurisdiction == jurisdiction)
+    system_docs = system_docs_q.order_by(SystemIntelligenceDocument.created_at.desc()).limit(10).all()
     system_intelligence_refs = []
     for doc in system_docs:
         chunks = db.query(SystemIntelligenceChunk).filter(SystemIntelligenceChunk.system_document_id == doc.id).order_by(SystemIntelligenceChunk.chunk_index.asc()).limit(5).all()
         snippets = [c.content[:220] for c in chunks]
-        system_intelligence_refs.append({"id": str(doc.id), "title": doc.title, "category": doc.category, "jurisdiction": doc.jurisdiction, "source_type": doc.source_type, "kind": "system_intelligence", "snippets": snippets})
-    web_refs = db.query(SystemIntelligenceWebReference).filter(SystemIntelligenceWebReference.status == "active").order_by(SystemIntelligenceWebReference.created_at.desc()).limit(10).all()
+        system_intelligence_refs.append({"id": str(doc.id), "title": doc.title, "category": doc.category, "jurisdiction": doc.jurisdiction, "source_type": doc.source_type, "kind": "system_intelligence", "snippets": snippets, "selection_reason": "active_indexed_match"})
+    web_refs_q = db.query(SystemIntelligenceWebReference).filter(SystemIntelligenceWebReference.status == "active")
+    if jurisdiction:
+        web_refs_q = web_refs_q.filter(SystemIntelligenceWebReference.jurisdiction == jurisdiction)
+    if legal_area:
+        web_refs_q = web_refs_q.filter(SystemIntelligenceWebReference.legal_area == legal_area)
+    web_refs = web_refs_q.order_by(SystemIntelligenceWebReference.created_at.desc()).limit(10).all()
     legal_web_refs = [
-        {"id": str(ref.id), "title": ref.title, "url": ref.url, "source_domain": ref.source_domain, "legal_area": ref.legal_area, "document_type": ref.document_type, "kind": "legal_web"}
+        {"id": str(ref.id), "title": ref.title, "url": ref.url, "source_domain": ref.source_domain, "legal_area": ref.legal_area, "document_type": ref.document_type, "kind": "legal_web", "selection_reason": "active_web_reference"}
         for ref in web_refs
     ]
 
-    result = {"documents": documents, "source_refs": source_refs, "document_clusters": cluster_payload, "insights": insights_payload, "user_evidence_refs": source_refs, "system_intelligence_refs": system_intelligence_refs, "legal_web_refs": legal_web_refs}
+    result = {"documents": documents, "source_refs": source_refs, "document_clusters": cluster_payload, "insights": insights_payload, "user_evidence_refs": source_refs, "system_intelligence_refs": system_intelligence_refs, "legal_web_refs": legal_web_refs, "retrieval_meta": {"assistant_type": assistant_type, "category": category, "jurisdiction": jurisdiction, "legal_area": legal_area, "selected_user_documents": len(documents), "selected_system_refs": len(system_intelligence_refs), "selected_legal_refs": len(legal_web_refs)}}
     if cache_enabled and cache_key is not None:
         _cache_set(cache_key, result)
 

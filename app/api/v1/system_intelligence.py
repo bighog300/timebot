@@ -48,7 +48,11 @@ async def create_doc(title: str = Form(...), description: str | None = Form(None
     saved_path, file_size = await storage.save_upload(file)
     mime_type = file.content_type or allowed[suffix]
     doc = SystemIntelligenceDocument(source_type=source_type, title=title, description=description, category=category, jurisdiction=jurisdiction, status='draft', storage_uri=str(saved_path), mime_type=mime_type, content_hash=hash_bytes(content), original_filename=Path(file.filename or "upload").name, size_bytes=file_size)
-    db.add(doc); db.flush(); ingest_document(db, doc); _audit(db,user,'document_created','document',str(doc.id),{'title':doc.title}); db.commit(); db.refresh(doc); return doc
+    db.add(doc); db.flush(); ingest_document(db, doc)
+    if doc.extraction_status != "extracted" or doc.index_status != "indexed":
+        sanitized_error = "Document processing failed during extraction or indexing."
+        raise HTTPException(status_code=400, detail=sanitized_error)
+    _audit(db,user,'document_created','document',str(doc.id),{'title':doc.title}); db.commit(); db.refresh(doc); return doc
 
 @router.get('/admin/system-intelligence/documents/{doc_id}', response_model=SystemIntelligenceDocumentResponse, dependencies=[Depends(_require_admin)])
 def get_doc(doc_id: str, db: Session = Depends(get_db)):
@@ -194,7 +198,7 @@ def archive_ref(ref_id: str, db: Session = Depends(get_db), user: User = Depends
 def delete_ref(ref_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     ref = db.query(SystemIntelligenceWebReference).filter(SystemIntelligenceWebReference.id == ref_id).first()
     if not ref: raise HTTPException(404, 'Not found')
-    db.delete(ref); _audit(db,user,'web_reference_deleted','web_reference',str(ref.id)); db.commit(); return {'ok':True}
+    ref.status='deleted'; _audit(db,user,'web_reference_deleted','web_reference',str(ref.id)); db.commit(); return {'ok':True}
 
 @router.get('/admin/system-intelligence/audit-log', response_model=list[SystemIntelligenceAuditLogResponse], dependencies=[Depends(_require_admin)])
 def audit_logs(db: Session = Depends(get_db)):

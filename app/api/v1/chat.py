@@ -95,6 +95,9 @@ class MessageRequest(BaseModel):
     document_ids: list[str] | None = None
     include_timeline: bool = True
     include_full_text: bool = False
+    category: str | None = None
+    jurisdiction: str | None = None
+    legal_area: str | None = None
 
 
 def _get_session_for_user(db: Session, session_id: UUID, user_id: UUID) -> ChatSession:
@@ -125,7 +128,7 @@ def _build_model_messages(db: Session, bot_settings, prompt: str, prior_messages
     return model_messages
 
 
-def _build_chat_payload(db: Session, user: User, payload: MessageRequest, session_id: UUID | None = None):
+def _build_chat_payload(db: Session, user: User, payload: MessageRequest, session_id: UUID | None = None, assistant_type: str | None = None):
     bot_settings = _get_or_create_chatbot_settings(db)
     if not openai_client_service.enabled:
         raise HTTPException(status_code=503, detail="Chat AI is unavailable: OPENAI_API_KEY is not configured.")
@@ -138,6 +141,10 @@ def _build_chat_payload(db: Session, user: User, payload: MessageRequest, sessio
         include_timeline=payload.include_timeline,
         include_full_text=payload.include_full_text and bot_settings.allow_full_text_retrieval,
         max_documents=bot_settings.max_documents,
+        assistant_type=assistant_type,
+        category=payload.category,
+        jurisdiction=payload.jurisdiction,
+        legal_area=payload.legal_area,
         session_id=session_id,
     )
     retrieval_duration_ms = (time.perf_counter() - retrieval_start) * 1000
@@ -262,7 +269,11 @@ def post_message(session_id: UUID, payload: MessageRequest, db: Session = Depend
             raise HTTPException(status_code=404, detail="Assistant not found or disabled")
         _require_plan(db, user.id, assistant.required_plan)
     enforce_limit(db, user.id, "processing_jobs_per_month", quantity=1)
-    bot_settings, context, prompt = _build_chat_payload(db, user, payload, s.id)
+    assistant_type = None
+    if s.assistant_id:
+        assistant_row = db.query(AssistantProfile).filter(AssistantProfile.id == s.assistant_id).first()
+        assistant_type = assistant_row.name if assistant_row else None
+    bot_settings, context, prompt = _build_chat_payload(db, user, payload, s.id, assistant_type)
     prior_messages = _load_recent_session_messages(db, s.id, settings.CHAT_MAX_HISTORY_MESSAGES)
     user_message = ChatMessage(session_id=s.id, role="user", content=payload.message, metadata_json={"assistant_id": str(s.assistant_id) if s.assistant_id else None, "prompt_template_id": str(s.prompt_template_id) if s.prompt_template_id else None})
     start = time.perf_counter()
@@ -304,7 +315,7 @@ def post_message(session_id: UUID, payload: MessageRequest, db: Session = Depend
         assistant_content = (response.choices[0].message.content or "").strip() or "Not enough information was found in accessible Timebot documents."
         assistant_content = _append_sources(assistant_content, context["source_refs"])
     success = True
-    assistant_message = ChatMessage(session_id=s.id, role="assistant", content=assistant_content, source_refs=context["source_refs"], metadata_json={"assistant_id": str(s.assistant_id) if s.assistant_id else None, "prompt_template_id": str(s.prompt_template_id) if s.prompt_template_id else None, "model": bot_settings.model, "provider": "openai", "document_references": context["source_refs"], "user_evidence_refs": context.get("user_evidence_refs", []), "system_intelligence_refs": context.get("system_intelligence_refs", []), "legal_web_refs": context.get("legal_web_refs", [])})
+    assistant_message = ChatMessage(session_id=s.id, role="assistant", content=assistant_content, source_refs=context["source_refs"], metadata_json={"assistant_id": str(s.assistant_id) if s.assistant_id else None, "prompt_template_id": str(s.prompt_template_id) if s.prompt_template_id else None, "model": bot_settings.model, "provider": "openai", "document_references": context["source_refs"], "user_evidence_refs": context.get("user_evidence_refs", []), "system_intelligence_refs": context.get("system_intelligence_refs", []), "legal_web_refs": context.get("legal_web_refs", []), "retrieval_meta": context.get("retrieval_meta", {})})
     db.add(user_message)
     db.add(assistant_message)
     db.commit()
