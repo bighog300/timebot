@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session, joinedload, selectinload
 from app.config import settings
 from app.models.document import Document
 from app.models.relationships import DocumentRelationship
+from app.models.system_intelligence import SystemIntelligenceDocument, SystemIntelligenceWebReference
 from app.services.document_clusters import document_cluster_service
 from app.services.insights_service import insights_service
 from app.services.artifact_lookup import latest_artifact
@@ -252,7 +253,18 @@ def retrieve_chat_context(
     related_insights.sort(key=lambda item: (severity_rank.get(str(item.get("severity", "")).lower(), 99), str(item.get("title", "")).lower()))
     insights_payload = related_insights[:5]
 
-    result = {"documents": documents, "source_refs": source_refs, "document_clusters": cluster_payload, "insights": insights_payload}
+    system_docs = db.query(SystemIntelligenceDocument).filter(SystemIntelligenceDocument.status == "active").order_by(SystemIntelligenceDocument.created_at.desc()).limit(10).all()
+    system_intelligence_refs = [
+        {"id": str(doc.id), "title": doc.title, "category": doc.category, "jurisdiction": doc.jurisdiction, "source_type": doc.source_type, "kind": "system_intelligence"}
+        for doc in system_docs
+    ]
+    web_refs = db.query(SystemIntelligenceWebReference).filter(SystemIntelligenceWebReference.status == "active").order_by(SystemIntelligenceWebReference.created_at.desc()).limit(10).all()
+    legal_web_refs = [
+        {"id": str(ref.id), "title": ref.title, "url": ref.url, "source_domain": ref.source_domain, "legal_area": ref.legal_area, "document_type": ref.document_type, "kind": "legal_web"}
+        for ref in web_refs
+    ]
+
+    result = {"documents": documents, "source_refs": source_refs, "document_clusters": cluster_payload, "insights": insights_payload, "user_evidence_refs": source_refs, "system_intelligence_refs": system_intelligence_refs, "legal_web_refs": legal_web_refs}
     if cache_enabled and cache_key is not None:
         _cache_set(cache_key, result)
 
