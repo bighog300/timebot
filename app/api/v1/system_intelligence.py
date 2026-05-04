@@ -13,7 +13,7 @@ from app.models.system_intelligence import (
 )
 from app.models.document import Document
 from app.models.user import User
-from app.models.workspace import WorkspaceMember
+from app.models.workspace import Workspace, WorkspaceMember
 from app.schemas.system_intelligence import *
 from app.services.storage import storage
 from app.services.system_intelligence_ingest import hash_bytes, ingest_document
@@ -132,9 +132,53 @@ def withdraw(submission_id: str, db: Session = Depends(get_db), user: User = Dep
     if not sub: raise HTTPException(404, 'Not found')
     sub.status='withdrawn'; db.commit(); return {'ok':True}
 
-@router.get('/admin/system-intelligence/submissions', response_model=list[SystemIntelligenceSubmissionResponse], dependencies=[Depends(_require_admin)])
-def list_subs(db: Session = Depends(get_db)):
-    return db.query(SystemIntelligenceSubmission).all()
+@router.post('/system-intelligence/submissions/{submission_id}/withdraw')
+def withdraw_compat(submission_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    return withdraw(submission_id=submission_id, db=db, user=user)
+
+@router.get('/admin/system-intelligence/submissions', response_model=list[SystemIntelligenceSubmissionAdminResponse], dependencies=[Depends(_require_admin)])
+def list_subs(status: str = 'all', db: Session = Depends(get_db)):
+    q = db.query(SystemIntelligenceSubmission).order_by(SystemIntelligenceSubmission.created_at.desc())
+    if status != 'all':
+        q = q.filter(SystemIntelligenceSubmission.status == status)
+    out = []
+    for sub in q.all():
+        src = db.query(Document).filter(Document.id == sub.source_document_id).first() if sub.source_document_id else None
+        owner = db.query(User).filter(User.id == src.user_id).first() if src else None
+        ws = db.query(Workspace).filter(Workspace.id == src.workspace_id).first() if src and src.workspace_id else None
+        payload = SystemIntelligenceSubmissionAdminResponse.model_validate(sub).model_dump()
+        payload.update({
+            'source_document_filename': src.filename if src else None,
+            'source_document_owner_email': owner.email if owner else None,
+            'source_document_workspace_title': ws.name if ws else None,
+            'source_document_processing_status': src.processing_status if src else None,
+        })
+        out.append(payload)
+    return out
+
+@router.get('/admin/system-intelligence/submissions/{submission_id}/preview', response_model=SystemIntelligenceSubmissionPreviewResponse, dependencies=[Depends(_require_admin)])
+def preview_sub(submission_id: str, db: Session = Depends(get_db)):
+    sub = db.query(SystemIntelligenceSubmission).filter(SystemIntelligenceSubmission.id == submission_id).first()
+    if not sub:
+        raise HTTPException(404, 'Not found')
+    src = db.query(Document).filter(Document.id == sub.source_document_id).first() if sub.source_document_id else None
+    warnings: list[str] = []
+    if not src:
+        warnings.append('Source document is missing')
+    text = (src.raw_text or '') if src else ''
+    if not text.strip():
+        warnings.append('Source raw text is empty')
+    words = len([w for w in text.split() if w.strip()])
+    return {
+        'submission': sub,
+        'source_document_metadata': None if not src else {
+            'id': str(src.id), 'filename': src.filename, 'owner_user_id': str(src.user_id), 'workspace_id': str(src.workspace_id) if src.workspace_id else None, 'processing_status': src.processing_status,
+        },
+        'raw_text_preview': (text[:1200] if text else None),
+        'word_count': words,
+        'extraction_status': src.processing_status if src else None,
+        'warnings': warnings,
+    }
 
 @router.post('/admin/system-intelligence/submissions/{submission_id}/approve', response_model=SystemIntelligenceSubmissionResponse, dependencies=[Depends(_require_admin)])
 def approve_sub(submission_id: str, payload: SystemIntelligenceSubmissionModeration, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
@@ -143,12 +187,12 @@ def approve_sub(submission_id: str, payload: SystemIntelligenceSubmissionModerat
     src = db.query(Document).filter(Document.id == sub.source_document_id).first() if sub.source_document_id else None
     if not src:
         raise HTTPException(status_code=400, detail='Source document is not accessible')
-    text = (src.raw_text or '').strip()
+    text = (payload.approved_text_override if payload.approved_text_override is not None else (src.raw_text or '')).strip()
     if not text:
         raise HTTPException(status_code=400, detail='Source document has no extractable content')
     stored = storage.save_text(f"si_{sub.id}", text)
     content = text.encode('utf-8')
-    doc = SystemIntelligenceDocument(source_type='user_recommendation', source_user_id=sub.user_id, source_document_id=sub.source_document_id, source_drive_file_id=sub.source_drive_file_id, status=payload.status or 'active', title=payload.title or sub.title, category=payload.category or sub.suggested_category, jurisdiction=payload.jurisdiction or sub.suggested_jurisdiction, storage_uri=str(stored), mime_type='text/plain', original_filename=f"{src.filename}.txt", size_bytes=len(content), content_hash=hash_bytes(content), description=payload.admin_notes)
+    doc = SystemIntelligenceDocument(source_type='user_recommendation', source_user_id=sub.user_id, source_document_id=sub.source_document_id, source_drive_file_id=sub.source_drive_file_id, status=payload.status or 'active', title=payload.title or sub.title, category=payload.category or sub.suggested_category, jurisdiction=payload.jurisdiction or sub.suggested_jurisdiction, storage_uri=str(stored), mime_type='text/plain', original_filename=f"{src.filename}.txt", size_bytes=len(content), content_hash=hash_bytes(content), description=payload.admin_notes, metadata_json={'edited_or_redacted': payload.approved_text_override is not None})
     db.add(doc); db.flush(); ingest_document(db, doc)
     if doc.extraction_status != 'extracted' or doc.index_status != 'indexed':
         raise HTTPException(status_code=400, detail=f"Approval failed during ingest: {doc.extraction_error or doc.index_error or 'unknown error'}")
