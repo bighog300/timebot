@@ -4,6 +4,18 @@ from app.api.v1 import monetization
 from app.models.billing import Subscription
 from app.services.subscriptions import ensure_default_free_subscription, seed_default_plans
 from app.services.usage import record_usage
+import pytest
+
+
+@pytest.fixture(autouse=True)
+def _enable_billing_for_phase8(monkeypatch):
+    monkeypatch.setattr(monetization.settings, "BILLING_PROVIDER", "stripe")
+    monkeypatch.setattr(monetization.settings, "STRIPE_ENABLED", True)
+    monkeypatch.setattr(monetization.billing_service, "billing_provider", "stripe")
+    monkeypatch.setattr(monetization.billing_service, "stripe_enabled", True)
+    monkeypatch.setattr(monetization.billing_service, "stripe_webhook_secret", "whsec_test")
+    monkeypatch.setattr(monetization.billing_service, "stripe_price_pro_monthly", "price_pro_test")
+    monkeypatch.setattr(monetization.billing_service, "stripe_price_business_monthly", "price_business_test")
 
 
 def test_signup_creates_free_subscription(client, db, test_user):
