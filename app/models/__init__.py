@@ -86,3 +86,5 @@ __all__ = [
     "SystemIntelligenceChunk",
     "SystemIntelligenceAuditLog",
 ]
+
+from app.models.divorce import *

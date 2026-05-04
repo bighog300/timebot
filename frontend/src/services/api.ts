@@ -90,6 +90,7 @@ import type {
   CampaignSendStatus,
   EmailSuppression,
   SystemIntelligenceSubmission,
+  DivorceDashboard,
 } from '@/types/api';
 
 
@@ -167,6 +168,9 @@ export function normalizeAdminPlanPatchPayload(payload: AdminPlanPatchPayload): 
 }
 
 export const api = {
+
+  createDivorceWorkspace: async (payload: { case_title: string; jurisdiction: string; current_stage: string; children_involved: boolean; financial_disclosure_started: boolean; lawyer_involved: boolean }): Promise<Workspace> => (await http.post('/divorce/setup', payload)).data,
+  getDivorceDashboard: async (workspaceId: string): Promise<DivorceDashboard> => (await http.get(`/divorce/dashboard/${workspaceId}`)).data,
   listWorkspaces: async (): Promise<Workspace[]> => (await http.get("/workspaces")).data,
   getWorkspace: async (workspaceId: string): Promise<Workspace> => (await http.get(`/workspaces/${workspaceId}`)).data,
   createWorkspace: async (payload: { name: string }): Promise<Workspace> => (await http.post('/workspaces', payload)).data,

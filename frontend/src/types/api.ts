@@ -713,3 +713,5 @@ export interface AuthConfig {
   local_login_enabled: boolean;
   google_login_enabled: boolean;
 }
+
+export interface DivorceDashboard { documents_uploaded:number; emails_imported:number; open_tasks:number; upcoming_deadlines: unknown[]; key_timeline_events: unknown[]; latest_reports: unknown[]; missing_information_checklist: string[] }

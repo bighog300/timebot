@@ -1,7 +1,7 @@
 import uuid
 
-from sqlalchemy import Column, ForeignKey, String, TIMESTAMP, UniqueConstraint
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import Boolean, Column, ForeignKey, String, TIMESTAMP, UniqueConstraint
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
@@ -15,6 +15,12 @@ class Workspace(Base):
     name = Column(String(255), nullable=False)
     type = Column(String(20), nullable=False, default="personal")
     owner_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+
+    workspace_type = Column(String(32), nullable=False, default='general', index=True)
+    matter_title = Column(String(255), nullable=True)
+    jurisdiction = Column(String(255), nullable=True)
+    spouse_or_other_party_name = Column(String(255), nullable=True)
+    key_dates_json = Column(JSONB, nullable=True)
     created_at = Column(TIMESTAMP(timezone=True), nullable=False, default=func.now())
     updated_at = Column(TIMESTAMP(timezone=True), nullable=False, default=func.now(), onupdate=func.now())
 

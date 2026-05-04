@@ -1,3 +1,9 @@
+import { DivorceDashboardPage } from '@/pages/DivorceDashboardPage';
+import { DivorceSetupPage } from '@/pages/DivorceSetupPage';
+import { DivorceTimelinePage } from '@/pages/DivorceTimelinePage';
+import { DivorceReportsPage } from '@/pages/DivorceReportsPage';
+import { DivorceTasksPage } from '@/pages/DivorceTasksPage';
+import { DivorceCommunicationsPage } from '@/pages/DivorceCommunicationsPage';
 import { createBrowserRouter } from 'react-router-dom';
 import { AppShell } from '@/components/layout/AppShell';
 import { TimelinePage } from '@/pages/TimelinePage';
@@ -46,6 +52,12 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: <Navigate to="/dashboard" replace /> },
       { path: 'dashboard', element: <DashboardPage /> },
+      { path: 'setup/divorce', element: <DivorceSetupPage /> },
+      { path: 'divorce', element: <DivorceDashboardPage /> },
+      { path: 'divorce/timeline', element: <DivorceTimelinePage /> },
+      { path: 'divorce/reports', element: <DivorceReportsPage /> },
+      { path: 'divorce/tasks', element: <DivorceTasksPage /> },
+      { path: 'divorce/communications', element: <DivorceCommunicationsPage /> },
       { path: 'timeline', element: <TimelinePage /> },
       { path: 'documents', element: <DocumentsPage /> },
       { path: 'documents/:id', element: <DocumentDetailPage /> },
