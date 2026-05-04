@@ -101,6 +101,14 @@ class AssistantProfileOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class ChatPromptTemplateOut(BaseModel):
+    id: UUID
+    name: str
+    type: str
+    required_plan: str | None = None
+    locked: bool = False
+
+
 class MessageRequest(BaseModel):
     message: str
     document_ids: list[str] | None = None
@@ -234,9 +242,27 @@ def _seed_assistants(db: Session):
         ("South African Legal Defense Expert", "South African defense-oriented legal analysis assistant.", "pro"),
         ("Document Research Assistant", "Finds and cites relevant workspace documents.", "free"),
     ]
+    chat_templates = db.query(PromptTemplate).filter(PromptTemplate.type == "chat", PromptTemplate.enabled.is_(True)).all()
+    template_by_name = {t.name.lower(): t for t in chat_templates}
+    default_map = {
+        "General Assistant": ["general chat template", "default chat"],
+        "Psychological Analyst": ["psychology analysis template", "psychological"],
+        "South African Legal Defense Expert": ["sa legal defense template", "legal strategy"],
+        "Document Research Assistant": ["document research template", "document research"],
+    }
     for name, desc, plan in defaults:
-        if not db.query(AssistantProfile).filter(AssistantProfile.name == name).first():
-            db.add(AssistantProfile(name=name, description=desc, required_plan=plan, enabled=True))
+        existing = db.query(AssistantProfile).filter(AssistantProfile.name == name).first()
+        default_prompt_template_id = None
+        for hint in default_map.get(name, []):
+            matched = next((tpl for tpl_name, tpl in template_by_name.items() if hint in tpl_name), None)
+            if matched:
+                default_prompt_template_id = matched.id
+                break
+        if not existing:
+            db.add(AssistantProfile(name=name, description=desc, required_plan=plan, enabled=True, default_prompt_template_id=default_prompt_template_id))
+        elif default_prompt_template_id and existing.default_prompt_template_id != default_prompt_template_id:
+            existing.default_prompt_template_id = default_prompt_template_id
+            db.add(existing)
     db.commit()
 
 
@@ -245,6 +271,13 @@ def list_assistants(db: Session = Depends(get_db), user: User = Depends(get_curr
     _seed_assistants(db)
     assistants = db.query(AssistantProfile).filter(AssistantProfile.enabled.is_(True)).order_by(AssistantProfile.name.asc()).all()
     return [AssistantProfileOut(id=a.id, name=a.name, description=a.description, required_plan=a.required_plan, default_prompt_template_id=a.default_prompt_template_id, enabled=a.enabled, locked=not can_use_assistant(db, user, a)) for a in assistants]
+
+
+@router.get("/prompt-templates", response_model=list[ChatPromptTemplateOut])
+def list_chat_prompt_templates(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    templates = db.query(PromptTemplate).filter(PromptTemplate.type == "chat", PromptTemplate.enabled.is_(True)).order_by(PromptTemplate.updated_at.desc()).all()
+    allow_custom = can_create_custom_prompt(db, user)
+    return [ChatPromptTemplateOut(id=t.id, name=t.name, type=t.type, required_plan=(None if allow_custom else "pro"), locked=not allow_custom) for t in templates]
 @router.post("/sessions")
 def create_session(payload: CreateSessionRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     _seed_assistants(db)
@@ -282,7 +315,18 @@ def list_sessions(db: Session = Depends(get_db), user: User = Depends(get_curren
 @router.get("/sessions/{session_id}")
 def get_session(session_id: UUID, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     s = _get_session_for_user(db, session_id, user.id)
-    return {"session": s, "messages": s.messages, "linked_documents": [str(link.document_id) for link in s.document_links]}
+    return {
+        "id": s.id,
+        "title": s.title,
+        "assistant_id": s.assistant_id,
+        "prompt_template_id": s.prompt_template_id,
+        "is_archived": s.is_archived,
+        "is_deleted": s.is_deleted,
+        "created_at": s.created_at,
+        "updated_at": s.updated_at,
+        "linked_document_ids": [str(link.document_id) for link in s.document_links],
+        "messages": s.messages,
+    }
 
 
 @router.post("/sessions/{session_id}/messages")

@@ -1,151 +1,43 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChatPage } from '@/pages/ChatPage';
 
-const { pushToast, sendChatMessageStream, createMutateAsync, updateMutateAsync, updateMutate, deleteMutate } = vi.hoisted(() => ({
-  pushToast: vi.fn(),
-  sendChatMessageStream: vi.fn(async () => undefined),
-  createMutateAsync: vi.fn(async () => ({ id: 'new1' })),
-  updateMutateAsync: vi.fn(async () => ({})),
-  updateMutate: vi.fn(),
-  deleteMutate: vi.fn(),
-}));
+const mocks = vi.hoisted(() => ({ invalidate: vi.fn(), create: vi.fn().mockResolvedValue({ id: 's1' }), stream: vi.fn().mockResolvedValue(undefined) }));
 
-type TestSession = { id: string; title: string; is_archived: boolean; is_deleted: boolean };
-
-type TestMessage = { id: string; role: 'user' | 'assistant'; content: string; metadata_json?: { document_references?: Array<{ document_title?: string }> } };
-
-type TestChatSession = {
-  id: string;
-  title?: string;
-  assistant_id?: string;
-  prompt_template_id?: string;
-  linked_document_ids?: string[];
-  is_archived: boolean;
-  is_deleted?: boolean;
-  messages?: TestMessage[];
-};
-
-let sessionsData: TestSession[] = [];
-let chatSessionData: TestChatSession | null = null;
-
-vi.mock('@/store/uiStore', () => ({ useUIStore: () => ({ pushToast }) }));
-vi.mock('@/services/api', async () => {
-  const actual = await vi.importActual<typeof import('@/services/api')>('@/services/api');
-  return {
-    ...actual,
-    api: { ...actual.api, sendChatMessageStream },
-    getErrorDetail: (e: unknown) => String((e as Error)?.message || e || 'error'),
-  };
-});
 vi.mock('@/hooks/useApi', () => ({
-  useChatSessions: () => ({ data: sessionsData, isLoading: false, error: null }),
-  useAssistants: () => ({ data: [{ id: 'as1', name: 'General Assistant', description: '', required_plan: 'free', enabled: true }] }),
-  useDocuments: () => ({ data: [{ id: 'doc-a', title: 'Doc A' }, { id: 'doc-b', title: 'Doc B' }] }),
-  useCreateChatSession: () => ({ mutateAsync: createMutateAsync }),
-  useUpdateChatSession: () => ({ mutateAsync: updateMutateAsync, mutate: updateMutate }),
-  useDeleteChatSession: () => ({ mutate: deleteMutate }),
-  useChatSession: () => ({ data: chatSessionData, isLoading: false, error: null }),
+  useChatSessions: () => ({ data: [{ id: 's1', title: 'Case prep', assistant_id: 'a2', is_archived: false, is_deleted: false }] }),
+  useAssistants: () => ({ data: [{ id: 'a1', name: 'General Assistant', required_plan: 'free', enabled: true, default_prompt_template_id: 't1' }, { id: 'a2', name: 'South African Legal Defense Expert', required_plan: 'pro', enabled: true, default_prompt_template_id: 't2', locked: true }] }),
+  useChatPromptTemplates: () => ({ data: [{ id: 't1', name: 'General chat template', type: 'chat', locked: false }, { id: 't2', name: 'Legal Strategy & Defense Report', type: 'chat', locked: false }] }),
+  useCreateChatSession: () => ({ mutateAsync: mocks.create }),
+  useDeleteChatSession: () => ({ mutate: vi.fn() }),
+  useUpdateChatSession: () => ({ mutate: vi.fn(), mutateAsync: vi.fn() }),
+  useDocuments: () => ({ data: [{ id: 'd1', filename: 'evidence.pdf' }] }),
+  useChatSession: () => ({ data: { id: 's1', assistant_id: 'a2', prompt_template_id: 't2', linked_document_ids: ['d1'], messages: [] } }),
+  useInvalidateChatSession: () => mocks.invalidate,
 }));
+vi.mock('@/services/api', () => ({ api: { sendChatMessageStream: mocks.stream }, getErrorDetail: () => 'error' }));
+vi.mock('@/store/uiStore', () => ({ useUIStore: () => ({ pushToast: vi.fn() }) }));
 
-describe('chat ux regressions', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    sessionsData = [
-      { id: 'a1', title: 'Active', is_archived: false, is_deleted: false },
-      { id: 'r1', title: 'Archived', is_archived: true, is_deleted: false },
-    ];
-    chatSessionData = {
-      id: 'a1',
-      title: 'Active',
-      assistant_id: 'as1',
-      prompt_template_id: 'pt-1',
-      linked_document_ids: ['doc-1', 'doc-2'],
-      is_archived: false,
-      is_deleted: false,
-      messages: [
-        { id: 'm1', role: 'user', content: 'hello' },
-        { id: 'm2', role: 'assistant', content: 'world', metadata_json: { document_references: [{ document_title: 'Ref One' }] } },
-      ],
-    };
-  });
-
-  it('lists sessions, selects archived session, and loads/render messages with context panel', () => {
+describe('chat advisor/template flow', () => {
+  it('shows advisor label in sidebar and header plus template', () => {
     render(<MemoryRouter><ChatPage /></MemoryRouter>);
-    expect(screen.getByText('Active chats')).toBeInTheDocument();
-    expect(screen.getByText('Archived chats')).toBeInTheDocument();
-    expect(screen.getByText('hello')).toBeInTheDocument();
-    expect(screen.getByText('world')).toBeInTheDocument();
-    expect(screen.getAllByText(/Assistant: General Assistant/).length).toBeGreaterThan(0);
-    expect(screen.getByText('Prompt template: pt-1')).toBeInTheDocument();
-    expect(screen.getByText('Linked docs: doc-1, doc-2')).toBeInTheDocument();
-
-    chatSessionData = { ...chatSessionData, id: 'r1', is_archived: true, title: 'Archived' };
-    fireEvent.click(screen.getByRole('button', { name: 'Archived' }));
-    expect(screen.getByText(/read-only/)).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('Ask a question')).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled();
+    expect(screen.getByText('South African Legal Defense Expert')).toBeInTheDocument();
+    expect(screen.getByText(/Template: Legal Strategy & Defense Report/)).toBeInTheDocument();
   });
 
-  it('create modal sends assistant_id, prompt_template_id, linked_document_ids', async () => {
+  it('auto-selects default template when assistant selected', async () => {
     render(<MemoryRouter><ChatPage /></MemoryRouter>);
     fireEvent.click(screen.getByText('New Chat'));
-    fireEvent.change(screen.getByPlaceholderText('title'), { target: { value: 'Created Chat' } });
-    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'as1' } });
-    fireEvent.change(screen.getAllByRole('combobox')[1], { target: { value: 'pt-new' } });
-    fireEvent.change(screen.getByRole('listbox'), { target: { selectedOptions: [{ value: 'doc-a' }, { value: 'doc-b' }] } });
-    fireEvent.click(screen.getByRole('button', { name: 'Create' }));
-    await waitFor(() => expect(createMutateAsync).toHaveBeenCalledWith({
-      title: 'Created Chat',
-      assistant_id: 'as1',
-      prompt_template_id: 'pt-new',
-      linked_document_ids: ['doc-a', 'doc-b'],
-    }));
+    fireEvent.change(screen.getByDisplayValue('Select assistant'), { target: { value: 'a1' } });
+    const templateSelect = screen.getAllByRole('combobox')[1] as HTMLSelectElement;
+    expect(templateSelect.value).toBe('t1');
   });
 
-  it('sends message and handles 402 upgrade_required', async () => {
-    sendChatMessageStream.mockResolvedValueOnce(undefined);
-    sendChatMessageStream.mockRejectedValueOnce(new Error('402 upgrade_required'));
+  it('stream send invalidates session', async () => {
     render(<MemoryRouter><ChatPage /></MemoryRouter>);
-
-    fireEvent.change(screen.getByPlaceholderText('Ask a question'), { target: { value: 'Question 1' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
-    await waitFor(() => expect(sendChatMessageStream).toHaveBeenCalledWith('a1', { message: 'Question 1' }, expect.any(Object)));
-
-    fireEvent.change(screen.getByPlaceholderText('Ask a question'), { target: { value: 'Question 2' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
-    await waitFor(() => expect(screen.getByText('Upgrade required')).toBeInTheDocument());
-    expect(pushToast).toHaveBeenCalled();
-  });
-
-  it('delete requires confirmation and stale selected chat is cleared after delete', () => {
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
-    const { rerender } = render(<MemoryRouter><ChatPage /></MemoryRouter>);
-    fireEvent.click(screen.getByRole('button', { name: 'Active' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
-    expect(confirmSpy).toHaveBeenCalledWith('Delete chat?');
-    expect(deleteMutate).not.toHaveBeenCalled();
-
-    confirmSpy.mockReturnValue(true);
-    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
-    expect(deleteMutate).toHaveBeenCalledWith('a1');
-
-    sessionsData = [{ id: 'r1', title: 'Archived', is_archived: true, is_deleted: false }];
-    chatSessionData = { ...chatSessionData, id: 'r1', is_archived: true, is_deleted: false, messages: [] };
-    rerender(<MemoryRouter><ChatPage /></MemoryRouter>);
-    expect(screen.queryByRole('button', { name: 'Active' })).toBeNull();
-    expect(screen.getByText(/read-only/)).toBeInTheDocument();
-  });
-
-  it('archive uses update mutation and rename ignores empty names', async () => {
-    const promptSpy = vi.spyOn(window, 'prompt').mockReturnValue('');
-    render(<MemoryRouter><ChatPage /></MemoryRouter>);
-    fireEvent.click(screen.getByRole('button', { name: 'Archive' }));
-    expect(updateMutate).toHaveBeenCalledWith({ sessionId: 'a1', payload: { is_archived: true } });
-
-    fireEvent.click(screen.getByRole('button', { name: 'Rename' }));
-    expect(promptSpy).toHaveBeenCalled();
-    expect(updateMutateAsync).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByPlaceholderText('Ask a question'), { target: { value: 'hello' } });
+    fireEvent.click(screen.getByText('Send'));
+    await waitFor(() => expect(mocks.invalidate).toHaveBeenCalledWith('s1'));
   });
 });

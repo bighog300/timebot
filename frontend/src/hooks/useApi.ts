@@ -66,6 +66,7 @@ export const keys = {
   chatbotSettings: ['chatbot-settings'] as const,
   chatSessions: ['chat-sessions'] as const,
   assistants: ['assistants'] as const,
+  chatPromptTemplates: ['chat-prompt-templates'] as const,
   chatSession: (sessionId: string) => ['chat-session', sessionId] as const,
   reports: ['reports'] as const,
   usage: ['usage'] as const,
@@ -660,6 +661,7 @@ export function useUpdateChatbotSettings() { const qc = useQueryClient(); return
 export function useResetChatbotSettings() { const qc = useQueryClient(); return useMutation({ mutationFn: api.resetChatbotSettings, onSuccess: () => qc.invalidateQueries({ queryKey: keys.chatbotSettings }) }); }
 export function useCreateChatSession() { const qc = useQueryClient(); return useMutation({ mutationFn: api.createChatSession, onSuccess: () => qc.invalidateQueries({ queryKey: keys.chatSessions }) }); }
 export function useAssistants() { const authReady = useAuthReady(); return useQuery({ queryKey: keys.assistants, queryFn: api.listAssistants, enabled: authReady }); }
+export function useChatPromptTemplates() { const authReady = useAuthReady(); return useQuery({ queryKey: keys.chatPromptTemplates, queryFn: api.listChatPromptTemplates, enabled: authReady }); }
 export function useUpdateChatSession() { const qc = useQueryClient(); return useMutation({ mutationFn: ({ sessionId, payload }: { sessionId: string; payload: { title?: string; is_archived?: boolean } }) => api.updateChatSession(sessionId, payload), onSuccess: () => qc.invalidateQueries({ queryKey: keys.chatSessions }) }); }
 export function useDeleteChatSession() { const qc = useQueryClient(); return useMutation({ mutationFn: (sessionId: string) => api.deleteChatSession(sessionId), onSuccess: () => qc.invalidateQueries({ queryKey: keys.chatSessions }) }); }
 export function useChatSessions() { const authReady = useAuthReady(); return useQuery({ queryKey: keys.chatSessions, queryFn: api.listChatSessions, enabled: authReady }); }
