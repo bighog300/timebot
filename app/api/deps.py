@@ -51,4 +51,6 @@ def get_active_workspace(
         return personal
     workspace_service.require_member(db, x_workspace_id, current_user.id)
     ws = db.query(Workspace).filter(Workspace.id == x_workspace_id).first()
-    return ws or personal
+    if not ws:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workspace not found")
+    return ws

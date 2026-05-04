@@ -618,8 +618,9 @@ export interface PromptExecutionSummary {
 export interface AdminInvite { id: string; email: string; role: string; status: string; created_at: string; dev_invite_link?: string | null; }
 
 
-export type WorkspaceMember = { user_id: string; role: "owner" | "admin" | "member"; email?: string | null };
-export type Workspace = { id: string; name: string; type: "personal" | "team"; owner_user_id?: string | null; members?: WorkspaceMember[] };
+export type WorkspaceMember = { user_id: string; role: "owner" | "admin" | "member"; email?: string | null; display_name?: string | null; created_at?: string };
+export type WorkspaceInvite = { id: string; workspace_id: string; email: string; role: "member" | "admin"; status: "pending" | "accepted" | "expired" | "canceled"; created_at: string; dev_invite_link?: string | null };
+export type Workspace = { id: string; name: string; type: "personal" | "team"; owner_user_id?: string | null; members?: WorkspaceMember[]; invites?: WorkspaceInvite[] };
 
 
 export interface NotificationItem { id: string; type: string; title: string; body: string; link_url?: string | null; read_at?: string | null; metadata_json: Record<string, unknown>; created_at: string; }

@@ -9,7 +9,7 @@ const mockCreate = vi.fn();
 const mockInvite = vi.fn();
 const mockAccept = vi.fn();
 type TestWorkspace = { id: string; name: string; type: 'personal' | 'team' };
-type TestWorkspaceDetail = TestWorkspace & { members?: Array<{ user_id: string; role: 'owner' | 'admin' | 'member'; email?: string | null }> };
+type TestWorkspaceDetail = TestWorkspace & { members?: Array<{ user_id: string; role: 'owner' | 'admin' | 'member'; email?: string | null }>; invites?: Array<{ id: string; workspace_id: string; email: string; role: string; status: string; created_at: string; dev_invite_link?: string }> };
 let workspaceData: TestWorkspace[] = [];
 let workspaceDetail: TestWorkspaceDetail | null = null;
 let acceptState = { isPending: false, isSuccess: true, isError: false };
@@ -19,6 +19,8 @@ vi.mock('@/hooks/useApi', () => ({
   useCreateWorkspace: () => ({ mutateAsync: (...args: unknown[]) => mockCreate(...args), isPending: false }),
   useWorkspaceDetail: () => ({ data: workspaceDetail, isLoading: false, isError: false }),
   useInviteWorkspaceMember: () => ({ mutateAsync: (...args: unknown[]) => mockInvite(...args), isError: false }),
+  useResendWorkspaceInvite: () => ({ mutate: vi.fn() }),
+  useCancelWorkspaceInvite: () => ({ mutate: vi.fn() }),
   useUpdateWorkspaceMemberRole: () => ({ mutate: vi.fn() }),
   useRemoveWorkspaceMember: () => ({ mutate: vi.fn() }),
   useAcceptWorkspaceInvite: () => ({ mutate: (...args: unknown[]) => mockAccept(...args), ...acceptState }),
@@ -33,7 +35,7 @@ vi.mock('@/auth/AuthContext', () => ({ useAuth: () => ({ user: { id: 'u1' } }) }
 
 function wrap(ui: React.ReactNode) { return render(<QueryClientProvider client={new QueryClient()}>{ui}</QueryClientProvider>); }
 
-beforeEach(() => { workspaceData = [{ id: 'ws1', name: 'My Team', type: 'team' }]; workspaceDetail = { id: 'ws1', name: 'My Team', type: 'team', members: [{ user_id: 'u1', role: 'owner', email: 'o@example.com' }] }; acceptState = { isPending: false, isSuccess: true, isError: false }; mockCreate.mockReset(); mockInvite.mockReset(); mockAccept.mockReset(); });
+beforeEach(() => { workspaceData = [{ id: 'ws1', name: 'My Team', type: 'team' }]; workspaceDetail = { id: 'ws1', name: 'My Team', type: 'team', members: [{ user_id: 'u1', role: 'owner', email: 'o@example.com' }], invites: [{ id: 'i1', workspace_id: 'ws1', email: 'x@example.com', role: 'member', status: 'pending', created_at: '2026-01-01', dev_invite_link: '/workspaces/invites/abc/accept' }] as any }; acceptState = { isPending: false, isSuccess: true, isError: false }; mockCreate.mockReset(); mockInvite.mockReset(); mockAccept.mockReset(); });
 
 test('workspace list renders and create flow submits', async () => {
   mockCreate.mockResolvedValue({ id: 'ws2' });
@@ -45,12 +47,12 @@ test('workspace list renders and create flow submits', async () => {
 });
 
 test('invite form submits and owner remove disabled', async () => {
-  mockInvite.mockResolvedValue({ invite: { id: '1', email: 'x@example.com', role: 'member' }, token: 'abc' });
+  mockInvite.mockResolvedValue({ invite: { id: '1', email: 'x@example.com', role: 'member' }, dev_invite_link: '/workspaces/invites/abc/accept' });
   wrap(<WorkspaceDetailPage />);
   fireEvent.change(screen.getByPlaceholderText('member@example.com'), { target: { value: 'x@example.com' } });
   fireEvent.click(screen.getByText('Invite'));
   await waitFor(() => expect(mockInvite).toHaveBeenCalledWith({ email: 'x@example.com', role: 'member' }));
-  expect(screen.getByText(/Invite token: abc/)).toBeInTheDocument();
+  expect(screen.getByText(/Dev invite link/)).toBeInTheDocument();
   expect(screen.getByText('Remove')).toBeDisabled();
 });
 
@@ -63,5 +65,5 @@ test('accept invite page success', async () => {
 test('accept invite page error', () => {
   acceptState = { isPending: false, isSuccess: false, isError: true };
   wrap(<WorkspaceInviteAcceptPage />);
-  expect(screen.getByText('Failed to accept invite.')).toBeInTheDocument();
+  expect(screen.getByText(/Failed to accept invite:/)).toBeInTheDocument();
 });

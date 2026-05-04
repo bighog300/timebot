@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { getErrorDetail } from '@/services/api';
-import { useInviteWorkspaceMember, useRemoveWorkspaceMember, useUpdateWorkspaceMemberRole, useWorkspaceDetail } from '@/hooks/useApi';
+import { useCancelWorkspaceInvite, useInviteWorkspaceMember, useRemoveWorkspaceMember, useResendWorkspaceInvite, useUpdateWorkspaceMemberRole, useWorkspaceDetail } from '@/hooks/useApi';
 import { useAuth } from '@/auth/AuthContext';
 import { useParams } from 'react-router-dom';
 
@@ -11,9 +11,11 @@ export function WorkspaceDetailPage() {
   const inviteMember = useInviteWorkspaceMember(workspaceId);
   const updateRole = useUpdateWorkspaceMemberRole(workspaceId);
   const removeMember = useRemoveWorkspaceMember(workspaceId);
+  const resendInvite = useResendWorkspaceInvite(workspaceId);
+  const cancelInvite = useCancelWorkspaceInvite(workspaceId);
   const [email, setEmail] = useState('');
   const [role, setRole] = useState('member');
-  const [inviteToken, setInviteToken] = useState<string | null>(null);
+  const [devInviteLink, setDevInviteLink] = useState<string | null>(null);
 
   const myMember = data?.members?.find((m) => m.user_id === user?.id);
   const canManage = myMember?.role === 'owner' || myMember?.role === 'admin';
@@ -27,7 +29,7 @@ export function WorkspaceDetailPage() {
       <h1 className="text-2xl font-semibold">{data.name}</h1>
       <p className="text-sm text-slate-300">Type: {data.type}</p>
     </div>
-    {canManage && <form className="space-y-2" onSubmit={async (e)=>{e.preventDefault(); const resp = await inviteMember.mutateAsync({ email, role }); setInviteToken(resp.token ?? null); setEmail(''); }}>
+    {canManage && <form className="space-y-2" onSubmit={async (e)=>{e.preventDefault(); const resp = await inviteMember.mutateAsync({ email, role }); setDevInviteLink(resp.dev_invite_link ?? null); setEmail(''); }}>
       <h2 className="font-medium">Invite member</h2>
       <div className="flex gap-2">
         <input placeholder="member@example.com" value={email} onChange={(e)=>setEmail(e.target.value)} className="rounded border border-slate-700 bg-slate-900 px-3 py-2 text-sm" />
@@ -35,7 +37,7 @@ export function WorkspaceDetailPage() {
         <button type="submit" className="rounded bg-blue-600 px-3 py-2 text-sm">Invite</button>
       </div>
       {inviteMember.isError && <p className="text-red-400">{getErrorDetail(inviteMember.error)}</p>}
-      {inviteToken && <p className="text-emerald-400">Invite token: {inviteToken} | Link: /workspaces/invites/{inviteToken}/accept</p>}
+      {devInviteLink && <p className="text-emerald-400">Dev invite link: {devInviteLink}</p>}
     </form>}
 
     <div>
@@ -48,6 +50,10 @@ export function WorkspaceDetailPage() {
           <button disabled={m.role === 'owner'} onClick={()=>removeMember.mutate(m.user_id)} className="rounded bg-red-700 px-2 py-1 text-xs disabled:opacity-50">Remove</button>
         </div>}
       </li>)}</ul>}
+    </div>
+    <div>
+      <h2 className="font-medium">Pending invites</h2>
+      <ul>{(data.invites || []).filter((i)=>i.status === 'pending').map((i)=><li key={i.id}>{i.email} ({i.role}) <button onClick={()=>resendInvite.mutate(i.id)}>Resend</button> <button onClick={()=>cancelInvite.mutate(i.id)}>Cancel</button> {i.dev_invite_link && <span>{i.dev_invite_link}</span>}</li>)}</ul>
     </div>
   </div>;
 }
