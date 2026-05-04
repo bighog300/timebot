@@ -39,11 +39,17 @@ class ChatSession(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     title = Column(String(255), nullable=False, default="New chat")
+    assistant_id = Column(UUID(as_uuid=True), ForeignKey("assistant_profiles.id", ondelete="SET NULL"), nullable=True, index=True)
+    prompt_template_id = Column(UUID(as_uuid=True), ForeignKey("prompt_templates.id", ondelete="SET NULL"), nullable=True, index=True)
+    is_archived = Column(Boolean, nullable=False, default=False)
+    is_deleted = Column(Boolean, nullable=False, default=False)
     created_at = Column(TIMESTAMP(timezone=True), nullable=False, default=func.now())
     updated_at = Column(TIMESTAMP(timezone=True), nullable=False, default=func.now(), onupdate=func.now())
 
     user = relationship("User")
+    assistant = relationship("AssistantProfile")
     messages = relationship("ChatMessage", back_populates="session", cascade="all, delete-orphan")
+    document_links = relationship("ChatDocumentLink", back_populates="session", cascade="all, delete-orphan")
 
 
 class ChatMessage(Base):
@@ -54,9 +60,34 @@ class ChatMessage(Base):
     role = Column(String(20), nullable=False)
     content = Column(Text, nullable=False)
     source_refs = Column(JSONB, default=list)
+    metadata_json = Column(JSONB, default=dict)
     created_at = Column(TIMESTAMP(timezone=True), nullable=False, default=func.now())
 
     session = relationship("ChatSession", back_populates="messages")
+
+
+class AssistantProfile(Base):
+    __tablename__ = "assistant_profiles"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name = Column(String(120), nullable=False, unique=True)
+    description = Column(Text, nullable=False)
+    required_plan = Column(String(50), nullable=False, default="free")
+    default_prompt_template_id = Column(UUID(as_uuid=True), ForeignKey("prompt_templates.id", ondelete="SET NULL"), nullable=True)
+    enabled = Column(Boolean, nullable=False, default=True)
+    created_at = Column(TIMESTAMP(timezone=True), nullable=False, default=func.now())
+    updated_at = Column(TIMESTAMP(timezone=True), nullable=False, default=func.now(), onupdate=func.now())
+
+
+class ChatDocumentLink(Base):
+    __tablename__ = "chat_document_links"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    session_id = Column(UUID(as_uuid=True), ForeignKey("chat_sessions.id", ondelete="CASCADE"), nullable=False, index=True)
+    document_id = Column(UUID(as_uuid=True), ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True)
+    created_at = Column(TIMESTAMP(timezone=True), nullable=False, default=func.now())
+
+    session = relationship("ChatSession", back_populates="document_links")
 
 
 class GeneratedReport(Base):

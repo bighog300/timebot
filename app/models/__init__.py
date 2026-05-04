@@ -13,7 +13,7 @@ from app.models.admin_audit import AdminAuditEvent
 from app.models.messaging import Notification, UserMessageThread, UserMessage
 from app.models.processing_event import DocumentProcessingEvent
 from app.models.usage_event import UsageEvent
-from app.models.chat import ChatbotSettings, ChatMessage, ChatSession, GeneratedReport
+from app.models.chat import ChatbotSettings, ChatMessage, ChatSession, GeneratedReport, AssistantProfile, ChatDocumentLink
 from app.models.prompt_template import PromptTemplate
 from app.models.prompt_execution_log import PromptExecutionLog
 from app.models.billing import Plan, Subscription
@@ -45,6 +45,8 @@ __all__ = [
     "ChatSession",
     "ChatMessage",
     "GeneratedReport",
+    "AssistantProfile",
+    "ChatDocumentLink",
     "PromptTemplate",
     "PromptExecutionLog",
     "Plan",
