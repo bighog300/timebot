@@ -60,12 +60,15 @@ const baseRelationships = [
 ] as const;
 
 function renderPage() {
-  const qc = new QueryClient();
+  const qc = new QueryClient({
+    defaultOptions: { queries: { gcTime: 0 }, mutations: { gcTime: 0 } },
+  });
   return render(
     <QueryClientProvider client={qc}>
       <MemoryRouter initialEntries={['/documents/doc-1']}>
         <Routes>
           <Route path="/documents/:id" element={<DocumentDetailPage />} />
+          <Route path="/documents" element={<div>Documents List</div>} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
