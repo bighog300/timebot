@@ -1,12 +1,13 @@
 import { useMemo } from 'react';
 import { getErrorDetail } from '@/services/api';
-import { useCreateCustomerPortalSession, usePlans, useSubscription } from '@/hooks/useApi';
+import { useBillingStatus, useCreateCustomerPortalSession, usePlans, useSubscription } from '@/hooks/useApi';
 import { useUIStore } from '@/store/uiStore';
 
 export function SettingsBillingPage() {
   const subscription = useSubscription();
   const plans = usePlans();
   const portal = useCreateCustomerPortalSession();
+  const billingStatus = useBillingStatus();
   const pushToast = useUIStore((s) => s.pushToast);
 
   const billingConfigured = useMemo(
@@ -14,13 +15,14 @@ export function SettingsBillingPage() {
     [plans.data],
   );
 
-  if (subscription.isLoading || plans.isLoading) return <div>Loading billing settings…</div>;
-  if (subscription.isError || plans.isError) return <div>Unable to load billing settings.</div>;
+  if (subscription.isLoading || plans.isLoading || billingStatus.isLoading) return <div>Loading billing settings…</div>;
+  if (subscription.isError || plans.isError || billingStatus.isError) return <div>Unable to load billing settings.</div>;
 
   return (
     <section className="space-y-4" aria-label="Billing settings">
       <h2 className="text-xl font-semibold">Billing & subscription</h2>
       <div className="rounded border border-slate-800 bg-slate-900 p-4 text-sm">
+        <div>Billing mode: <span className="font-semibold">{billingStatus.data?.enabled ? 'Stripe billing enabled' : 'Manual billing mode'}</span></div>
         <div>Current plan: <span className="font-semibold uppercase">{subscription.data?.plan.slug ?? 'free'}</span></div>
         {subscription.data && (subscription.data.status === 'active' || subscription.data.status === 'trialing') ? (
           <>
