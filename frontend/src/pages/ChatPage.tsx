@@ -31,6 +31,11 @@ export function ChatPage() {
   const lastAssistantMessage = [...(session.data?.messages || [])].reverse().find((m) => m.role === 'assistant');
 
   const onCreate = async () => {
+    const chosen = (assistants.data || []).find((a) => a.id === assistantId);
+    if (chosen?.locked) {
+      setMonetizationError(`Upgrade to Pro to use ${chosen.name}.`);
+      return;
+    }
     const created = await createSession.mutateAsync({ title, assistant_id: assistantId || null, prompt_template_id: promptTemplateId || null, linked_document_ids: linkedDocuments.split(',').map((x) => x.trim()).filter(Boolean) });
     setSessionId(created.id);
     setShowCreate(false);
@@ -45,7 +50,7 @@ export function ChatPage() {
     } catch (e) {
       const detail = getErrorDetail(e);
       if (detail.includes('402') || detail.includes('upgrade_required')) {
-        setMonetizationError('Upgrade required to use this assistant/template.');
+        setMonetizationError('Upgrade required. Free plan includes limited chats/messages. Upgrade to Pro for more.');
       }
       pushToast(detail, 'error');
     }
@@ -79,6 +84,6 @@ export function ChatPage() {
       <div className='text-sm'>System intelligence refs: {((lastAssistantMessage?.metadata_json?.system_intelligence_refs as { title?: string }[]|undefined) || []).map((r) => r.title || 'Untitled').join(', ') || 'None'}</div>
       <div className='text-sm'>Legal web refs: {((lastAssistantMessage?.metadata_json?.legal_web_refs as { title?: string }[]|undefined) || []).map((r) => r.title || 'Untitled').join(', ') || 'None'}</div>
     </aside>
-    {showCreate && <div className='fixed inset-0 bg-black/60 p-6'><div className='mx-auto max-w-lg rounded bg-slate-900 p-4'><h2 className='text-lg'>Create chat</h2><input className='mt-2 w-full rounded border border-slate-700 bg-slate-800 p-2' value={title} onChange={(e) => setTitle(e.target.value)} placeholder='title' /><select className='mt-2 w-full rounded border border-slate-700 bg-slate-800 p-2' value={assistantId} onChange={(e) => setAssistantId(e.target.value)}><option value=''>Select assistant</option>{(assistants.data || []).map((a) => <option key={a.id} value={a.id}>{a.name}{a.required_plan !== 'free' ? ' 🔒 Pro' : ''}</option>)}</select><input className='mt-2 w-full rounded border border-slate-700 bg-slate-800 p-2' value={promptTemplateId} onChange={(e) => setPromptTemplateId(e.target.value)} placeholder='prompt template id' /><input className='mt-2 w-full rounded border border-slate-700 bg-slate-800 p-2' value={linkedDocuments} onChange={(e) => setLinkedDocuments(e.target.value)} placeholder='linked documents comma-separated' /><div className='mt-3 flex justify-end gap-2'><button onClick={() => setShowCreate(false)}>Cancel</button><button onClick={onCreate} className='rounded bg-indigo-700 px-3 py-1'>Create</button></div></div></div>}
+    {showCreate && <div className='fixed inset-0 bg-black/60 p-6'><div className='mx-auto max-w-lg rounded bg-slate-900 p-4'><h2 className='text-lg'>Create chat</h2><input className='mt-2 w-full rounded border border-slate-700 bg-slate-800 p-2' value={title} onChange={(e) => setTitle(e.target.value)} placeholder='title' /><select className='mt-2 w-full rounded border border-slate-700 bg-slate-800 p-2' value={assistantId} onChange={(e) => setAssistantId(e.target.value)}><option value=''>Select assistant</option>{(assistants.data || []).map((a) => <option key={a.id} value={a.id}>{a.name}{a.required_plan !== 'free' ? ' 🔒 Pro' : ''}{a.locked ? ' (Locked)' : ''}</option>)}</select><input className='mt-2 w-full rounded border border-slate-700 bg-slate-800 p-2' value={promptTemplateId} onChange={(e) => setPromptTemplateId(e.target.value)} placeholder='prompt template id' /><input className='mt-2 w-full rounded border border-slate-700 bg-slate-800 p-2' value={linkedDocuments} onChange={(e) => setLinkedDocuments(e.target.value)} placeholder='linked documents comma-separated' /><div className='mt-3 flex justify-end gap-2'><button onClick={() => setShowCreate(false)}>Cancel</button><button onClick={onCreate} className='rounded bg-indigo-700 px-3 py-1'>Create</button></div></div></div>}
   </div>;
 }

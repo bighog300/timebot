@@ -442,7 +442,7 @@ export interface SourceRef {
   snippet?: string | null;
 }
 
-export interface AssistantProfile { id: string; name: string; description: string; required_plan: 'free'|'pro'|'team'|string; default_prompt_template_id?: string | null; enabled: boolean; }
+export interface AssistantProfile { id: string; name: string; description: string; required_plan: 'free'|'pro'|'team'|'business'|'admin'|string; default_prompt_template_id?: string | null; enabled: boolean; locked?: boolean; }
 
 export interface ChatMessageMetadata { assistant_id?: string | null; prompt_template_id?: string | null; document_references?: SourceRef[]; [k: string]: unknown; }
 
