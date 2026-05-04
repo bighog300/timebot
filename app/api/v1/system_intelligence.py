@@ -1,5 +1,4 @@
 from datetime import datetime, timezone
-
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
@@ -12,7 +11,9 @@ from app.models.system_intelligence import (
     SystemIntelligenceSubmission,
     SystemIntelligenceWebReference,
 )
+from app.models.document import Document
 from app.models.user import User
+from app.models.workspace import WorkspaceMember
 from app.schemas.system_intelligence import *
 from app.services.storage import storage
 from app.services.system_intelligence_ingest import hash_bytes, ingest_document
@@ -87,9 +88,34 @@ def reindex_doc(doc_id: str, db: Session = Depends(get_db), user: User = Depends
     ingest_document(db, doc)
     _audit(db,user,'document_reindexed','document',str(doc.id)); db.commit(); db.refresh(doc); return doc
 
+
+
+def _find_accessible_source_document(db: Session, user: User, source_document_id: str | None) -> Document:
+    if not source_document_id:
+        raise HTTPException(status_code=400, detail='source_document_id is required')
+    doc = db.query(Document).filter(Document.id == source_document_id).first()
+    if not doc:
+        raise HTTPException(status_code=404, detail='Source document not found')
+    if doc.user_id == user.id:
+        return doc
+    if doc.workspace_id:
+        member = db.query(WorkspaceMember).filter(WorkspaceMember.workspace_id == doc.workspace_id, WorkspaceMember.user_id == user.id).first()
+        if member:
+            return doc
+    raise HTTPException(status_code=403, detail='You do not have access to the source document')
+
 @router.post('/system-intelligence/submissions', response_model=SystemIntelligenceSubmissionResponse)
 def submit(payload: SystemIntelligenceSubmissionCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    sub = SystemIntelligenceSubmission(user_id=user.id, status='pending', **payload.model_dump())
+    source_doc = _find_accessible_source_document(db, user, str(payload.source_document_id) if payload.source_document_id else None)
+    existing = db.query(SystemIntelligenceSubmission).filter(
+        SystemIntelligenceSubmission.user_id == user.id,
+        SystemIntelligenceSubmission.source_document_id == source_doc.id,
+        SystemIntelligenceSubmission.status == 'pending',
+    ).first()
+    if existing:
+        raise HTTPException(status_code=409, detail='A pending submission already exists for this document')
+    title = payload.title or source_doc.filename
+    sub = SystemIntelligenceSubmission(user_id=user.id, status='pending', title=title, source_document_id=source_doc.id, workspace_id=source_doc.workspace_id, source_drive_file_id=source_doc.source_id if source_doc.source == 'gdrive' else None, suggested_category=payload.suggested_category, suggested_jurisdiction=payload.suggested_jurisdiction, reason=payload.reason)
     db.add(sub); db.commit(); db.refresh(sub); return sub
 
 @router.get('/system-intelligence/submissions/mine', response_model=list[SystemIntelligenceSubmissionResponse])
@@ -110,9 +136,19 @@ def list_subs(db: Session = Depends(get_db)):
 def approve_sub(submission_id: str, payload: SystemIntelligenceSubmissionModeration, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     sub = db.query(SystemIntelligenceSubmission).filter(SystemIntelligenceSubmission.id == submission_id).first()
     if not sub: raise HTTPException(404, 'Not found')
-    doc = SystemIntelligenceDocument(source_type='user_recommendation', status='active', title=sub.title, category=sub.suggested_category, jurisdiction=sub.suggested_jurisdiction)
-    db.add(doc); db.flush()
-    sub.status='approved'; sub.admin_notes=payload.admin_notes; sub.reviewed_by_admin_id=user.id; sub.resulting_system_document_id=doc.id
+    src = db.query(Document).filter(Document.id == sub.source_document_id).first() if sub.source_document_id else None
+    if not src:
+        raise HTTPException(status_code=400, detail='Source document is not accessible')
+    text = (src.raw_text or '').strip()
+    if not text:
+        raise HTTPException(status_code=400, detail='Source document has no extractable content')
+    stored = storage.save_text(f"si_{sub.id}", text)
+    content = text.encode('utf-8')
+    doc = SystemIntelligenceDocument(source_type='user_recommendation', source_user_id=sub.user_id, source_document_id=sub.source_document_id, source_drive_file_id=sub.source_drive_file_id, status=payload.status or 'active', title=payload.title or sub.title, category=payload.category or sub.suggested_category, jurisdiction=payload.jurisdiction or sub.suggested_jurisdiction, storage_uri=str(stored), mime_type='text/plain', original_filename=f"{src.filename}.txt", size_bytes=len(content), content_hash=hash_bytes(content), description=payload.admin_notes)
+    db.add(doc); db.flush(); ingest_document(db, doc)
+    if doc.extraction_status != 'extracted' or doc.index_status != 'indexed':
+        raise HTTPException(status_code=400, detail=f"Approval failed during ingest: {doc.extraction_error or doc.index_error or 'unknown error'}")
+    sub.status='approved'; sub.admin_notes=payload.admin_notes; sub.reviewed_by_admin_id=user.id; sub.reviewed_at=datetime.now(timezone.utc); sub.resulting_system_document_id=doc.id
     _audit(db,user,'submission_approved','submission',str(sub.id),{'document_id':str(doc.id)})
     db.commit(); db.refresh(sub); return sub
 
@@ -120,7 +156,9 @@ def approve_sub(submission_id: str, payload: SystemIntelligenceSubmissionModerat
 def reject_sub(submission_id: str, payload: SystemIntelligenceSubmissionModeration, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     sub = db.query(SystemIntelligenceSubmission).filter(SystemIntelligenceSubmission.id == submission_id).first()
     if not sub: raise HTTPException(404, 'Not found')
-    sub.status='rejected'; sub.admin_notes=payload.admin_notes; sub.reviewed_by_admin_id=user.id
+    if not (payload.admin_notes or '').strip():
+        raise HTTPException(status_code=400, detail='Rejection reason is required')
+    sub.status='rejected'; sub.admin_notes=payload.admin_notes; sub.reviewed_by_admin_id=user.id; sub.reviewed_at=datetime.now(timezone.utc)
     _audit(db,user,'submission_rejected','submission',str(sub.id))
     db.commit(); db.refresh(sub); return sub
 

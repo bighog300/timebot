@@ -55,7 +55,7 @@ class SystemIntelligenceDocumentResponse(BaseModel):
 
 class SystemIntelligenceSubmissionCreate(BaseModel):
     workspace_id: uuid.UUID | None = None
-    source_document_id: uuid.UUID | None = None
+    source_document_id: uuid.UUID
     source_drive_file_id: str | None = None
     title: str
     suggested_category: str | None = None
@@ -65,6 +65,10 @@ class SystemIntelligenceSubmissionCreate(BaseModel):
 
 class SystemIntelligenceSubmissionModeration(BaseModel):
     admin_notes: str | None = None
+    title: str | None = None
+    category: str | None = None
+    jurisdiction: str | None = None
+    status: str | None = None
 
 
 class SystemIntelligenceSubmissionResponse(BaseModel):
@@ -81,6 +85,7 @@ class SystemIntelligenceSubmissionResponse(BaseModel):
     admin_notes: str | None
     reviewed_by_admin_id: uuid.UUID | None
     resulting_system_document_id: uuid.UUID | None
+    reviewed_at: datetime | None = None
     created_at: datetime
 
     class Config:
