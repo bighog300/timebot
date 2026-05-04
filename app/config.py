@@ -76,6 +76,10 @@ class Settings(BaseSettings):
     CONNECTOR_TOKEN_ENCRYPTION_KEY: str = ""
 
     AUTH_SECRET_KEY: str = "dev-insecure-change-me"
+    AUTH_MODE: str = "local"
+    GOOGLE_AUTH_ENABLED: bool = False
+    LOCAL_ADMIN_EMAIL: str = ""
+    LOCAL_ADMIN_PASSWORD: str = ""
     AUTH_ALGORITHM: str = "HS256"
     AUTH_ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
 
