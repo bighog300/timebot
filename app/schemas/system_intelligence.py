@@ -37,7 +37,13 @@ class SystemIntelligenceDocumentResponse(BaseModel):
     jurisdiction: str | None
     storage_uri: str | None
     mime_type: str | None
+    original_filename: str | None = None
+    size_bytes: int | None = None
     content_hash: str | None
+    extraction_status: str
+    extraction_error: str | None = None
+    index_status: str
+    index_error: str | None = None
     version: int
     metadata_json: dict | None
     indexed_at: datetime | None

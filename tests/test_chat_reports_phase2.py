@@ -979,3 +979,17 @@ def test_retrieval_cache_miss_still_works(db, test_user, monkeypatch):
     out = retrieve_chat_context(db, "alpha", test_user.id, None, True, False, 5, session_id="session-a")
 
     assert out["documents"]
+
+
+def test_active_indexed_chunks_in_chat_retrieval(db, test_user):
+    from app.models.system_intelligence import SystemIntelligenceChunk, SystemIntelligenceDocument
+    sid = SystemIntelligenceDocument(source_type='admin_upload', status='active', title='Policy', index_status='indexed', extraction_status='extracted')
+    db.add(sid)
+    db.flush()
+    db.add(SystemIntelligenceChunk(system_document_id=sid.id, chunk_index=0, content='This is a system snippet for policy guidance', metadata_json={}))
+    db.commit()
+
+    out = retrieve_chat_context(db, 'policy guidance', test_user.id, None, True, False, 5, session_id='s2')
+    refs = out.get('system_intelligence_refs') or []
+    assert refs
+    assert refs[0]['snippets']

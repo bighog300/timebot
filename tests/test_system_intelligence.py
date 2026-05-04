@@ -31,13 +31,36 @@ def test_non_admin_blocked(db):
 def test_admin_document_lifecycle_and_audit(db):
     admin = _mk_user(db, 'admin@example.com', 'admin')
     with _client_with_user(db, admin) as c:
-        created = c.post('/api/v1/admin/system-intelligence/documents', json={'source_type':'admin_upload','title':'Doc A'}).json()
+        created = c.post('/api/v1/admin/system-intelligence/documents', data={'source_type':'admin_upload','title':'Doc A'}, files={'file': ('doc.txt', b'hello extraction text', 'text/plain')}).json()
         doc_id = created['id']
+        assert created['mime_type'] == 'text/plain'
+        assert created['original_filename'] == 'doc.txt'
+        assert created['extraction_status'] == 'extracted'
+        assert created['index_status'] == 'indexed'
         assert c.post(f'/api/v1/admin/system-intelligence/documents/{doc_id}/archive').json()['status'] == 'archived'
         assert c.post(f'/api/v1/admin/system-intelligence/documents/{doc_id}/activate').json()['status'] == 'active'
         assert c.delete(f'/api/v1/admin/system-intelligence/documents/{doc_id}').status_code == 200
         logs = c.get('/api/v1/admin/system-intelligence/audit-log').json()
         assert any(l['action'] == 'document_created' for l in logs)
+
+
+def test_upload_rejects_unsupported_type(db):
+    admin = _mk_user(db, 'admin4@example.com', 'admin')
+    with _client_with_user(db, admin) as c:
+        resp = c.post('/api/v1/admin/system-intelligence/documents', data={'source_type':'admin_upload','title':'Doc Bad'}, files={'file': ('malware.exe', b'X', 'application/octet-stream')})
+        assert resp.status_code == 400
+
+
+def test_reindex_rebuilds_chunks(db):
+    from app.models.system_intelligence import SystemIntelligenceChunk
+    admin = _mk_user(db, 'admin5@example.com', 'admin')
+    with _client_with_user(db, admin) as c:
+        created = c.post('/api/v1/admin/system-intelligence/documents', data={'source_type':'admin_upload','title':'Doc A'}, files={'file': ('doc.txt', b'hello extraction text again', 'text/plain')}).json()
+        doc_id = created['id']
+        before = db.query(SystemIntelligenceChunk).count()
+        c.post(f'/api/v1/admin/system-intelligence/documents/{doc_id}/reindex')
+        after = db.query(SystemIntelligenceChunk).count()
+        assert after >= before
 
 
 def test_submission_and_moderation(db):

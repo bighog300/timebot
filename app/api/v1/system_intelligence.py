@@ -1,6 +1,8 @@
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from pathlib import Path
+
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_current_user_role, get_db
@@ -12,6 +14,8 @@ from app.models.system_intelligence import (
 )
 from app.models.user import User
 from app.schemas.system_intelligence import *
+from app.services.storage import storage
+from app.services.system_intelligence_ingest import hash_bytes, ingest_document
 
 router = APIRouter(tags=["system-intelligence"])
 
@@ -30,9 +34,20 @@ def list_docs(db: Session = Depends(get_db)):
     return db.query(SystemIntelligenceDocument).order_by(SystemIntelligenceDocument.created_at.desc()).all()
 
 @router.post('/admin/system-intelligence/documents', response_model=SystemIntelligenceDocumentResponse, dependencies=[Depends(_require_admin)])
-def create_doc(payload: SystemIntelligenceDocumentCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    doc = SystemIntelligenceDocument(**payload.model_dump(), status='draft')
-    db.add(doc); db.flush(); _audit(db,user,'document_created','document',str(doc.id),{'title':doc.title}); db.commit(); db.refresh(doc); return doc
+async def create_doc(title: str = Form(...), description: str | None = Form(None), category: str | None = Form(None), jurisdiction: str | None = Form(None), source_type: str = Form("admin_upload"), file: UploadFile = File(...), db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    allowed = {".pdf": "application/pdf", ".txt": "text/plain", ".md": "text/markdown", ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"}
+    max_size = 10 * 1024 * 1024
+    suffix = Path(file.filename or "").suffix.lower()
+    if suffix not in allowed:
+        raise HTTPException(status_code=400, detail="Unsupported file type")
+    content = await file.read()
+    if len(content) > max_size:
+        raise HTTPException(status_code=400, detail="File exceeds max size (10MB)")
+    await file.seek(0)
+    saved_path, file_size = await storage.save_upload(file)
+    mime_type = file.content_type or allowed[suffix]
+    doc = SystemIntelligenceDocument(source_type=source_type, title=title, description=description, category=category, jurisdiction=jurisdiction, status='draft', storage_uri=str(saved_path), mime_type=mime_type, content_hash=hash_bytes(content), original_filename=Path(file.filename or "upload").name, size_bytes=file_size)
+    db.add(doc); db.flush(); ingest_document(db, doc); _audit(db,user,'document_created','document',str(doc.id),{'title':doc.title}); db.commit(); db.refresh(doc); return doc
 
 @router.get('/admin/system-intelligence/documents/{doc_id}', response_model=SystemIntelligenceDocumentResponse, dependencies=[Depends(_require_admin)])
 def get_doc(doc_id: str, db: Session = Depends(get_db)):
@@ -69,7 +84,8 @@ def activate_doc(doc_id: str, db: Session = Depends(get_db), user: User = Depend
 def reindex_doc(doc_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     doc = db.query(SystemIntelligenceDocument).filter(SystemIntelligenceDocument.id == doc_id).first()
     if not doc: raise HTTPException(404, 'Not found')
-    doc.indexed_at = datetime.now(timezone.utc); _audit(db,user,'document_reindexed','document',str(doc.id)); db.commit(); db.refresh(doc); return doc
+    ingest_document(db, doc)
+    _audit(db,user,'document_reindexed','document',str(doc.id)); db.commit(); db.refresh(doc); return doc
 
 @router.post('/system-intelligence/submissions', response_model=SystemIntelligenceSubmissionResponse)
 def submit(payload: SystemIntelligenceSubmissionCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
