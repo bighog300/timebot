@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react';
 import { api, getErrorDetail } from '@/services/api';
 import type { DivorceReport } from '@/types/api';
+import { getActiveWorkspaceId } from '@/services/workspace';
 
 const REPORT_TYPES = [
   'case_overview_report','legal_advisor_summary','psychological_communication_dynamics_report','evidence_timeline_report','task_deadline_report','lawyer_handoff_pack',
 ];
 
 export function DivorceReportsPage(){
-  const workspaceId = typeof window !== 'undefined' ? (new URLSearchParams(window.location.search).get('workspace_id') ?? '') : '';
+  const workspaceId = getActiveWorkspaceId();
   const [items,setItems]=useState<DivorceReport[]>([]); const [sel,setSel]=useState('case_overview_report'); const [title,setTitle]=useState(''); const [err,setErr]=useState('');
   const [selected,setSelected]=useState<DivorceReport|null>(null);
   const load=()=>api.listDivorceReports(workspaceId).then(setItems).catch((e)=>setErr(getErrorDetail(e)));

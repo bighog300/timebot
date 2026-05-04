@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { vi } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { DivorceSetupPage } from './DivorceSetupPage';
 
 const nav = vi.hoisted(() => vi.fn());
@@ -9,7 +9,7 @@ vi.mock('react-router-dom', async (orig) => ({ ...(await orig() as object), useN
 vi.mock('@/services/api', () => ({ api: { createDivorceWorkspace: create } }));
 
 describe('DivorceSetupPage', () => {
-  it('creates workspace and redirects to dashboard', async () => {
+  it('creates workspace and redirects to /divorce', async () => {
     render(<MemoryRouter><DivorceSetupPage /></MemoryRouter>);
     fireEvent.change(screen.getByPlaceholderText('Case title'), { target: { value: 'Case A' } });
     fireEvent.change(screen.getByPlaceholderText('Jurisdiction'), { target: { value: 'CA' } });

@@ -1,6 +1,7 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { api } from '@/services/api';
+import { getActiveWorkspaceId } from '@/services/workspace';
 
 const CHECKLIST = [
   { label: 'Upload documents', href: '/documents' },
@@ -13,7 +14,7 @@ const CHECKLIST = [
 
 export function DivorceDashboardPage() {
   const navigate = useNavigate();
-  const workspaceId = localStorage.getItem('active_workspace_id') || '';
+  const workspaceId = getActiveWorkspaceId();
   const { data } = useQuery({ queryKey: ['divorce-dash', workspaceId], queryFn: () => api.getDivorceDashboard(workspaceId), enabled: !!workspaceId });
   const advisors = useQuery({ queryKey: ['divorce-advisors'], queryFn: () => api.getDivorceAdvisors() });
   const createChat = useMutation({ mutationFn: api.createChatSession, onSuccess: () => navigate('/chat') });

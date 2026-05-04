@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/services/api';
+import { getActiveWorkspaceId } from '@/services/workspace';
 
-const workspaceId = () => localStorage.getItem('active_workspace_id') || localStorage.getItem('activeWorkspaceId') || '';
+const workspaceId = () => getActiveWorkspaceId();
 
 export function DivorceTasksPage(){
   const qc = useQueryClient();

@@ -6,9 +6,9 @@ vi.mock('@/services/api', () => ({ api: { listDivorceTimeline: vi.fn(async()=>[{
 
 describe('DivorceTimelinePage', () => {
   it('renders and shows source snippet', async () => {
-    localStorage.setItem('active_workspace_id', 'w');
+    localStorage.setItem('activeWorkspaceId', 'w');
     render(<QueryClientProvider client={new QueryClient()}><DivorceTimelinePage /></QueryClientProvider>);
-    expect(await screen.findByText(/AI-suggested chronology/i)).toBeTruthy();
+    expect(await screen.findByText(/Legal disclaimer: informational support only, not legal advice/i)).toBeTruthy();
     expect(await screen.findByText('snippet')).toBeTruthy();
     fireEvent.click(screen.getByText('Extract timeline'));
     fireEvent.click(screen.getByText('Accept'));
