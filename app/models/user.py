@@ -23,6 +23,9 @@ class User(Base):
     # DEPRECATED: legacy monetization field; enforcement must use Subscription/Plan.
     # TODO: remove users.plan in a future migration after all legacy billing paths are retired.
     plan = Column(String(20), nullable=False, default="free")
+    subscription_status = Column(String(20), nullable=False, default="none")
+    plan_started_at = Column(TIMESTAMP(timezone=True), nullable=True)
+    plan_expires_at = Column(TIMESTAMP(timezone=True), nullable=True)
     documents_uploaded_count = Column(Integer, nullable=False, default=0)
     reports_generated_count = Column(Integer, nullable=False, default=0)
     chat_messages_count = Column(Integer, nullable=False, default=0)
