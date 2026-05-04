@@ -17,6 +17,8 @@ vi.mock('@/hooks/useApi', () => ({
   ]}),
   useSubscription: () => ({ data: { status: 'active', current_period_start: '2026-05-01', current_period_end: '2026-06-01', plan: { slug: 'free' } } }),
   useUsage: () => ({ data: { messages: { used: 1, limit: 10 }, reports: { used: 0, limit: 2 } } }),
+  useBillingStatus: () => ({ data: { enabled: false, provider: 'manual' } }),
+  useCreateCheckoutSession: () => ({ isPending: false, mutateAsync: vi.fn() }),
   useChatSessions: () => ({ data: [{ id: 's1', title: 'A', is_archived: false, is_deleted: false }] }),
   useChatSession: () => ({ data: { id:'s1', is_archived:false, is_deleted:false, messages:[], linked_document_ids:[] } }),
   useAssistants: () => ({ data: [{ id:'a1', name:'Legal Assistant', required_plan:'pro', locked:true }] }),
@@ -30,13 +32,22 @@ describe('monetization ux', () => {
     render(<MemoryRouter><PricingPage /></MemoryRouter>);
     expect(screen.getByText('Plans & Pricing')).toBeInTheDocument();
     expect(screen.getByText('Business')).toBeInTheDocument();
-    expect(screen.getByText(/subscription_status/i)).toBeInTheDocument();
+    expect(screen.getByText(/Subscription status:/i)).toBeInTheDocument();
+  });
+
+
+  it('manual billing mode shows request-upgrade and contact-admin CTAs', () => {
+    render(<MemoryRouter><PricingPage /></MemoryRouter>);
+    expect(screen.getByText(/Billing mode:/i)).toHaveTextContent('Manual billing mode');
+    expect(screen.getByRole('button', { name: 'Request upgrade' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Contact Admin' })).toBeInTheDocument();
   });
 
   it('locked assistant links to upgrade and send upgrade modal opens', async () => {
     render(<MemoryRouter><ChatPage /></MemoryRouter>);
     fireEvent.click(screen.getByText('Send'));
-    expect(await screen.findByText('Upgrade required')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'View plans' }).getAttribute('href')).toContain('/upgrade');
+    expect(await screen.findByRole('heading', { name: 'Upgrade required' })).toBeInTheDocument();
+    const viewPlansLinks = screen.getAllByRole('link', { name: 'View plans' });
+    expect(viewPlansLinks.some((link) => link.getAttribute('href')?.includes('/upgrade'))).toBe(true);
   });
 });

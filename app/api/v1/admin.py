@@ -969,7 +969,7 @@ def list_admin_audit(
 @router.get("/system-status", response_model=AdminSystemStatusResponse)
 def admin_system_status(_: str = Depends(require_admin)):
     stripe_configured = bool(settings.STRIPE_SECRET_KEY.strip())
-    stripe_prices_configured = bool(settings.STRIPE_PRICE_PRO_MONTHLY.strip()) and bool(settings.STRIPE_PRICE_TEAM_MONTHLY.strip())
+    stripe_prices_configured = bool(settings.STRIPE_PRICE_PRO_MONTHLY.strip()) and bool(settings.STRIPE_PRICE_BUSINESS_MONTHLY.strip())
     billing_configured = stripe_configured and stripe_prices_configured
     limits_configured = all([
         settings.RATE_LIMIT_UPLOADS_PER_MINUTE > 0,

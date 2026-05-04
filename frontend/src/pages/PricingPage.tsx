@@ -63,7 +63,11 @@ export function PricingPage() {
                   window.location.href = session.checkout_url;
                 } catch (error) { pushToast(getErrorDetail(error), 'error'); }
               }}>
-              {plan.slug === 'free' ? 'Current plan' : plan.slug === 'pro' ? 'Request upgrade' : 'Contact sales'}
+              {plan.slug === 'free'
+                ? 'Current plan'
+                : plan.slug === 'pro'
+                  ? 'Request upgrade'
+                  : (billingStatus.data?.enabled ? 'Contact sales' : 'Contact Admin')}
             </button>
           </Card>
         ))}

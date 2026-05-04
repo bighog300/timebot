@@ -104,6 +104,38 @@ def test_admin_can_view_subscription(client, test_user, db):
     assert any(item["user_id"] == str(test_user.id) for item in r.json())
 
 
+
+def test_admin_can_update_plan_status_persists_and_monetization_audit_created(client, test_user, db):
+    test_user.role = "admin"; db.commit()
+    target = User(id=uuid.uuid4(), email="subpersist@example.com", password_hash="x", display_name="SubPersist", is_active=True, role="viewer")
+    db.add(target); db.commit()
+
+    r = client.patch(
+        f"/api/v1/admin/users/{target.id}/plan",
+        json={"plan_slug": "business", "subscription_status": "past_due"},
+    )
+    assert r.status_code == 200
+    assert r.json()["plan_slug"] == "pro"
+    assert r.json()["status"] == "past_due"
+
+    db.refresh(target)
+    assert target.plan == "business"
+    assert target.subscription_status == "past_due"
+
+    from app.models.billing import Subscription
+    sub = db.query(Subscription).filter(Subscription.user_id == target.id).first()
+    assert sub is not None
+    assert sub.plan.slug == "pro"
+    assert sub.status == "past_due"
+
+    if AdminAuditEvent is not None:
+        ev = db.query(AdminAuditEvent).filter(
+            AdminAuditEvent.entity_id == str(target.id),
+            AdminAuditEvent.entity_type == "subscription",
+            AdminAuditEvent.action == "plan_updated",
+        ).first()
+        assert ev is not None
+
 def test_admin_can_update_plan_and_audit_created(client, test_user, db):
     test_user.role = "admin"; db.commit()
     target = User(id=uuid.uuid4(), email="subtarget@example.com", password_hash="x", display_name="SubTarget", is_active=True, role="viewer")
@@ -157,7 +189,7 @@ def test_system_status_response_shape_and_no_secrets(client, test_user, db, monk
     monkeypatch.setattr(settings, 'APP_ENV', 'staging')
     monkeypatch.setattr(settings, 'STRIPE_SECRET_KEY', 'sk_test_123')
     monkeypatch.setattr(settings, 'STRIPE_PRICE_PRO_MONTHLY', 'price_pro')
-    monkeypatch.setattr(settings, 'STRIPE_PRICE_TEAM_MONTHLY', 'price_team')
+    monkeypatch.setattr(settings, 'STRIPE_PRICE_BUSINESS_MONTHLY', 'price_team')
 
     response = client.get('/api/v1/admin/system-status')
     assert response.status_code == 200
