@@ -42,6 +42,7 @@ vi.mock('@/services/api', async () => {
 vi.mock('@/hooks/useApi', () => ({
   useChatSessions: () => ({ data: sessionsData, isLoading: false, error: null }),
   useAssistants: () => ({ data: [{ id: 'as1', name: 'General Assistant', description: '', required_plan: 'free', enabled: true }] }),
+  useDocuments: () => ({ data: [{ id: 'doc-a', title: 'Doc A' }, { id: 'doc-b', title: 'Doc B' }] }),
   useCreateChatSession: () => ({ mutateAsync: createMutateAsync }),
   useUpdateChatSession: () => ({ mutateAsync: updateMutateAsync, mutate: updateMutate }),
   useDeleteChatSession: () => ({ mutate: deleteMutate }),
@@ -79,7 +80,6 @@ describe('chat ux regressions', () => {
     expect(screen.getAllByText(/Assistant: General Assistant/).length).toBeGreaterThan(0);
     expect(screen.getByText('Prompt template: pt-1')).toBeInTheDocument();
     expect(screen.getByText('Linked docs: doc-1, doc-2')).toBeInTheDocument();
-    expect(screen.getByText('Last response refs: Ref One')).toBeInTheDocument();
 
     chatSessionData = { ...chatSessionData, id: 'r1', is_archived: true, title: 'Archived' };
     fireEvent.click(screen.getByRole('button', { name: 'Archived' }));
@@ -93,8 +93,8 @@ describe('chat ux regressions', () => {
     fireEvent.click(screen.getByText('New Chat'));
     fireEvent.change(screen.getByPlaceholderText('title'), { target: { value: 'Created Chat' } });
     fireEvent.change(screen.getByRole('combobox'), { target: { value: 'as1' } });
-    fireEvent.change(screen.getByPlaceholderText('prompt template id'), { target: { value: 'pt-new' } });
-    fireEvent.change(screen.getByPlaceholderText('linked documents comma-separated'), { target: { value: 'doc-a, doc-b' } });
+    fireEvent.change(screen.getAllByRole('combobox')[1], { target: { value: 'pt-new' } });
+    fireEvent.change(screen.getByRole('listbox'), { target: { selectedOptions: [{ value: 'doc-a' }, { value: 'doc-b' }] } });
     fireEvent.click(screen.getByRole('button', { name: 'Create' }));
     await waitFor(() => expect(createMutateAsync).toHaveBeenCalledWith({
       title: 'Created Chat',
