@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { useAuth } from '@/auth/AuthContext';
 import { api } from '@/services/api';
-import type { ActionItem, PromptTemplateCreateRequest, PromptTemplateTestRequest, PromptTemplateUpdateRequest, RelationshipReviewItem, ReviewItem } from '@/types/api';
+import type { ActionItem, PromptTemplateCreateRequest, PromptTemplateTestRequest, PromptTemplateUpdateRequest, RelationshipReviewItem, ReviewItem, SystemIntelligenceSubmission } from '@/types/api';
 import type { DocumentRelationshipListItem } from '@/types/api';
 
 type PaginatedData<T> = { items: T[]; total_count: number; limit: number; offset: number };
@@ -75,6 +75,7 @@ export const keys = {
   gmailConnections: ['connections'] as const,
   workspaces: (scope: string) => ['workspaces', scope] as const,
   workspaceDetail: (workspaceId: string) => ['workspace-detail', workspaceId] as const,
+  mySystemIntelligenceSubmissions: ['my-system-intelligence-submissions'] as const,
 };
 
 const workspaceScope = () => (typeof window !== 'undefined' ? (localStorage.getItem('activeWorkspaceId') || 'personal') : 'personal');
@@ -740,3 +741,29 @@ export function useCreateCheckoutSession() { return useMutation({ mutationFn: (p
 export function useCreateCustomerPortalSession() { return useMutation({ mutationFn: () => api.createCustomerPortalSession() }); }
 
 export function useAdminPromptExecutions() { const authReady = useAuthReady(); return useQuery({ queryKey: keys.adminPromptExecutions, queryFn: api.listPromptExecutions, enabled: authReady }); }
+
+
+export function useMySystemIntelligenceSubmissions() {
+  const authReady = useAuthReady();
+  return useQuery({ queryKey: keys.mySystemIntelligenceSubmissions, queryFn: api.listMySystemIntelligenceSubmissions, enabled: authReady });
+}
+
+export function useCreateSystemIntelligenceSubmission() {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: ({ source_document_id, suggested_category, suggested_jurisdiction, reason }: { source_document_id: string; suggested_category?: string | null; suggested_jurisdiction?: string | null; reason: string }) => api.createSystemIntelligenceSubmission(source_document_id, suggested_category ?? null, suggested_jurisdiction ?? null, reason), onSuccess: () => qc.invalidateQueries({ queryKey: keys.mySystemIntelligenceSubmissions }) });
+}
+
+export function useWithdrawSystemIntelligenceSubmission() {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: (id: string) => api.withdrawSystemIntelligenceSubmission(id), onSuccess: () => qc.invalidateQueries({ queryKey: keys.mySystemIntelligenceSubmissions }) });
+}
+
+export function useApproveSystemIntelligenceSubmission() {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: ({ id, payload }: { id: string; payload: Record<string, unknown> }) => api.approveSystemIntelligenceSubmission(id, payload), onSuccess: () => qc.invalidateQueries({ queryKey: ['si-subs'] }) });
+}
+
+export function useRejectSystemIntelligenceSubmission() {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: ({ id, admin_notes }: { id: string; admin_notes: string }) => api.rejectSystemIntelligenceSubmission(id, admin_notes), onSuccess: () => qc.invalidateQueries({ queryKey: ['si-subs'] }) });
+}

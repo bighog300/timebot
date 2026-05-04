@@ -10,6 +10,7 @@ import { ProcessingStatusIndicator } from '@/components/documents/ProcessingStat
 import { getSeverityBadgeClass, getSeverityLabel, sortInsightsBySeverity } from '@/lib/insights';
 import { useUIStore } from '@/store/uiStore';
 import {
+  useCreateSystemIntelligenceSubmission,
   useApproveDocumentCategory,
   useConfirmDocumentRelationship,
   useDismissDocumentRelationship,
@@ -91,6 +92,7 @@ export function DocumentDetailPage() {
   const patchIntelligence = usePatchDocumentIntelligence(id);
   const approveCategory = useApproveDocumentCategory(id);
   const overrideCategory = useOverrideDocumentCategory(id);
+  const createSubmission = useCreateSystemIntelligenceSubmission();
 
   const [summaryDraft, setSummaryDraft] = useState('');
   const [tagsDraft, setTagsDraft] = useState('');
@@ -98,6 +100,10 @@ export function DocumentDetailPage() {
   const [categoryOverrideId, setCategoryOverrideId] = useState('');
   const [relationshipFilter, setRelationshipFilter] = useState<'all' | 'structural' | 'ai_detected' | 'confirmed' | 'pending'>('all');
   const [confirmAction, setConfirmAction] = useState<'delete' | 'reprocess' | null>(null);
+  const [showRecommend, setShowRecommend] = useState(false);
+  const [suggestedCategory, setSuggestedCategory] = useState('');
+  const [suggestedJurisdiction, setSuggestedJurisdiction] = useState('');
+  const [recommendReason, setRecommendReason] = useState('');
 
   useEffect(() => {
     if (!intelligenceQuery.data) return;
@@ -292,6 +298,7 @@ export function DocumentDetailPage() {
         <Button onClick={() => updateMutation.mutate({ is_favorite: !doc.is_favorite })}>{doc.is_favorite ? 'Unfavorite' : 'Favorite'}</Button>
         <Button onClick={() => updateMutation.mutate({ is_archived: !doc.is_archived })}>{doc.is_archived ? 'Unarchive' : 'Archive'}</Button>
         <Button onClick={() => setConfirmAction('reprocess')}>Reprocess</Button>
+        <Button onClick={() => setShowRecommend(true)}>Recommend for System Intelligence</Button>
         <button
           className="rounded border border-red-800 px-3 py-1.5 text-sm text-red-400 hover:border-red-600 hover:text-red-200"
           onClick={() => setConfirmAction('delete')}
@@ -299,6 +306,36 @@ export function DocumentDetailPage() {
           Delete
         </button>
       </div>
+      {showRecommend && (
+        <Card>
+          <h2 className="mb-2 text-lg">Recommend for System Intelligence</h2>
+          <input className="mb-2 w-full rounded border border-slate-700 bg-slate-950 p-2 text-sm" value={suggestedCategory} onChange={(e) => setSuggestedCategory(e.target.value)} placeholder="Suggested category" />
+          <input className="mb-2 w-full rounded border border-slate-700 bg-slate-950 p-2 text-sm" value={suggestedJurisdiction} onChange={(e) => setSuggestedJurisdiction(e.target.value)} placeholder="Suggested jurisdiction" />
+          <textarea className="mb-2 w-full rounded border border-slate-700 bg-slate-950 p-2 text-sm" value={recommendReason} onChange={(e) => setRecommendReason(e.target.value)} placeholder="Reason" />
+          <div className="flex gap-2">
+            <Button onClick={() => setShowRecommend(false)}>Cancel</Button>
+            <Button onClick={() => {
+              if (!id || !recommendReason.trim()) {
+                pushToast('Document and reason are required');
+                return;
+              }
+              createSubmission.mutate({ source_document_id: id, suggested_category: suggestedCategory || null, suggested_jurisdiction: suggestedJurisdiction || null, reason: recommendReason }, {
+                onSuccess: () => {
+                  pushToast('Submission created');
+                  setShowRecommend(false);
+                  setRecommendReason('');
+                  setSuggestedCategory('');
+                  setSuggestedJurisdiction('');
+                },
+                onError: (error) => {
+                  const msg = (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail || 'Failed to create submission';
+                  pushToast(String(msg).toLowerCase().includes('duplicate') ? 'You already have a pending recommendation for this document.' : String(msg));
+                },
+              });
+            }}>Submit</Button>
+          </div>
+        </Card>
+      )}
 
       <Card>
         <h2 className="mb-2 text-lg">Document intelligence</h2>

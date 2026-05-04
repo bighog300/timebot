@@ -84,6 +84,7 @@ import type {
   CampaignSendResult,
   CampaignSendStatus,
   EmailSuppression,
+  SystemIntelligenceSubmission,
 } from '@/types/api';
 
 
@@ -335,6 +336,12 @@ export const api = {
   listDocuments: async (includeArchived = false): Promise<Document[]> =>
     (await http.get('/documents/', { params: { include_archived: includeArchived } })).data,
   getDocument: async (id: string): Promise<Document> => (await http.get(`/documents/${id}`)).data,
+  createSystemIntelligenceSubmission: async (source_document_id: string, suggested_category: string | null, suggested_jurisdiction: string | null, reason: string): Promise<SystemIntelligenceSubmission> =>
+    (await http.post('/system-intelligence/submissions', { source_document_id, suggested_category, suggested_jurisdiction, reason })).data,
+  listMySystemIntelligenceSubmissions: async (): Promise<SystemIntelligenceSubmission[]> => (await http.get('/system-intelligence/submissions/mine')).data,
+  withdrawSystemIntelligenceSubmission: async (id: string): Promise<SystemIntelligenceSubmission> => (await http.post(`/system-intelligence/submissions/${id}/withdraw`)).data,
+  approveSystemIntelligenceSubmission: async (id: string, payload: Record<string, unknown>): Promise<SystemIntelligenceSubmission> => (await http.post(`/admin/system-intelligence/submissions/${id}/approve`, payload)).data,
+  rejectSystemIntelligenceSubmission: async (id: string, admin_notes: string): Promise<SystemIntelligenceSubmission> => (await http.post(`/admin/system-intelligence/submissions/${id}/reject`, { admin_notes })).data,
   uploadDocument: async (file: File, token: string): Promise<Document> => {
     const body = new FormData();
     body.append('file', file);

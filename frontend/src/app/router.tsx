@@ -31,6 +31,7 @@ import { AdminMessagesPage } from '@/pages/AdminMessagesPage';
 import { WorkspacesPage } from '@/pages/WorkspacesPage';
 import { WorkspaceDetailPage } from '@/pages/WorkspaceDetailPage';
 import { WorkspaceInviteAcceptPage } from '@/pages/WorkspaceInviteAcceptPage';
+import { MySystemIntelligenceSubmissionsPage } from '@/pages/MySystemIntelligenceSubmissionsPage';
 
 export const router = createBrowserRouter([
   { path: '/login', element: <LoginPage /> },
@@ -65,6 +66,7 @@ export const router = createBrowserRouter([
       { path: 'workspaces', element: <WorkspacesPage /> },
       { path: 'workspaces/:workspaceId', element: <WorkspaceDetailPage /> },
       { path: 'workspaces/invites/:token/accept', element: <WorkspaceInviteAcceptPage /> },
+      { path: 'system-intelligence/submissions', element: <MySystemIntelligenceSubmissionsPage /> },
       {
         path: 'settings',
         element: <SettingsLayoutPage />,
