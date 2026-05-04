@@ -963,6 +963,8 @@ def admin_system_status(_: str = Depends(require_admin)):
     ])
     environment = settings.APP_ENV if settings.APP_ENV in {"development", "staging", "production"} else "development"
     return AdminSystemStatusResponse(
+        auth_mode=(settings.AUTH_MODE or "local").strip().lower(),
+        google_auth_enabled=bool(settings.GOOGLE_AUTH_ENABLED),
         billing_configured=billing_configured,
         stripe_configured=stripe_configured,
         stripe_prices_configured=stripe_prices_configured,

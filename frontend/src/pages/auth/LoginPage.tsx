@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { api } from '@/services/api';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/auth/AuthContext';
 
@@ -8,10 +9,15 @@ export function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [googleEnabled, setGoogleEnabled] = useState(false);
   const navigate = useNavigate();
   const location = useLocation() as { state?: { from?: string } };
 
   if (user) return <Navigate to={location.state?.from || '/'} replace />;
+
+  useEffect(() => {
+    api.getAuthConfig().then((cfg) => setGoogleEnabled(Boolean(cfg.google_login_enabled))).catch(() => setGoogleEnabled(false));
+  }, []);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,6 +42,7 @@ export function LoginPage() {
         {error && <p className="text-sm text-red-400">{error}</p>}
         <button className="w-full rounded bg-blue-600 p-2 disabled:opacity-50" disabled={loading}>{loading ? 'Signing in…' : 'Sign in'}</button>
       </form>
+      {googleEnabled && <button className='mt-3 w-full rounded bg-rose-600 p-2' onClick={() => setError('Google sign-in flow is enabled server-side. Complete OAuth wiring in client integration.')}>Continue with Google</button>}
       <p className="mt-4 text-sm text-slate-400">No account? <Link className="text-blue-400" to="/register">Create one</Link></p>
     </div>
   );

@@ -88,3 +88,12 @@ def test_validate_auth_mode_local_google_requires_credentials_when_enabled(monke
     monkeypatch.setattr("app.main.settings.GOOGLE_OAUTH_CLIENT_SECRET", "")
     with pytest.raises(RuntimeError, match="Google OAuth credentials"):
         _validate_auth_mode_configuration()
+
+
+def test_validate_auth_mode_google_requires_credentials_when_enabled(monkeypatch):
+    monkeypatch.setattr("app.main.settings.AUTH_MODE", "google")
+    monkeypatch.setattr("app.main.settings.GOOGLE_AUTH_ENABLED", True)
+    monkeypatch.setattr("app.main.settings.GOOGLE_OAUTH_CLIENT_ID", "")
+    monkeypatch.setattr("app.main.settings.GOOGLE_OAUTH_CLIENT_SECRET", "")
+    with pytest.raises(RuntimeError, match="Google OAuth credentials"):
+        _validate_auth_mode_configuration()

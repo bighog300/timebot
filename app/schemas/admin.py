@@ -143,6 +143,8 @@ class AdminSystemStatusFeaturesResponse(BaseModel):
 
 
 class AdminSystemStatusResponse(BaseModel):
+    auth_mode: str
+    google_auth_enabled: bool
     billing_configured: bool
     stripe_configured: bool
     stripe_prices_configured: bool
