@@ -12,8 +12,23 @@ const { pushToast, sendChatMessageStream, createMutateAsync, updateMutateAsync, 
   deleteMutate: vi.fn(),
 }));
 
-let sessionsData: any[] = [];
-let chatSessionData: any = {};
+type TestSession = { id: string; title: string; is_archived: boolean; is_deleted: boolean };
+
+type TestMessage = { id: string; role: 'user' | 'assistant'; content: string; metadata_json?: { document_references?: Array<{ document_title?: string }> } };
+
+type TestChatSession = {
+  id: string;
+  title?: string;
+  assistant_id?: string;
+  prompt_template_id?: string;
+  linked_document_ids?: string[];
+  is_archived: boolean;
+  is_deleted?: boolean;
+  messages?: TestMessage[];
+};
+
+let sessionsData: TestSession[] = [];
+let chatSessionData: TestChatSession | null = null;
 
 vi.mock('@/store/uiStore', () => ({ useUIStore: () => ({ pushToast }) }));
 vi.mock('@/services/api', async () => {
