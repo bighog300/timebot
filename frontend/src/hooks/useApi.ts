@@ -601,7 +601,7 @@ export function useAdminSystemJobs() { const authReady = useAuthReady(); return 
 export function useAdminLlmMetricsSystem() { const authReady = useAuthReady(); return useQuery({ queryKey: keys.adminLlmMetricsSystem, queryFn: api.getAdminLlmMetrics, enabled: authReady }); }
 export function useAdminUpdateUserPlan() {
   const qc = useQueryClient();
-  return useMutation({ mutationFn: ({ userId, plan_slug }: { userId: string; plan_slug: string }) => api.updateAdminUserPlan(userId, plan_slug), onSuccess: () => { qc.invalidateQueries({ queryKey: keys.adminSubscriptions }); qc.invalidateQueries({ queryKey: ['admin-audit'] }); } });
+  return useMutation({ mutationFn: ({ userId, payload }: { userId: string; payload: { plan_slug: string; subscription_status?: string; plan_started_at?: string | null; plan_expires_at?: string | null } }) => api.updateAdminUserPlan(userId, payload), onSuccess: () => { qc.invalidateQueries({ queryKey: keys.adminSubscriptions }); qc.invalidateQueries({ queryKey: ['admin-audit'] }); } });
 }
 export function useAdminUpdateUsageControls() {
   const qc = useQueryClient();

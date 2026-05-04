@@ -104,6 +104,9 @@ class AdminUsageSummaryResponse(BaseModel):
 
 class AdminPlanUpdateRequest(BaseModel):
     plan_slug: str
+    subscription_status: str | None = None
+    plan_started_at: datetime | None = None
+    plan_expires_at: datetime | None = None
 
 
 class AdminPlanResponse(BaseModel):

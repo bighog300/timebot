@@ -19,6 +19,7 @@ from app.services.prompt_templates import get_active_prompt_content
 from app.services.limit_enforcement import enforce_feature, enforce_limit, get_effective_plan
 from app.services.entitlements import (
     can_create_chat,
+    can_create_custom_prompt,
     can_use_assistant,
     can_use_system_intelligence,
     enforce_message_limit,
@@ -241,7 +242,7 @@ def _seed_assistants(db: Session):
 def list_assistants(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     _seed_assistants(db)
     assistants = db.query(AssistantProfile).filter(AssistantProfile.enabled.is_(True)).order_by(AssistantProfile.name.asc()).all()
-    return [AssistantProfileOut.model_validate(a, update={"locked": not can_use_assistant(db, user, a)}) for a in assistants]
+    return [AssistantProfileOut(id=a.id, name=a.name, description=a.description, required_plan=a.required_plan, default_prompt_template_id=a.default_prompt_template_id, enabled=a.enabled, locked=not can_use_assistant(db, user, a)) for a in assistants]
 @router.post("/sessions")
 def create_session(payload: CreateSessionRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     _seed_assistants(db)
@@ -251,6 +252,8 @@ def create_session(payload: CreateSessionRequest, db: Session = Depends(get_db),
         assistant = db.query(AssistantProfile).filter(AssistantProfile.id == payload.assistant_id, AssistantProfile.enabled.is_(True)).first()
         if assistant and not can_use_assistant(db, user, assistant):
             require_upgrade("pro", "assistant_access", f"Upgrade to Pro to use {assistant.name}.")
+    if payload.prompt_template_id and not can_create_custom_prompt(db, user):
+        require_upgrade("pro", "custom_prompts", "Upgrade to Pro to use custom prompt templates.")
     session = ChatSession(user_id=user.id, title=payload.title, assistant_id=payload.assistant_id, prompt_template_id=payload.prompt_template_id)
     db.add(session)
     db.flush()
