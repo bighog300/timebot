@@ -1,6 +1,6 @@
 import pytest
 
-from app.main import _sanitize_headers_for_log, _validate_auth_secret_for_environment
+from app.main import _sanitize_headers_for_log, _validate_auth_mode_configuration, _validate_auth_secret_for_environment
 
 
 def test_validate_auth_secret_allows_default_outside_production(monkeypatch):
@@ -56,3 +56,35 @@ def test_sanitize_headers_redacts_authorization_token():
     sanitized = _sanitize_headers_for_log({"Authorization": "Bearer secret-token", "X-Test": "ok"})
     assert sanitized["Authorization"] == "[redacted]"
     assert sanitized["X-Test"] == "ok"
+
+
+def test_validate_auth_mode_local_does_not_require_google_credentials(monkeypatch):
+    monkeypatch.setattr("app.main.settings.AUTH_MODE", "local")
+    monkeypatch.setattr("app.main.settings.GOOGLE_AUTH_ENABLED", False)
+    monkeypatch.setattr("app.main.settings.GOOGLE_OAUTH_CLIENT_ID", "")
+    monkeypatch.setattr("app.main.settings.GOOGLE_OAUTH_CLIENT_SECRET", "")
+    _validate_auth_mode_configuration()
+
+
+def test_validate_auth_mode_google_requires_enabled_and_credentials(monkeypatch):
+    monkeypatch.setattr("app.main.settings.AUTH_MODE", "google")
+    monkeypatch.setattr("app.main.settings.GOOGLE_AUTH_ENABLED", True)
+    monkeypatch.setattr("app.main.settings.GOOGLE_OAUTH_CLIENT_ID", "id")
+    monkeypatch.setattr("app.main.settings.GOOGLE_OAUTH_CLIENT_SECRET", "secret")
+    _validate_auth_mode_configuration()
+
+
+def test_validate_auth_mode_google_raises_without_google_enabled(monkeypatch):
+    monkeypatch.setattr("app.main.settings.AUTH_MODE", "google")
+    monkeypatch.setattr("app.main.settings.GOOGLE_AUTH_ENABLED", False)
+    with pytest.raises(RuntimeError, match="GOOGLE_AUTH_ENABLED"):
+        _validate_auth_mode_configuration()
+
+
+def test_validate_auth_mode_local_google_requires_credentials_when_enabled(monkeypatch):
+    monkeypatch.setattr("app.main.settings.AUTH_MODE", "local_google")
+    monkeypatch.setattr("app.main.settings.GOOGLE_AUTH_ENABLED", True)
+    monkeypatch.setattr("app.main.settings.GOOGLE_OAUTH_CLIENT_ID", "")
+    monkeypatch.setattr("app.main.settings.GOOGLE_OAUTH_CLIENT_SECRET", "")
+    with pytest.raises(RuntimeError, match="Google OAuth credentials"):
+        _validate_auth_mode_configuration()

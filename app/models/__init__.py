@@ -28,6 +28,13 @@ from app.models.relationships import (
     GmailImportedMessage,
     GmailImportedAttachment,
 )
+from app.models.system_intelligence import (
+    SystemIntelligenceDocument,
+    SystemIntelligenceSubmission,
+    SystemIntelligenceWebReference,
+    SystemIntelligenceChunk,
+    SystemIntelligenceAuditLog,
+)
 
 __all__ = [
     "User",
@@ -73,4 +80,9 @@ __all__ = [
     "GmailImportRule",
     "GmailImportedMessage",
     "GmailImportedAttachment",
+    "SystemIntelligenceDocument",
+    "SystemIntelligenceSubmission",
+    "SystemIntelligenceWebReference",
+    "SystemIntelligenceChunk",
+    "SystemIntelligenceAuditLog",
 ]

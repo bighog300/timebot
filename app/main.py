@@ -64,6 +64,19 @@ def _validate_auth_secret_for_environment() -> None:
         logger.warning("AUTH_SECRET_KEY is using the insecure development default. Set a unique secret for shared/prod environments.")
 
 
+def _validate_auth_mode_configuration() -> None:
+    auth_mode = (settings.AUTH_MODE or "local").strip().lower()
+    if auth_mode not in {"local", "google", "local_google"}:
+        raise RuntimeError("AUTH_MODE must be one of: local, google, local_google")
+
+    google_enabled = bool(settings.GOOGLE_AUTH_ENABLED)
+    if auth_mode == "google" and not google_enabled:
+        raise RuntimeError("GOOGLE_AUTH_ENABLED must be true when AUTH_MODE=google")
+    if google_enabled and auth_mode in {"google", "local_google"}:
+        if not settings.GOOGLE_OAUTH_CLIENT_ID.strip() or not settings.GOOGLE_OAUTH_CLIENT_SECRET.strip():
+            raise RuntimeError("Google OAuth credentials are required when Google auth is enabled")
+
+
 def _sanitize_headers_for_log(headers: dict[str, str]) -> dict[str, str]:
     sanitized: dict[str, str] = {}
     for key, value in headers.items():
@@ -91,6 +104,7 @@ async def lifespan(app: FastAPI):
     import app.models  # noqa: F401
 
     _validate_auth_secret_for_environment()
+    _validate_auth_mode_configuration()
 
     init_db()
     data_dir = Path(settings.effective_data_dir)
