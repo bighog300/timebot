@@ -230,6 +230,8 @@ class AdminInviteResponse(BaseModel):
     accepted_at: datetime | None
     canceled_at: datetime | None
     created_at: datetime
+    status: str
+    dev_invite_link: str | None = None
 
     model_config = {"from_attributes": True}
 
