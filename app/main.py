@@ -126,16 +126,20 @@ async def lifespan(app: FastAPI):
     from app.services.admin_seed import seed_default_email_templates, seed_initial_admin
     from app.services.prompt_templates import seed_default_prompt_templates
 
-    db = SessionLocal()
+    db = None
     try:
+        db = SessionLocal()
         seed_initial_admin(db)
         seeded_templates = seed_default_email_templates(db)
         logger.info("default_email_templates_seeded count=%s", seeded_templates)
         if settings.SEED_DEFAULT_PROMPTS:
             seeded = seed_default_prompt_templates(db)
             logger.info("default_prompt_templates_seeded count=%s", seeded)
+    except Exception as exc:
+        logger.warning("startup_seed_skipped reason=%s", type(exc).__name__)
     finally:
-        db.close()
+        if db is not None:
+            db.close()
 
     yield
 
