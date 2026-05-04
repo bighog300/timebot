@@ -65,6 +65,7 @@ export const keys = {
   adminLlmModels: ['admin-llm-models'] as const,
   chatbotSettings: ['chatbot-settings'] as const,
   chatSessions: ['chat-sessions'] as const,
+  assistants: ['assistants'] as const,
   chatSession: (sessionId: string) => ['chat-session', sessionId] as const,
   reports: ['reports'] as const,
   usage: ['usage'] as const,
@@ -656,7 +657,10 @@ export function useCancelAdminInvite() { const qc = useQueryClient(); return use
 export function useChatbotSettings() { const authReady = useAuthReady(); return useQuery({ queryKey: keys.chatbotSettings, queryFn: api.getChatbotSettings, enabled: authReady }); }
 export function useUpdateChatbotSettings() { const qc = useQueryClient(); return useMutation({ mutationFn: api.updateChatbotSettings, onSuccess: () => qc.invalidateQueries({ queryKey: keys.chatbotSettings }) }); }
 export function useResetChatbotSettings() { const qc = useQueryClient(); return useMutation({ mutationFn: api.resetChatbotSettings, onSuccess: () => qc.invalidateQueries({ queryKey: keys.chatbotSettings }) }); }
-export function useCreateChatSession() { const qc = useQueryClient(); return useMutation({ mutationFn: (title?: string) => api.createChatSession(title), onSuccess: () => qc.invalidateQueries({ queryKey: keys.chatSessions }) }); }
+export function useCreateChatSession() { const qc = useQueryClient(); return useMutation({ mutationFn: api.createChatSession, onSuccess: () => qc.invalidateQueries({ queryKey: keys.chatSessions }) }); }
+export function useAssistants() { const authReady = useAuthReady(); return useQuery({ queryKey: keys.assistants, queryFn: api.listAssistants, enabled: authReady }); }
+export function useUpdateChatSession() { const qc = useQueryClient(); return useMutation({ mutationFn: ({ sessionId, payload }: { sessionId: string; payload: { title?: string; is_archived?: boolean } }) => api.updateChatSession(sessionId, payload), onSuccess: () => qc.invalidateQueries({ queryKey: keys.chatSessions }) }); }
+export function useDeleteChatSession() { const qc = useQueryClient(); return useMutation({ mutationFn: (sessionId: string) => api.deleteChatSession(sessionId), onSuccess: () => qc.invalidateQueries({ queryKey: keys.chatSessions }) }); }
 export function useChatSessions() { const authReady = useAuthReady(); return useQuery({ queryKey: keys.chatSessions, queryFn: api.listChatSessions, enabled: authReady }); }
 export function useChatSession(sessionId: string) { const authReady = useAuthReady(); return useQuery({ queryKey: keys.chatSession(sessionId), queryFn: () => api.getChatSession(sessionId), enabled: authReady && Boolean(sessionId) }); }
 export function useSendChatMessage(sessionId: string) { const qc = useQueryClient(); return useMutation({ mutationFn: (payload: Parameters<typeof api.sendChatMessage>[1]) => api.sendChatMessage(sessionId, payload), onSuccess: () => { qc.invalidateQueries({ queryKey: keys.chatSessions }); qc.invalidateQueries({ queryKey: keys.chatSession(sessionId) }); } }); }

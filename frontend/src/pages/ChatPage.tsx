@@ -1,288 +1,82 @@
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { useCreateChatSession, useChatSession, useChatSessions, useCreateReport, useInvalidateChatSession } from '@/hooks/useApi';
-import { useUIStore } from '@/store/uiStore';
+import { useMemo, useState } from 'react';
+import { useAssistants, useChatSession, useChatSessions, useCreateChatSession, useDeleteChatSession, useUpdateChatSession } from '@/hooks/useApi';
 import { api, getErrorDetail } from '@/services/api';
+import { useUIStore } from '@/store/uiStore';
 import { UpgradePrompt } from '@/components/billing/UpgradePrompt';
-import type { ChatMessage, SourceRef } from '@/types/api';
-
-type FollowUpContext = {
-  includeTimeline: boolean;
-  includeFullText: boolean;
-  sourceRefCount: number;
-};
-
-function getFollowUpSuggestions(context: FollowUpContext): string[] {
-  const suggestions = new Set<string>([
-    'What are the key risks?',
-    'Are there inconsistencies?',
-    'Generate a report from this answer',
-  ]);
-
-  if (context.includeTimeline) suggestions.add('What changed over time?');
-  if (context.sourceRefCount > 0) suggestions.add('Which documents support this?');
-  if (context.includeFullText) suggestions.add('What important details might be missing?');
-
-  return Array.from(suggestions);
-}
-
-function FollowUpSuggestions({
-  suggestions,
-  onSelect,
-}: {
-  suggestions: string[];
-  onSelect: (suggestion: string) => void;
-}) {
-  if (suggestions.length === 0) return null;
-
-  return (
-    <div className='mt-2 space-y-2'>
-      <div className='text-xs uppercase tracking-wide text-slate-400'>Suggested follow-ups</div>
-      <div className='flex flex-wrap gap-2'>
-        {suggestions.map((suggestion) => (
-          <button
-            key={suggestion}
-            type='button'
-            onClick={() => onSelect(suggestion)}
-            className='rounded-full border border-slate-700 bg-slate-900 px-3 py-1 text-xs text-slate-200 hover:border-slate-500'
-          >
-            {suggestion}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function ResponseShortcuts() {
-  const relationshipRoute = '/review/relationships';
-  return (
-    <div className='mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-300'>
-      <Link className='rounded px-1 py-0.5 underline decoration-slate-500 underline-offset-2 hover:text-cyan-200' to='/timeline'>Open in Timeline</Link>
-      <Link className='rounded px-1 py-0.5 underline decoration-slate-500 underline-offset-2 hover:text-cyan-200' to={relationshipRoute}>Open in Relationships</Link>
-    </div>
-  );
-}
-
-
-function getMessageContainerClasses(role: ChatMessage['role']): string {
-  if (role === 'user') {
-    return 'ml-auto w-full max-w-[82ch] rounded-2xl border border-indigo-500/40 bg-indigo-500/10 px-3 py-3 shadow-sm sm:px-4 lg:w-[92%]';
-  }
-
-  return 'mr-auto w-full max-w-[88ch] rounded-2xl border border-slate-700/90 bg-slate-900/50 px-3 py-3 shadow-sm sm:px-4 lg:w-[95%]';
-}
-
-function getMessageTextClasses(): string {
-  return 'whitespace-pre-wrap break-words leading-7 [overflow-wrap:anywhere]';
-}
-
-function isNewConversationTurn(messages: ChatMessage[], index: number): boolean {
-  if (index === 0) return true;
-  return messages[index].role === 'user';
-}
-
-function CitationSection({ sourceRefs }: { sourceRefs: SourceRef[] }) {
-  const [expanded, setExpanded] = useState(true);
-  const contentId = useId();
-  if (sourceRefs.length === 0) return null;
-
-  return (
-    <section className='mt-2 rounded border border-slate-700/80 bg-slate-900/40 p-2 text-xs'>
-      <button
-        type='button'
-        aria-expanded={expanded}
-        aria-controls={contentId}
-        onClick={() => setExpanded((prev) => !prev)}
-        className='group flex w-full items-center justify-between gap-2 rounded px-1 py-1 text-left text-slate-300 transition-colors hover:bg-slate-800/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/80 active:bg-slate-800'
-      >
-        <span className='font-medium'>Citations ({sourceRefs.length})</span>
-        <span className='text-[11px] text-slate-400'>{expanded ? 'Tap/click to collapse' : 'Tap/click to expand'}</span>
-      </button>
-      {expanded && <div id={contentId} className='mt-2 grid gap-2 sm:grid-cols-2'>
-        {sourceRefs.map((ref, index) => {
-          const title = ref.document_title || ref.title || 'Untitled source';
-          const typeLabel = ref.source_type || ref.kind || null;
-          const snippet = ref.snippet || ref.preview || null;
-          const card = (
-            <div className='h-full rounded border border-slate-700 bg-slate-900/70 p-2 transition-colors hover:border-slate-500 hover:bg-slate-900 focus-within:border-cyan-500'>
-              <div className='break-words font-medium text-cyan-300'>{title}</div>
-              {typeLabel && <div className='mt-1 text-[11px] uppercase tracking-wide text-slate-400'>{typeLabel}</div>}
-              {snippet && <div className='mt-1 break-words text-slate-300 [overflow-wrap:anywhere]'>{snippet}</div>}
-            </div>
-          );
-          if (ref.document_id) {
-            const destination = `/documents/${ref.document_id}`;
-            const linkLabel = `Open document: ${title}`;
-            return <Link key={`${ref.document_id}-${index}`} aria-label={linkLabel} title={linkLabel} className='block rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500/80' to={destination}>{card}<span className='sr-only'>{linkLabel}</span><div className='mt-1 text-[11px] font-medium text-cyan-200'>↗ Open document</div></Link>;
-          }
-          return <div key={`citation-${index}`}>{card}</div>;
-        })}
-      </div>}
-    </section>
-  );
-}
+import type { ChatSession, PromptTemplate } from '@/types/api';
 
 export function ChatPage() {
   const { pushToast } = useUIStore();
   const sessions = useChatSessions();
+  const assistants = useAssistants();
   const createSession = useCreateChatSession();
+  const updateSession = useUpdateChatSession();
+  const deleteSession = useDeleteChatSession();
   const [sessionId, setSessionId] = useState('');
-  const currentSessionId = sessionId || sessions.data?.[0]?.id || '';
-  const session = useChatSession(currentSessionId);
-  const invalidateChatSession = useInvalidateChatSession();
-  const createReport = useCreateReport();
+  const [showCreate, setShowCreate] = useState(false);
+  const [title, setTitle] = useState('New chat');
+  const [assistantId, setAssistantId] = useState('');
+  const [promptTemplateId, setPromptTemplateId] = useState('');
+  const [linkedDocuments, setLinkedDocuments] = useState('');
   const [message, setMessage] = useState('');
-  const [docIds, setDocIds] = useState('');
-  const [includeTimeline, setIncludeTimeline] = useState(true);
-  const [includeFullText, setIncludeFullText] = useState(false);
-  const [streamingMessage, setStreamingMessage] = useState('');
-  const [streamingSourceRefs, setStreamingSourceRefs] = useState<SourceRef[]>([]);
-  const [isStreaming, setIsStreaming] = useState(false);
-  const [hasStreamFinal, setHasStreamFinal] = useState(false);
-  const [streamError, setStreamError] = useState<string | null>(null);
   const [monetizationError, setMonetizationError] = useState<string | null>(null);
-  const chunkBufferRef = useRef('');
-  const frameRef = useRef<number | null>(null);
-  const hasFinalEventRef = useRef(false);
-  const ids = useMemo(() => docIds.split(',').map((d) => d.trim()).filter(Boolean), [docIds]);
 
-  useEffect(() => () => {
-    if (frameRef.current !== null) window.cancelAnimationFrame(frameRef.current);
-  }, []);
+  const currentSessionId = sessionId || sessions.data?.find((s) => !s.is_archived)?.id || '';
+  const session = useChatSession(currentSessionId);
+  const activeChats = (sessions.data || []).filter((s) => !s.is_archived && !s.is_deleted);
+  const archivedChats = (sessions.data || []).filter((s) => s.is_archived && !s.is_deleted);
 
-  const flushChunkBuffer = () => {
-    if (!chunkBufferRef.current) return;
-    const buffer = chunkBufferRef.current;
-    chunkBufferRef.current = '';
-    setStreamingMessage((prev) => prev + buffer);
+  const assistantMap = useMemo(() => new Map((assistants.data || []).map((a) => [a.id, a])), [assistants.data]);
+  const selectedAssistant = session.data?.assistant_id ? assistantMap.get(session.data.assistant_id) : undefined;
+  const lastAssistantMessage = [...(session.data?.messages || [])].reverse().find((m) => m.role === 'assistant');
+
+  const onCreate = async () => {
+    const created = await createSession.mutateAsync({ title, assistant_id: assistantId || null, prompt_template_id: promptTemplateId || null, linked_document_ids: linkedDocuments.split(',').map((x) => x.trim()).filter(Boolean) });
+    setSessionId(created.id);
+    setShowCreate(false);
   };
 
-  const onNew = async () => { const s = await createSession.mutateAsync(undefined); setSessionId(s.id); };
   const onSend = async () => {
+    if (!currentSessionId || session.data?.is_archived || session.data?.is_deleted) return;
     try {
-      setStreamError(null);
       setMonetizationError(null);
-      let sid = currentSessionId;
-      if (!sid) { const s = await createSession.mutateAsync(undefined); sid = s.id; setSessionId(sid); }
-      setIsStreaming(true);
-      hasFinalEventRef.current = false;
-      setHasStreamFinal(false);
-      setStreamingMessage('');
-      setStreamingSourceRefs([]);
-      await api.sendChatMessageStream(sid, { message, document_ids: ids, include_timeline: includeTimeline, include_full_text: includeFullText }, {
-        onEvent: (event) => {
-          if (event.type === 'chunk') {
-            chunkBufferRef.current += event.content;
-            if (frameRef.current === null) {
-              frameRef.current = window.requestAnimationFrame(() => {
-                flushChunkBuffer();
-                frameRef.current = null;
-              });
-            }
-          }
-          if (event.type === 'final') {
-            hasFinalEventRef.current = true;
-            if (frameRef.current !== null) {
-              window.cancelAnimationFrame(frameRef.current);
-              frameRef.current = null;
-            }
-            flushChunkBuffer();
-            setStreamingMessage(event.content);
-            setStreamingSourceRefs(event.source_refs || []);
-            setHasStreamFinal(true);
-          }
-        },
-      });
-      invalidateChatSession(sid);
+      await api.sendChatMessageStream(currentSessionId, { message }, { onEvent: () => undefined });
       setMessage('');
     } catch (e) {
       const detail = getErrorDetail(e);
-      setStreamError(detail);
-      if (detail.toLowerCase().includes('usage limit reached') || detail.toLowerCase().includes('limit_reached')) {
-        setMonetizationError('You reached your plan usage limit. Upgrade to continue using chat.');
-        pushToast("You’ve reached your limit. Upgrade to Pro to continue.", 'error');
-        return;
+      if (detail.includes('402') || detail.includes('upgrade_required')) {
+        setMonetizationError('Upgrade required to use this assistant/template.');
       }
-      if (detail.toLowerCase().includes('feature_not_available')) {
-        setMonetizationError('This feature is not available on your current plan.');
-        pushToast('Upgrade your plan to unlock this feature.', 'error');
-        return;
-      }
-      pushToast(detail.includes('503') ? 'OpenAI unavailable. Please retry shortly.' : detail, 'error');
-    } finally {
-      if (!hasFinalEventRef.current && frameRef.current !== null) {
-        window.cancelAnimationFrame(frameRef.current);
-        frameRef.current = null;
-        flushChunkBuffer();
-      }
-      setIsStreaming(false);
+      pushToast(detail, 'error');
     }
   };
 
-  const messages: ChatMessage[] = session.data?.messages || [];
+  const renameChat = async (s: ChatSession) => {
+    const next = window.prompt('Rename chat', s.title || '');
+    if (!next) return;
+    await updateSession.mutateAsync({ sessionId: s.id, payload: { title: next } });
+  };
 
-  return <div className='grid min-h-[calc(100vh-8rem)] gap-3 md:gap-4 lg:grid-cols-[280px_minmax(0,1fr)]'>
-    <aside className='order-2 min-w-0 space-y-3 lg:order-1 lg:sticky lg:top-4 lg:self-start'>
-      <button onClick={onNew} className='rounded bg-slate-700 px-3 py-2 text-sm'>New Chat</button>
-      <div className='grid max-h-52 gap-2 overflow-auto pr-1 md:max-h-none'>
-        {(sessions.data || []).map((s) => <button key={s.id} onClick={() => setSessionId(s.id)} className='block w-full min-w-0 rounded border border-slate-700 p-2 text-left text-sm break-words'>{s.title || `Session ${s.id.slice(0, 8)}`}</button>)}
-      </div>
+  return <div className='grid grid-cols-[280px_1fr_300px] gap-3'>
+    <aside className='space-y-3'>
+      <button className='rounded bg-slate-700 px-3 py-2 text-sm' onClick={() => setShowCreate(true)}>New Chat</button>
+      <div><h3 className='text-xs uppercase text-slate-400'>Active chats</h3>{activeChats.map((s) => <div key={s.id} className='mt-2 rounded border border-slate-700 p-2'><button className='block w-full text-left' onClick={() => setSessionId(s.id)}>{s.title || 'Untitled'}</button><div className='mt-1 flex gap-1 text-xs'><button onClick={() => renameChat(s)}>Rename</button><button onClick={() => updateSession.mutate({ sessionId: s.id, payload: { is_archived: true } })}>Archive</button><button onClick={() => window.confirm('Delete chat?') && deleteSession.mutate(s.id)}>Delete</button></div></div>)}</div>
+      <div><h3 className='text-xs uppercase text-slate-400'>Archived chats</h3>{archivedChats.map((s) => <button key={s.id} className='mt-2 block w-full rounded border border-slate-700 p-2 text-left' onClick={() => setSessionId(s.id)}>{s.title || 'Untitled'}</button>)}</div>
     </aside>
-    <div className='order-1 flex min-h-0 min-w-0 flex-col space-y-3 lg:order-2'>
-      <h1 className='text-xl font-semibold'>Chat</h1>
+    <main>
+      <h1 className='text-xl font-semibold'>Chat {selectedAssistant ? <span className='ml-2 rounded bg-slate-800 px-2 py-1 text-sm'>Assistant: {selectedAssistant.name}</span> : null}</h1>
       {monetizationError ? <UpgradePrompt title='Upgrade required' message={monetizationError} /> : null}
-      <div data-testid='chat-message-list' className='min-h-[18rem] flex-1 space-y-2 overflow-y-auto rounded-xl border border-slate-700 p-2.5 sm:p-4 lg:px-5'>
-        {messages.map((m, index) => (
-          <div key={m.id} className={isNewConversationTurn(messages, index) ? 'pt-2 first:pt-0' : 'pt-1'} data-testid='chat-flow-turn'>
-            {index > 0 && isNewConversationTurn(messages, index) && (
-              <div
-                aria-hidden='true'
-                data-testid='chat-turn-divider'
-                className='mx-auto mb-3 h-px w-16 bg-gradient-to-r from-transparent via-slate-700 to-transparent opacity-70'
-              />
-            )}
-            <div className={getMessageContainerClasses(m.role)} data-testid={`chat-message-${m.role}`}>
-            <div className='mb-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-300'>{m.role}</div>
-            <div className={getMessageTextClasses()}>{m.content}</div>
-            {m.role === 'assistant' && (
-              <>
-                <ResponseShortcuts />
-                <CitationSection sourceRefs={m.source_refs || []} />
-                <FollowUpSuggestions
-                  suggestions={getFollowUpSuggestions({ includeTimeline, includeFullText, sourceRefCount: (m.source_refs || []).length })}
-                  onSelect={setMessage}
-                />
-              </>
-            )}
-          </div>
-          </div>
-        ))}
-        {isStreaming && (
-          <div data-testid='streaming-message' className={getMessageContainerClasses('assistant')}>
-            <div className='mb-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-300'>assistant</div>
-            <div className={`min-h-[4rem] ${getMessageTextClasses()}`}>{streamingMessage || ' '}</div>
-            {!hasStreamFinal && <div data-testid='streaming-indicator' aria-live='polite' className='mt-2 inline-flex items-center gap-1 text-xs text-slate-400'><span className='h-1.5 w-1.5 animate-pulse rounded-full bg-slate-400 [animation-delay:0ms]' /><span className='h-1.5 w-1.5 animate-pulse rounded-full bg-slate-400 [animation-delay:120ms]' /><span className='h-1.5 w-1.5 animate-pulse rounded-full bg-slate-400 [animation-delay:240ms]' /><span>Assistant is typing</span></div>}
-            {hasStreamFinal && <ResponseShortcuts />}
-            <CitationSection sourceRefs={streamingSourceRefs} />
-            {hasStreamFinal && <FollowUpSuggestions suggestions={getFollowUpSuggestions({ includeTimeline, includeFullText, sourceRefCount: streamingSourceRefs.length })} onSelect={setMessage} />}
-          </div>
-        )}
-        {streamError && <div className='text-sm text-rose-400'>Streaming failed. Retry sending your message. ({streamError})</div>}
-        {(session.isLoading || isStreaming) && <div>{isStreaming ? 'Streaming...' : 'Loading...'}</div>}
-      </div>
-      <div data-testid='chat-input-panel' className='sticky bottom-0 z-10 space-y-2 rounded border border-slate-700 bg-slate-950/95 p-2 sm:p-3 pb-[max(0.5rem,env(safe-area-inset-bottom))] shadow-[0_-8px_24px_rgba(2,6,23,0.45)] backdrop-blur'>
-        <textarea disabled={isStreaming} value={message} onChange={(e) => setMessage(e.target.value)} className='max-h-40 w-full rounded border border-slate-700 bg-slate-900 p-2' placeholder='Ask a question' />
-        <input value={docIds} onChange={(e) => setDocIds(e.target.value)} placeholder='Document IDs comma-separated (optional)' className='w-full rounded border border-slate-700 bg-slate-900 p-2 text-sm' />
-        <div className='flex flex-wrap items-center gap-3'>
-          <label><input type='checkbox' checked={includeTimeline} onChange={(e) => setIncludeTimeline(e.target.checked)} /> include timeline</label>
-          <label><input type='checkbox' checked={includeFullText} onChange={(e) => setIncludeFullText(e.target.checked)} /> include full text</label>
-        </div>
-        <div className='flex flex-wrap gap-2'>
-          <button disabled={isStreaming} onClick={onSend} className='rounded bg-indigo-700 px-3 py-2 text-sm disabled:opacity-60'>Send</button>
-          <button onClick={async () => { if (!currentSessionId) return; await createReport.mutateAsync({ title: 'Chat report', prompt: 'Generate report from this conversation', include_timeline: includeTimeline, include_full_text: includeFullText, document_ids: ids }); pushToast('Report generated'); }} className='rounded bg-emerald-700 px-3 py-2 text-sm'>Generate report from this conversation/answer</button>
-        </div>
-      </div>
-    </div>
+      <div className='mt-3 min-h-72 space-y-2 rounded border border-slate-700 p-3'>{(session.data?.messages || []).map((m) => <div key={m.id}><b>{m.role}:</b> {m.content}</div>)}</div>
+      {(session.data?.is_archived || session.data?.is_deleted) ? <div className='mt-2 text-amber-300'>This chat is archived/deleted and read-only.</div> : null}
+      <div className='mt-2 flex gap-2'><textarea disabled={Boolean(session.data?.is_archived || session.data?.is_deleted)} value={message} onChange={(e) => setMessage(e.target.value)} placeholder='Ask a question' className='w-full rounded border border-slate-700 bg-slate-900 p-2' /><button onClick={onSend} disabled={Boolean(session.data?.is_archived || session.data?.is_deleted)} className='rounded bg-indigo-700 px-3'>Send</button></div>
+    </main>
+    <aside className='rounded border border-slate-700 p-3'>
+      <h3 className='font-medium'>Context</h3>
+      <div className='mt-2 text-sm'>Assistant: {selectedAssistant?.name || 'None'}</div>
+      <div className='text-sm'>Prompt template: {session.data?.prompt_template_id || 'None'}</div>
+      <div className='text-sm'>Linked docs: {(session.data?.linked_document_ids || []).join(', ') || 'None'}</div>
+      <div className='mt-2 text-sm'>Last response refs: {((lastAssistantMessage?.metadata_json?.document_references as { document_title?: string }[]|undefined) || []).map((r) => r.document_title || 'Untitled').join(', ') || 'None'}</div>
+    </aside>
+    {showCreate && <div className='fixed inset-0 bg-black/60 p-6'><div className='mx-auto max-w-lg rounded bg-slate-900 p-4'><h2 className='text-lg'>Create chat</h2><input className='mt-2 w-full rounded border border-slate-700 bg-slate-800 p-2' value={title} onChange={(e) => setTitle(e.target.value)} placeholder='title' /><select className='mt-2 w-full rounded border border-slate-700 bg-slate-800 p-2' value={assistantId} onChange={(e) => setAssistantId(e.target.value)}><option value=''>Select assistant</option>{(assistants.data || []).map((a) => <option key={a.id} value={a.id}>{a.name}{a.required_plan !== 'free' ? ' 🔒 Pro' : ''}</option>)}</select><input className='mt-2 w-full rounded border border-slate-700 bg-slate-800 p-2' value={promptTemplateId} onChange={(e) => setPromptTemplateId(e.target.value)} placeholder='prompt template id' /><input className='mt-2 w-full rounded border border-slate-700 bg-slate-800 p-2' value={linkedDocuments} onChange={(e) => setLinkedDocuments(e.target.value)} placeholder='linked documents comma-separated' /><div className='mt-3 flex justify-end gap-2'><button onClick={() => setShowCreate(false)}>Cancel</button><button onClick={onCreate} className='rounded bg-indigo-700 px-3 py-1'>Create</button></div></div></div>}
   </div>;
 }

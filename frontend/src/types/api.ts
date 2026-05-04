@@ -423,22 +423,34 @@ export interface SourceRef {
   snippet?: string | null;
 }
 
+export interface AssistantProfile { id: string; name: string; description: string; required_plan: 'free'|'pro'|'team'|string; default_prompt_template_id?: string | null; enabled: boolean; }
+
+export interface ChatMessageMetadata { assistant_id?: string | null; prompt_template_id?: string | null; document_references?: SourceRef[]; [k: string]: unknown; }
+
 export interface ChatMessage {
   id: string;
   session_id: string;
   role: 'user' | 'assistant' | 'system';
   content: string;
   source_refs?: SourceRef[];
+  metadata_json?: ChatMessageMetadata | null;
   created_at: string;
 }
 
 export interface ChatSession {
   id: string;
   title?: string | null;
+  assistant_id?: string | null;
+  prompt_template_id?: string | null;
+  linked_document_ids?: string[];
+  is_archived?: boolean;
+  is_deleted?: boolean;
   created_at: string;
   updated_at?: string | null;
   messages?: ChatMessage[];
 }
+
+export interface CreateChatSessionRequest { title?: string; assistant_id?: string | null; prompt_template_id?: string | null; linked_document_ids?: string[]; }
 
 export interface ChatMessageRequest {
   message: string;
