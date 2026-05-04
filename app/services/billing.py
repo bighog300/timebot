@@ -16,10 +16,12 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class BillingService:
+    billing_provider: str
+    stripe_enabled: bool
     stripe_secret_key: str
     stripe_webhook_secret: str
     stripe_price_pro_monthly: str
-    stripe_price_team_monthly: str
+    stripe_price_business_monthly: str
     app_url: str = "http://localhost:5174"
 
     def __post_init__(self) -> None:
@@ -27,13 +29,15 @@ class BillingService:
 
 
     def _ensure_configured(self) -> None:
-        if not self.stripe_secret_key or not self.stripe_price_pro_monthly or not self.stripe_price_team_monthly:
+        if not self.stripe_enabled or self.billing_provider != "stripe":
+            raise ValueError("Billing disabled")
+        if not self.stripe_secret_key or not self.stripe_price_pro_monthly or not self.stripe_price_business_monthly or not self.stripe_webhook_secret:
             raise ValueError("Billing not configured")
 
     def _price_id_for_plan(self, plan_slug: str) -> str:
         mapping = {
             "pro": self.stripe_price_pro_monthly,
-            "team": self.stripe_price_team_monthly,
+            "business": self.stripe_price_business_monthly,
         }
         value = mapping.get(plan_slug)
         if not value:
@@ -108,7 +112,7 @@ class BillingService:
         return False
 
     def _find_plan_by_price(self, db: Session, price_id: str | None) -> Plan | None:
-        mapping = {self.stripe_price_pro_monthly: "pro", self.stripe_price_team_monthly: "team"}
+        mapping = {self.stripe_price_pro_monthly: "pro", self.stripe_price_business_monthly: "business"}
         slug = mapping.get(price_id)
         if not slug:
             return None
@@ -144,8 +148,11 @@ class BillingService:
         previous_plan_id = sub.plan_id
         sub.plan_id = target_plan.id
         sub.external_provider = "stripe"
+        sub.billing_provider = "stripe"
         sub.external_customer_id = customer_id
+        sub.billing_customer_id = customer_id
         sub.external_subscription_id = sub_id
+        sub.billing_subscription_id = sub_id
         sub.status = "active"
         db.add(sub)
         db.commit()
@@ -167,15 +174,21 @@ class BillingService:
         if plan:
             sub.plan_id = plan.id
         sub.external_provider = "stripe"
+        sub.billing_provider = "stripe"
         sub.external_customer_id = customer_id
+        sub.billing_customer_id = customer_id
         sub.external_subscription_id = sub_id
-        sub.status = status or sub.status
+        sub.billing_subscription_id = sub_id
+        sub.billing_price_id = price_id
+        status_map = {"trialing": "trialing", "active": "active", "past_due": "past_due", "unpaid": "past_due", "canceled": "canceled", "incomplete": "past_due"}
+        sub.status = status_map.get(status or "", sub.status)
         cps = stripe_sub.get("current_period_start")
         cpe = stripe_sub.get("current_period_end")
         if cps:
             sub.current_period_start = datetime.fromtimestamp(cps, tz=timezone.utc)
         if cpe:
             sub.current_period_end = datetime.fromtimestamp(cpe, tz=timezone.utc)
+            sub.billing_current_period_end = sub.current_period_end
         sub.cancel_at_period_end = bool(stripe_sub.get("cancel_at_period_end", False))
         db.add(sub)
         db.commit()

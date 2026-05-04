@@ -40,6 +40,11 @@ class Subscription(Base):
     limit_overrides_json = Column(JSONB, nullable=False, default=dict)
     external_customer_id = Column(String(255), nullable=True)
     external_subscription_id = Column(String(255), nullable=True)
+    billing_customer_id = Column(String(255), nullable=True)
+    billing_subscription_id = Column(String(255), nullable=True)
+    billing_price_id = Column(String(255), nullable=True)
+    billing_provider = Column(String(50), nullable=True)
+    billing_current_period_end = Column(TIMESTAMP(timezone=True), nullable=True)
     created_at = Column(TIMESTAMP(timezone=True), nullable=False, default=func.now())
     updated_at = Column(TIMESTAMP(timezone=True), nullable=False, default=func.now(), onupdate=func.now())
 

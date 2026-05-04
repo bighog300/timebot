@@ -1,5 +1,7 @@
 import { Card } from '@/components/ui/Card';
-import { usePlans, useSubscription, useUsage } from '@/hooks/useApi';
+import { getErrorDetail } from '@/services/api';
+import { useBillingStatus, useCreateCheckoutSession, usePlans, useSubscription, useUsage } from '@/hooks/useApi';
+import { useUIStore } from '@/store/uiStore';
 
 const lockedFeatures = [
   'Specialist assistants',
@@ -14,6 +16,9 @@ export function PricingPage() {
   const plans = usePlans();
   const subscription = useSubscription();
   const usage = useUsage();
+  const billingStatus = useBillingStatus();
+  const checkout = useCreateCheckoutSession();
+  const pushToast = useUIStore((s) => s.pushToast);
 
   const currentPlan = subscription.data?.plan.slug ?? 'free';
   const sorted = (plans.data ?? []).sort((a, b) => a.price_monthly_cents - b.price_monthly_cents);
@@ -47,7 +52,15 @@ export function PricingPage() {
             <ul className="mt-3 list-disc space-y-1 pl-5 text-xs text-slate-300">
               {lockedFeatures.map((feature) => <li key={`${plan.slug}-${feature}`}>{feature}</li>)}
             </ul>
-            <button className="mt-3 rounded bg-indigo-700 px-3 py-2 text-sm disabled:opacity-50" disabled={plan.slug === currentPlan}>
+            <button className="mt-3 rounded bg-indigo-700 px-3 py-2 text-sm disabled:opacity-50" disabled={plan.slug === currentPlan || checkout.isPending}
+              onClick={async () => {
+                if (plan.slug === 'free') return;
+                if (!billingStatus.data?.enabled) return;
+                try {
+                  const session = await checkout.mutateAsync(plan.slug);
+                  window.location.href = session.checkout_url;
+                } catch (error) { pushToast(getErrorDetail(error), 'error'); }
+              }}>
               {plan.slug === 'free' ? 'Current plan' : plan.slug === 'pro' ? 'Request upgrade' : 'Contact sales'}
             </button>
           </Card>

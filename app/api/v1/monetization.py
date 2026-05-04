@@ -38,10 +38,12 @@ def usage_payload(db: Session, user: User) -> dict:
 
 router = APIRouter(tags=["monetization"])
 billing_service = BillingService(
+    settings.BILLING_PROVIDER,
+    settings.STRIPE_ENABLED,
     settings.STRIPE_SECRET_KEY,
     settings.STRIPE_WEBHOOK_SECRET,
     settings.STRIPE_PRICE_PRO_MONTHLY,
-    settings.STRIPE_PRICE_TEAM_MONTHLY,
+    settings.STRIPE_PRICE_BUSINESS_MONTHLY,
     settings.PUBLIC_APP_URL,
 )
 
@@ -98,20 +100,38 @@ def list_plans(db: Session = Depends(get_db), user: User = Depends(get_current_u
     ]
 
 
+def _billing_disabled_response() -> HTTPException:
+    return HTTPException(status_code=503, detail={"code": "billing_disabled", "message": "Billing provider is disabled in this environment."})
+
+
+@router.get("/billing/status")
+def billing_status():
+    return {"provider": settings.BILLING_PROVIDER, "stripe_enabled": settings.STRIPE_ENABLED, "enabled": settings.BILLING_PROVIDER == "stripe" and settings.STRIPE_ENABLED}
+
+
+@router.post("/billing/checkout")
 @router.post("/billing/checkout-session")
 def create_checkout(payload: CheckoutRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     try:
         return billing_service.create_checkout_session(db, user, payload.plan)
     except ValueError as exc:
         detail = str(exc)
+        if detail == "Billing disabled":
+            raise _billing_disabled_response() from exc
         if detail == 'Billing not configured':
             raise HTTPException(status_code=400, detail={'code': 'billing_not_configured', 'message': 'Billing is not configured in this environment.'}) from exc
         raise HTTPException(status_code=400, detail=detail) from exc
 
 
+@router.post("/billing/portal")
 @router.post("/billing/customer-portal")
 def create_customer_portal(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    return billing_service.create_customer_portal_session(db, user)
+    try:
+        return billing_service.create_customer_portal_session(db, user)
+    except ValueError as exc:
+        if str(exc) == "Billing disabled":
+            raise _billing_disabled_response() from exc
+        raise
 
 
 @router.post("/billing/webhook")
@@ -120,6 +140,8 @@ async def billing_webhook(
     db: Session = Depends(get_db),
     stripe_signature: str | None = Header(default=None, alias="Stripe-Signature"),
 ):
+    if not settings.STRIPE_ENABLED or settings.BILLING_PROVIDER != "stripe":
+        raise _billing_disabled_response()
     payload = await request.body()
     try:
         event = billing_service.construct_event(payload=payload, signature=stripe_signature)

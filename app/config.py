@@ -87,10 +87,12 @@ class Settings(BaseSettings):
     INITIAL_ADMIN_PASSWORD: str = ""
     INITIAL_ADMIN_NAME: str = "Timebot Admin"
     RESET_INITIAL_ADMIN_PASSWORD: bool = False
+    BILLING_PROVIDER: str = "manual"
+    STRIPE_ENABLED: bool = False
     STRIPE_SECRET_KEY: str = ""
     STRIPE_WEBHOOK_SECRET: str = ""
     STRIPE_PRICE_PRO_MONTHLY: str = ""
-    STRIPE_PRICE_TEAM_MONTHLY: str = ""
+    STRIPE_PRICE_BUSINESS_MONTHLY: str = ""
     PUBLIC_STRIPE_PUBLISHABLE_KEY: str = ""
     PUBLIC_APP_URL: str = "http://localhost:5174"
     SEED_DEFAULT_PROMPTS: bool = True
