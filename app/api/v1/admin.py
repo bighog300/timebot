@@ -717,13 +717,32 @@ def admin_change_user_plan(user_id: str, payload: AdminPlanUpdateRequest, _: str
     target = db.query(User).filter(User.id == user_id).first()
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
-    plan = db.query(Plan).filter(Plan.slug == payload.plan_slug, Plan.is_active.is_(True)).first()
+    allowed_plans = {"free", "pro", "business", "admin"}
+    allowed_statuses = {"none", "trialing", "active", "past_due", "canceled"}
+    plan_slug = (payload.plan_slug or "").lower()
+    if plan_slug not in allowed_plans:
+        raise HTTPException(status_code=422, detail="Invalid plan")
+    if payload.subscription_status is not None and payload.subscription_status not in allowed_statuses:
+        raise HTTPException(status_code=422, detail="Invalid subscription status")
+
+    plan_lookup = {"business": "pro", "admin": "pro"}
+    plan = db.query(Plan).filter(Plan.slug == plan_lookup.get(plan_slug, plan_slug), Plan.is_active.is_(True)).first()
     if not plan:
         raise HTTPException(status_code=404, detail="Plan not found")
     sub = ensure_default_free_subscription(db, target.id)
-    prev = sub.plan.slug if sub.plan else None
+    prev = {"plan": sub.plan.slug if sub.plan else None, "status": sub.status, "user_plan": target.plan, "user_subscription_status": target.subscription_status}
     sub.plan_id = plan.id
-    _audit_admin_monetization_action(db, current_user=current_user, target_user=target, action="plan_updated", details={"previous_plan": prev, "new_plan": plan.slug})
+    if payload.subscription_status is not None:
+        sub.status = payload.subscription_status
+        target.subscription_status = payload.subscription_status
+    target.plan = plan_slug
+    if payload.plan_started_at is not None:
+        target.plan_started_at = payload.plan_started_at
+        sub.current_period_start = payload.plan_started_at
+    if payload.plan_expires_at is not None:
+        target.plan_expires_at = payload.plan_expires_at
+        sub.current_period_end = payload.plan_expires_at
+    _audit_admin_monetization_action(db, current_user=current_user, target_user=target, action="plan_updated", details={"before": prev, "after": {"plan": plan_slug, "subscription_status": payload.subscription_status or sub.status, "plan_started_at": payload.plan_started_at.isoformat() if payload.plan_started_at else None, "plan_expires_at": payload.plan_expires_at.isoformat() if payload.plan_expires_at else None}})
     db.commit()
     db.refresh(sub)
     return AdminSubscriptionResponse(user_id=target.id, email=target.email, subscription_id=sub.id, plan_slug=sub.plan.slug, plan_name=sub.plan.name, status=sub.status, cancel_at_period_end=sub.cancel_at_period_end, usage_credits=sub.usage_credits_json or {}, limit_overrides=sub.limit_overrides_json or {})

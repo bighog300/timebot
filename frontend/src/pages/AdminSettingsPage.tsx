@@ -26,6 +26,7 @@ export function AdminSubscriptionsPage() {
   const updatePlan = useAdminUpdateUserPlan();
   const updateUsage = useAdminUpdateUsageControls();
   const cancelOrDowngrade = useAdminCancelOrDowngrade();
+  const [edits, setEdits] = useState<Record<string, { plan_slug: string; subscription_status: string }>>({});
 
   if (subs.isLoading) return <Card>Loading subscriptions...</Card>;
   if (subs.isError) return <Card>Failed loading subscriptions.</Card>;
@@ -38,10 +39,10 @@ export function AdminSubscriptionsPage() {
         <tbody>
           {subs.data.map((s) => <tr key={s.subscription_id} className='border-t border-slate-800'>
             <td><Link className='underline' to={`/admin/users/${s.user_id}/usage`}>{s.email}</Link></td>
-            <td>{s.plan_slug}</td><td>{s.status}</td>
+            <td><select value={(edits[s.subscription_id]?.plan_slug ?? s.plan_slug)} onChange={(e)=>setEdits((prev)=>({...prev,[s.subscription_id]:{plan_slug:e.target.value,subscription_status:(prev[s.subscription_id]?.subscription_status ?? s.status)}}))} className="bg-slate-900"><option value="free">free</option><option value="pro">pro</option><option value="business">business</option><option value="admin">admin</option></select></td><td><select value={(edits[s.subscription_id]?.subscription_status ?? s.status)} onChange={(e)=>setEdits((prev)=>({...prev,[s.subscription_id]:{plan_slug:(prev[s.subscription_id]?.plan_slug ?? s.plan_slug),subscription_status:e.target.value}}))} className="bg-slate-900"><option value="none">none</option><option value="trialing">trialing</option><option value="active">active</option><option value="past_due">past_due</option><option value="canceled">canceled</option></select></td>
             <td>{JSON.stringify(s.usage_credits)}</td><td>{JSON.stringify(s.limit_overrides)}</td>
             <td className='space-x-2'>
-              <button onClick={async ()=>{ try { await updatePlan.mutateAsync({ userId: s.user_id, plan_slug: s.plan_slug === 'free' ? 'pro' : 'free' }); pushToast('Plan updated'); } catch(e){ pushToast((e as Error).message, 'error'); } }} className='rounded bg-slate-700 px-2 py-1'>Toggle plan</button>
+              <button onClick={async ()=>{ try { const next = edits[s.subscription_id] ?? { plan_slug: 'pro', subscription_status: 'active' }; await updatePlan.mutateAsync({ userId: s.user_id, payload: next }); pushToast(`Updated to ${next.plan_slug}/${next.subscription_status}`); } catch(e){ pushToast((e as Error).message, 'error'); } }} className='rounded bg-slate-700 px-2 py-1'>Toggle plan</button>
               <button onClick={async ()=>{ try { await updateUsage.mutateAsync({ userId: s.user_id, usage_credits: { reports: 5 }, limit_overrides: { reports: 500 } }); pushToast('Usage controls updated'); } catch(e){ pushToast((e as Error).message, 'error'); } }} className='rounded bg-slate-700 px-2 py-1'>Grant usage</button>
               <button onClick={async ()=>{ try { await cancelOrDowngrade.mutateAsync({ userId: s.user_id, downgrade_to_plan_slug: 'free' }); pushToast('Subscription downgraded/canceled'); } catch(e){ pushToast((e as Error).message, 'error'); } }} className='rounded bg-amber-800 px-2 py-1'>Cancel/Downgrade</button>
             </td>

@@ -19,6 +19,7 @@ from app.services.openai_client import APIError, openai_client_service
 from app.services.report_export import generate_report_pdf
 from app.services.insights_service import insights_service
 from app.services.limit_enforcement import enforce_limit
+from app.services.entitlements import can_generate_report, require_upgrade
 
 router = APIRouter(prefix="/reports", tags=["reports"])
 logger = logging.getLogger(__name__)
@@ -232,12 +233,15 @@ def update_report(report_id: UUID, payload: ReportUpdateRequest, db: Session = D
 def download_report(
     report_id: UUID,
     format: str = Query(default="md", pattern="^(md|markdown|pdf)$"),
+    advanced_export: bool = Query(default=False),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
     report = db.query(GeneratedReport).filter(GeneratedReport.id == report_id, GeneratedReport.created_by_id == user.id).first()
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
+    if advanced_export and not can_generate_report(db, user):
+        require_upgrade("pro", "report_export", "Upgrade to Pro to use advanced report export.")
     report_dir = Path(settings.effective_artifact_dir) / "reports"
     report_dir.mkdir(parents=True, exist_ok=True)
     safe_name = "".join(c for c in report.title if c.isalnum() or c in (" ", "-", "_")).strip() or "report"

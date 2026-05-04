@@ -300,7 +300,7 @@ export const api = {
   getAdminSystemJobs: async (): Promise<AdminSystemJobs> => (await http.get('/admin/system/jobs')).data,
   getAdminLlmMetrics: async (): Promise<AdminLlmMetrics> => (await http.get('/admin/system/llm-metrics')).data,
   getAdminLlmModels: async (): Promise<AdminLlmModelsResponse> => (await http.get('/admin/llm-models')).data,
-  updateAdminUserPlan: async (userId: string, planSlug: string): Promise<AdminSubscription> => (await http.patch(`/admin/users/${userId}/plan`, { plan_slug: planSlug })).data,
+  updateAdminUserPlan: async (userId: string, payload: { plan_slug: string; subscription_status?: string; plan_started_at?: string | null; plan_expires_at?: string | null }): Promise<AdminSubscription> => (await http.patch(`/admin/users/${userId}/plan`, payload)).data,
   updateAdminUsageControls: async (userId: string, usageCredits: Record<string, number>, limitOverrides: Record<string, number | null>): Promise<AdminSubscription> => (await http.patch(`/admin/users/${userId}/usage-controls`, { usage_credits: usageCredits, limit_overrides: limitOverrides })).data,
   cancelOrDowngradeAdminSubscription: async (userId: string, downgradeToPlanSlug: string): Promise<AdminSubscription> => (await http.post(`/admin/users/${userId}/cancel-or-downgrade`, { downgrade_to_plan_slug: downgradeToPlanSlug })).data,
 
