@@ -3,8 +3,6 @@ import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { PricingPage } from './PricingPage';
 
-const checkoutMutate = vi.fn();
-
 vi.mock('@/hooks/useApi', () => ({
   usePlans: () => ({
     data: [
@@ -17,27 +15,18 @@ vi.mock('@/hooks/useApi', () => ({
         features: {},
         is_current: true,
       },
-      {
-        slug: 'pro',
-        name: 'Pro',
-        price_monthly_cents: 2900,
-        currency: 'usd',
-        limits: { documents_per_month: 200 },
-        features: { billing_configured: false },
-        is_current: false,
-      },
+      { slug: 'pro', name: 'Pro', price_monthly_cents: 2900, currency: 'usd', limits: {}, features: {}, is_current: false },
     ],
   }),
-  useSubscription: () => ({ data: { plan: { slug: 'free' } } }),
-  useCreateCheckoutSession: () => ({ mutateAsync: checkoutMutate, isPending: false }),
-  useCreateCustomerPortalSession: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useSubscription: () => ({ data: { status: 'active', current_period_start: '2026-05-01', current_period_end: '2026-06-01', plan: { slug: 'free' } } }),
+  useUsage: () => ({ data: { messages: { used: 1, limit: 10 }, reports: { used: 0, limit: 2 } } }),
 }));
 
 describe('PricingPage', () => {
-  it('renders pricing plans even when billing is unavailable', () => {
+  it('renders pricing plans and static upgrade CTA', () => {
     render(<MemoryRouter><PricingPage /></MemoryRouter>);
     expect(screen.getByText('Plans & Pricing')).toBeInTheDocument();
     expect(screen.getByText('Free')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Billing not configured' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Request upgrade' })).toBeInTheDocument();
   });
 });

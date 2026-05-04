@@ -24,8 +24,12 @@ def usage_payload(db: Session, user: User) -> dict:
     end = subscription.current_period_end or (start + timedelta(days=32)).replace(day=1)
     docs_used = db.query(Document).filter(Document.user_id == user.id).count()
     jobs_used = get_usage_total(db, user.id, "processing_jobs_per_month", start, end)
+    messages_used = get_usage_total(db, user.id, "chat_messages_per_month", start, end)
+    reports_used = get_usage_total(db, user.id, "reports_per_month", start, end)
     return {
         "plan": plan.slug if plan else "free",
+        "messages": {"used": messages_used, "limit": limits.get("chat_messages_per_month")},
+        "reports": {"used": reports_used, "limit": limits.get("reports_per_month")},
         "documents": {"used": docs_used, "limit": limits.get("documents_per_month")},
         "processing_jobs": {"used": jobs_used, "limit": limits.get("processing_jobs_per_month")},
         "storage_bytes": {"used": sum((d.file_size or 0) for d in db.query(Document).filter(Document.user_id == user.id).all()), "limit": limits.get("storage_bytes")},
