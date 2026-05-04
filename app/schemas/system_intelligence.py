@@ -129,8 +129,14 @@ class SystemIntelligenceWebReferenceResponse(BaseModel):
     url: str
     status: str
     summary: str | None
+    canonical_url: str | None
     source_domain: str | None
     jurisdiction: str | None
+    court_or_institution: str | None
+    document_type: str | None
+    legal_area: str | None
+    retrieved_at: datetime | None
+    last_checked_at: datetime | None
     created_at: datetime
 
     class Config:
