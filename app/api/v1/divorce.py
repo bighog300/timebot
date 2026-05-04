@@ -10,6 +10,8 @@ from app.models.divorce import DivorceReport, DivorceTimelineItem
 from app.models.intelligence import DocumentActionItem
 from app.models.user import User
 from app.models.workspace import Workspace, WorkspaceMember
+from app.models.chat import AssistantProfile
+from app.models.prompt_template import PromptTemplate
 from app.services.divorce_task_extraction import extract_tasks_for_workspace
 from app.services.divorce_report_generation import PRO_REPORT_TYPES, generate_divorce_report
 from app.services.divorce_timeline_extraction import extract_timeline_for_workspace
@@ -104,6 +106,41 @@ def extract_divorce_tasks(workspace_id: str, db: Session = Depends(get_db), curr
     _verify_access(db, workspace_id, current_user.id)
     created = extract_tasks_for_workspace(db, workspace_id)
     return {'created_count': created}
+
+
+
+@router.get('/advisors')
+def divorce_advisors(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    ensure_default_free_subscription(db, current_user.id)
+    plan = get_user_plan(db, current_user.id)
+    plan_slug = (plan.slug if plan else 'free').lower()
+    locked = plan_slug == 'free'
+    assistants = {a.name: a for a in db.query(AssistantProfile).filter(AssistantProfile.enabled.is_(True)).all()}
+    templates = {(t.assistant_id, t.name): t for t in db.query(PromptTemplate).filter(PromptTemplate.type=='chat', PromptTemplate.enabled.is_(True)).all()}
+
+    def map_item(key: str, label: str, assistant_name: str, template_hint: str, required_plan: str = 'free', chat_title: str = 'Divorce Advisor'):
+        assistant = assistants.get(assistant_name)
+        if not assistant:
+            return None
+        template = next((t for (aid, _), t in templates.items() if aid == assistant.id and template_hint.lower() in t.name.lower()), None)
+        if not template:
+            template = db.query(PromptTemplate).filter(PromptTemplate.id == assistant.default_prompt_template_id).first()
+        if not template:
+            return None
+        is_locked = required_plan != 'free' and locked
+        return {
+            'key': key, 'label': label, 'assistant_id': str(assistant.id), 'assistant_name': assistant.name,
+            'prompt_template_id': str(template.id), 'prompt_template_name': template.name,
+            'locked': is_locked, 'required_plan': required_plan, 'chat_title': chat_title,
+        }
+
+    rows = [
+        map_item('legal_advisor', 'Ask Legal Advisor', 'South African Legal Defense Expert', 'Legal', 'pro', 'Legal advisor session'),
+        map_item('psychology_advisor', 'Ask Psychology Advisor', 'Psychological Analyst', 'Psychological', 'pro', 'Psychology advisor session'),
+        map_item('document_analyst', 'Analyze Documents', 'Document Research Assistant', 'Document', 'free', 'Document analysis session'),
+        map_item('general_divorce_advisor', 'General Divorce Advisor', 'General Assistant', 'General', 'free', 'General divorce advisor session'),
+    ]
+    return [r for r in rows if r]
 
 @router.get('/dashboard/{workspace_id}')
 def divorce_dashboard(workspace_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
