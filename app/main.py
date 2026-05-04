@@ -32,6 +32,7 @@ from app.api.v1 import (
     messaging,
     email_webhooks,
     system_intelligence,
+    divorce,
 )
 
 logger = logging.getLogger(__name__)
@@ -191,6 +192,7 @@ app.include_router(reports.router, prefix="/api/v1")
 app.include_router(gmail_imports.router, prefix="/api/v1")
 app.include_router(monetization.router, prefix="/api/v1")
 app.include_router(email_webhooks.router, prefix="/api/v1")
+app.include_router(divorce.router, prefix="/api/v1")
 
 
 @app.get("/health", tags=["health"])
