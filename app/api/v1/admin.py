@@ -965,7 +965,19 @@ def cancel_invite(invite_id: str, _: str = Depends(require_admin), db: Session =
 @router.get("/users/invites", response_model=list[AdminInviteResponse])
 def list_invites(_: str = Depends(require_admin), db: Session = Depends(get_db)):
     invites = db.query(UserInvite).order_by(UserInvite.created_at.desc()).all()
-    return [AdminInviteResponse.model_validate(invite, from_attributes=True).model_copy(update={"status": _invite_status(invite)}) for invite in invites]
+    return [
+        AdminInviteResponse(
+            id=invite.id,
+            email=invite.email,
+            role=invite.role,
+            expires_at=invite.expires_at,
+            accepted_at=invite.accepted_at,
+            canceled_at=invite.canceled_at,
+            created_at=invite.created_at,
+            status=_invite_status(invite),
+        )
+        for invite in invites
+    ]
 
 
 @router.get("/audit", response_model=AdminAuditPageResponse)
