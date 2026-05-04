@@ -15,7 +15,7 @@ export function DivorceReportsPage(){
   const gen=async()=>{ try{ setErr(''); const r=await api.generateDivorceReport(workspaceId,{report_type:sel,title:title||undefined}); await load(); setSelected(r);}catch(e){setErr(getErrorDetail(e));} };
   const archive=async(id:string)=>{ await api.patchDivorceReport(id,{status:'archived'}); await load(); };
   const del=async(id:string)=>{ await api.deleteDivorceReport(id); await load(); if(selected?.id===id) setSelected(null); };
-  return <div><h1>Divorce Reports</h1><p>This report is informational and not legal advice.</p>
+  return <div><h1>Divorce Reports</h1><p>This report is informational and not legal advice. AI-generated, verify before legal use.</p>
     {err?<div>{err}{err.includes('upgrade_required')?' Upgrade to Pro to unlock this report type.':''}</div>:null}
     <div><select value={sel} onChange={(e)=>setSel(e.target.value)}>{REPORT_TYPES.map((t)=><option key={t} value={t}>{t}</option>)}</select><input placeholder='Title optional' value={title} onChange={(e)=>setTitle(e.target.value)} /><button onClick={gen}>Generate report</button></div>
     <ul>{items.map((r)=><li key={r.id}><button onClick={()=>setSelected(r)}>{r.title}</button> ({r.status}) sources: T{r.source_task_ids_json?.length||0}/L{r.source_timeline_item_ids_json?.length||0}/D{r.source_document_ids_json?.length||0} <button onClick={()=>archive(r.id)}>Archive</button> <button onClick={()=>del(r.id)}>Delete</button></li>)}</ul>

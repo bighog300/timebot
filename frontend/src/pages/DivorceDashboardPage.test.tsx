@@ -24,6 +24,8 @@ describe('DivorceDashboardPage', ()=>{
     expect(await screen.findByText('Ask Legal Advisor')).toBeInTheDocument();
     fireEvent.click(screen.getByText('Build Timeline'));
     expect(nav).toHaveBeenCalledWith('/divorce/timeline');
+    fireEvent.click(screen.getByRole('button', { name: /Upload documents/i }));
+    expect(nav).toHaveBeenCalledWith('/documents');
   });
 
   it('creates legal advisor chat with mapping', async ()=>{
