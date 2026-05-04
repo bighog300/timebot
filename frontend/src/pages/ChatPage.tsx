@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useAssistants, useChatSession, useChatSessions, useCreateChatSession, useDeleteChatSession, useDocuments, useUpdateChatSession } from '@/hooks/useApi';
+import { useAssistants, useChatPromptTemplates, useChatSession, useChatSessions, useCreateChatSession, useDeleteChatSession, useDocuments, useInvalidateChatSession, useUpdateChatSession } from '@/hooks/useApi';
 import { api, getErrorDetail } from '@/services/api';
 import { useUIStore } from '@/store/uiStore';
 import { UpgradePrompt } from '@/components/billing/UpgradePrompt';
@@ -11,6 +11,8 @@ export function ChatPage() {
   const sessions = useChatSessions();
   const assistants = useAssistants();
   const createSession = useCreateChatSession();
+  const promptTemplates = useChatPromptTemplates();
+  const invalidateChat = useInvalidateChatSession();
   const documents = useDocuments();
   const updateSession = useUpdateChatSession();
   const deleteSession = useDeleteChatSession();
@@ -31,6 +33,8 @@ export function ChatPage() {
 
   const assistantMap = useMemo(() => new Map((assistants.data || []).map((a) => [a.id, a])), [assistants.data]);
   const selectedAssistant = session.data?.assistant_id ? assistantMap.get(session.data.assistant_id) : undefined;
+  const templateMap = useMemo(() => new Map((promptTemplates.data || []).map((t) => [t.id, t])), [promptTemplates.data]);
+  const documentMap = useMemo(() => new Map((documents.data || []).map((d) => [d.id, d.filename || d.id])), [documents.data]);
   const lastAssistantMessage = [...(session.data?.messages || [])].reverse().find((m) => m.role === 'assistant');
 
   const onCreate = async () => {
@@ -38,6 +42,11 @@ export function ChatPage() {
     if (chosen?.locked) {
       setMonetizationError(`Upgrade to Pro to use ${chosen.name}.`);
       setUpgradeModal({ feature: 'specialist assistants', requiredPlan: 'pro', message: `Upgrade to Pro to use ${chosen.name}.` });
+      return;
+    }
+    const chosenTemplate = (promptTemplates.data || []).find((t) => t.id === promptTemplateId);
+    if (chosenTemplate?.locked) {
+      setMonetizationError(`Upgrade to Pro to use template ${chosenTemplate.name}.`);
       return;
     }
     const created = await createSession.mutateAsync({ title, assistant_id: assistantId || null, prompt_template_id: promptTemplateId || null, linked_document_ids: linkedDocumentIds });
@@ -50,6 +59,7 @@ export function ChatPage() {
     try {
       setMonetizationError(null);
       await api.sendChatMessageStream(currentSessionId, { message }, { onEvent: () => undefined });
+      invalidateChat(currentSessionId);
       setMessage('');
     } catch (e) {
       const detailRaw = (e as { response?: { data?: { detail?: { error?: string; code?: string; feature?: string; required_plan?: string; message?: string } } } })?.response?.data?.detail;
@@ -72,26 +82,26 @@ export function ChatPage() {
   return <div className='grid grid-cols-[280px_1fr_300px] gap-3'>
     <aside className='space-y-3'>
       <button className='rounded bg-slate-700 px-3 py-2 text-sm' onClick={() => setShowCreate(true)}>New Chat</button>
-      <div><h3 className='text-xs uppercase text-slate-400'>Active chats</h3>{activeChats.map((s) => <div key={s.id} className='mt-2 rounded border border-slate-700 p-2'><button className='block w-full text-left' onClick={() => setSessionId(s.id)}>{s.title || 'Untitled'}</button><div className='mt-1 flex gap-1 text-xs'><button onClick={() => renameChat(s)}>Rename</button><button onClick={() => updateSession.mutate({ sessionId: s.id, payload: { is_archived: true } })}>Archive</button><button onClick={() => window.confirm('Delete chat?') && deleteSession.mutate(s.id)}>Delete</button></div></div>)}</div>
+      <div><h3 className='text-xs uppercase text-slate-400'>Active chats</h3>{activeChats.map((s) => <div key={s.id} className='mt-2 rounded border border-slate-700 p-2'><button className='block w-full text-left' onClick={() => setSessionId(s.id)}>{s.title || 'Untitled'}</button><div className='text-xs text-slate-400'>{assistantMap.get(s.assistant_id || '')?.name || 'General Assistant'}</div><div className='mt-1 flex gap-1 text-xs'><button onClick={() => renameChat(s)}>Rename</button><button onClick={() => updateSession.mutate({ sessionId: s.id, payload: { is_archived: true } })}>Archive</button><button onClick={() => window.confirm('Delete chat?') && deleteSession.mutate(s.id)}>Delete</button></div></div>)}</div>
       <div><h3 className='text-xs uppercase text-slate-400'>Archived chats</h3>{archivedChats.map((s) => <button key={s.id} className='mt-2 block w-full rounded border border-slate-700 p-2 text-left' onClick={() => setSessionId(s.id)}>{s.title || 'Untitled'}</button>)}</div>
     </aside>
     <main>
-      <h1 className='text-xl font-semibold'>Chat {selectedAssistant ? <span className='ml-2 rounded bg-slate-800 px-2 py-1 text-sm'>Assistant: {selectedAssistant.name}</span> : null}</h1>
+      <h1 className='text-xl font-semibold'>Chat <span className='ml-2 rounded bg-slate-800 px-2 py-1 text-sm'>🤖 {selectedAssistant?.name || 'General Assistant'} {(selectedAssistant?.required_plan && selectedAssistant.required_plan !== 'free') ? `🔒 ${selectedAssistant.required_plan.toUpperCase()}` : ''}</span> <span className='ml-2 rounded bg-slate-800 px-2 py-1 text-sm'>Template: {templateMap.get(session.data?.prompt_template_id || '')?.name || 'Default'}</span></h1>
       {monetizationError ? <UpgradePrompt title='Upgrade required' message={monetizationError} /> : null}
-      <div className='mt-3 min-h-72 space-y-2 rounded border border-slate-700 p-3'>{(session.data?.messages || []).map((m) => <div key={m.id}><b>{m.role}:</b> {m.content}</div>)}</div>
+      <div className='mt-3 min-h-72 space-y-2 rounded border border-slate-700 p-3'>{(session.data?.messages || []).map((m) => <div key={m.id}><b>{m.role === 'assistant' ? (selectedAssistant?.name || 'Assistant') : m.role}:</b> {m.content}</div>)}</div>
       {(session.data?.is_archived || session.data?.is_deleted) ? <div className='mt-2 text-amber-300'>This chat is archived/deleted and read-only.</div> : null}
       <div className='mt-2 flex gap-2'><textarea disabled={Boolean(session.data?.is_archived || session.data?.is_deleted)} value={message} onChange={(e) => setMessage(e.target.value)} placeholder='Ask a question' className='w-full rounded border border-slate-700 bg-slate-900 p-2' /><button onClick={onSend} disabled={Boolean(session.data?.is_archived || session.data?.is_deleted)} className='rounded bg-indigo-700 px-3'>Send</button></div>
     </main>
     <aside className='rounded border border-slate-700 p-3'>
       <h3 className='font-medium'>Context</h3>
       <div className='mt-2 text-sm'>Assistant: {selectedAssistant?.name || 'None'}</div>
-      <div className='text-sm'>Prompt template: {session.data?.prompt_template_id || 'None'}</div>
-      <div className='text-sm'>Linked docs: {(session.data?.linked_document_ids || []).join(', ') || 'None'}</div>
+      <div className='text-sm'>Prompt template: {templateMap.get(session.data?.prompt_template_id || '')?.name || 'None'}</div>
+      <div className='text-sm'>Linked docs: {(session.data?.linked_document_ids || []).map((id) => documentMap.get(id) || id).join(', ') || 'None'}</div>
       <div className='mt-2 text-sm'>User evidence refs: {((lastAssistantMessage?.metadata_json?.user_evidence_refs as { document_title?: string }[]|undefined) || []).map((r) => r.document_title || 'Untitled').join(', ') || 'None'}</div>
       <div className='text-sm'>System intelligence refs: {((lastAssistantMessage?.metadata_json?.system_intelligence_refs as { title?: string }[]|undefined) || []).map((r) => r.title || 'Untitled').join(', ') || 'None'}</div>
       <div className='text-sm'>Legal web refs: {((lastAssistantMessage?.metadata_json?.legal_web_refs as { title?: string }[]|undefined) || []).map((r) => r.title || 'Untitled').join(', ') || 'None'}</div>
     </aside>
-    {showCreate && <div className='fixed inset-0 bg-black/60 p-6'><div className='mx-auto max-w-lg rounded bg-slate-900 p-4'><h2 className='text-lg'>Create chat</h2><input className='mt-2 w-full rounded border border-slate-700 bg-slate-800 p-2' value={title} onChange={(e) => setTitle(e.target.value)} placeholder='title' /><select className='mt-2 w-full rounded border border-slate-700 bg-slate-800 p-2' value={assistantId} onChange={(e) => setAssistantId(e.target.value)}><option value=''>Select assistant</option>{(assistants.data || []).map((a) => <option key={a.id} value={a.id}>{a.name}{a.required_plan !== 'free' ? ' 🔒 Pro' : ''}{a.locked ? ' (Locked)' : ''}</option>)}</select><select className='mt-2 w-full rounded border border-slate-700 bg-slate-800 p-2' value={promptTemplateId} onChange={(e) => setPromptTemplateId(e.target.value)}><option value=''>Default prompt template</option><option value='pt-new'>pt-new</option></select><select multiple className='mt-2 w-full rounded border border-slate-700 bg-slate-800 p-2' value={linkedDocumentIds} onChange={(e) => setLinkedDocumentIds(Array.from(e.target.selectedOptions).map((o) => o.value))}>{(documents.data || []).map((d) => <option key={d.id} value={d.id}>{d.filename || d.id}</option>)}</select><div className='mt-3 flex justify-end gap-2'><button onClick={() => setShowCreate(false)}>Cancel</button><button onClick={onCreate} className='rounded bg-indigo-700 px-3 py-1'>Create</button></div></div></div>}
+    {showCreate && <div className='fixed inset-0 bg-black/60 p-6'><div className='mx-auto max-w-lg rounded bg-slate-900 p-4'><h2 className='text-lg'>Create chat</h2><input className='mt-2 w-full rounded border border-slate-700 bg-slate-800 p-2' value={title} onChange={(e) => setTitle(e.target.value)} placeholder='title' /><select className='mt-2 w-full rounded border border-slate-700 bg-slate-800 p-2' value={assistantId} onChange={(e) => { const nextId = e.target.value; setAssistantId(nextId); const adv = (assistants.data || []).find((a) => a.id === nextId); if (adv?.default_prompt_template_id) setPromptTemplateId(adv.default_prompt_template_id); }}><option value=''>Select assistant</option>{(assistants.data || []).map((a) => <option key={a.id} value={a.id}>{a.name}{a.required_plan !== 'free' ? ' 🔒 Pro' : ''}{a.locked ? ' (Locked)' : ''}</option>)}</select><select className='mt-2 w-full rounded border border-slate-700 bg-slate-800 p-2' value={promptTemplateId} onChange={(e) => setPromptTemplateId(e.target.value)}><option value=''>Default prompt template</option>{(promptTemplates.data || []).map((t) => <option key={t.id} value={t.id}>{t.name}{t.locked ? ' (Locked)' : ''}</option>)}</select><select multiple className='mt-2 w-full rounded border border-slate-700 bg-slate-800 p-2' value={linkedDocumentIds} onChange={(e) => setLinkedDocumentIds(Array.from(e.target.selectedOptions).map((o) => o.value))}>{(documents.data || []).map((d) => <option key={d.id} value={d.id}>{d.filename || d.id}</option>)}</select><div className='mt-3 flex justify-end gap-2'><button onClick={() => setShowCreate(false)}>Cancel</button><button onClick={onCreate} className='rounded bg-indigo-700 px-3 py-1'>Create</button></div></div></div>}
     <UpgradeRequiredModal requirement={upgradeModal} onClose={() => setUpgradeModal(null)} />
   </div>;
 }

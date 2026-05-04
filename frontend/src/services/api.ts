@@ -31,6 +31,7 @@ import type {
   ChatbotSettings,
   ChatSession,
   AssistantProfile,
+  ChatPromptTemplateSummary,
   CreateChatSessionRequest,
   ChatMessageResponse,
   ChatMessageRequest,
@@ -195,7 +196,18 @@ export const api = {
   updateChatSession: async (sessionId: string, payload: { title?: string; is_archived?: boolean }): Promise<ChatSession> => (await http.patch(`/chat/sessions/${sessionId}`, payload)).data,
   deleteChatSession: async (sessionId: string): Promise<{ deleted: boolean }> => (await http.delete(`/chat/sessions/${sessionId}`)).data,
   listChatSessions: async (): Promise<ChatSession[]> => (await http.get('/chat/sessions')).data,
-  getChatSession: async (sessionId: string): Promise<ChatSession> => (await http.get(`/chat/sessions/${sessionId}`)).data,
+  listChatPromptTemplates: async (): Promise<ChatPromptTemplateSummary[]> => (await http.get('/chat/prompt-templates')).data,
+  getChatSession: async (sessionId: string): Promise<ChatSession> => {
+    const payload = (await http.get(`/chat/sessions/${sessionId}`)).data;
+    if (payload?.session) {
+      return {
+        ...payload.session,
+        messages: payload.messages ?? [],
+        linked_document_ids: payload.linked_documents ?? [],
+      };
+    }
+    return payload;
+  },
   sendChatMessage: async (sessionId: string, payload: ChatMessageRequest): Promise<ChatMessageResponse> => (await http.post(`/chat/sessions/${sessionId}/messages`, payload)).data,
   sendChatMessageStream: async (
     sessionId: string,
