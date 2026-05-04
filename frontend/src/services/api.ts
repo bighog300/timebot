@@ -90,7 +90,7 @@ import type {
   CampaignSendStatus,
   EmailSuppression,
   SystemIntelligenceSubmission,
-  DivorceAdvisorMapping, DivorceDashboard, DivorceReport, DivorceTask, DivorceTimelineEvent,
+  DivorceAdvisorMapping, DivorceCommunication, DivorceDashboard, DivorceReport, DivorceTask, DivorceTimelineEvent,
 } from '@/types/api';
 
 
@@ -184,6 +184,12 @@ export const api = {
   patchDivorceTimeline: async (eventId: string, payload: Partial<DivorceTimelineEvent>): Promise<DivorceTimelineEvent> => (await http.patch(`/divorce/timeline/${eventId}`, payload)).data,
   deleteDivorceTimeline: async (eventId: string): Promise<{ deleted: boolean }> => (await http.delete(`/divorce/timeline/${eventId}`)).data,
   createDivorceTimelineManual: async (workspaceId: string, payload: { title: string; event_date?: string | null; category: string }): Promise<DivorceTimelineEvent> => (await http.post(`/divorce/timeline/${workspaceId}/manual`, payload)).data,
+  listDivorceCommunications: async (workspaceId: string): Promise<DivorceCommunication[]> => (await http.get(`/divorce/communications/${workspaceId}`)).data,
+  extractDivorceCommunications: async (workspaceId: string): Promise<{ created_count: number }> => (await http.post(`/divorce/communications/extract/${workspaceId}`)).data,
+  acceptDivorceCommunication: async (communicationId: string): Promise<DivorceCommunication> => (await http.post(`/divorce/communications/${communicationId}/accept`)).data,
+  rejectDivorceCommunication: async (communicationId: string): Promise<DivorceCommunication> => (await http.post(`/divorce/communications/${communicationId}/reject`)).data,
+  patchDivorceCommunication: async (communicationId: string, payload: Partial<DivorceCommunication>): Promise<DivorceCommunication> => (await http.patch(`/divorce/communications/${communicationId}`, payload)).data,
+  deleteDivorceCommunication: async (communicationId: string): Promise<{ deleted: boolean }> => (await http.delete(`/divorce/communications/${communicationId}`)).data,
   listDivorceReports: async (workspaceId: string): Promise<DivorceReport[]> => (await http.get(`/divorce/reports/${workspaceId}`)).data,
   generateDivorceReport: async (workspaceId: string, payload: { report_type: string; title?: string; date_range?: Record<string, string>; include_task_ids?: string[]; include_timeline_item_ids?: string[]; include_document_ids?: string[] }): Promise<DivorceReport> => (await http.post(`/divorce/reports/${workspaceId}/generate`, payload)).data,
   getDivorceReportDetail: async (reportId: string): Promise<DivorceReport> => (await http.get(`/divorce/reports/detail/${reportId}`)).data,

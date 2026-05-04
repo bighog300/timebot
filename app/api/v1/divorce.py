@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
 from app.models.document import Document
-from app.models.divorce import DivorceReport, DivorceTimelineItem
+from app.models.divorce import DivorceCommunication, DivorceReport, DivorceTimelineItem
 from app.models.intelligence import DocumentActionItem
 from app.models.user import User
 from app.models.workspace import Workspace, WorkspaceMember
@@ -15,6 +15,7 @@ from app.models.prompt_template import PromptTemplate
 from app.services.divorce_task_extraction import extract_tasks_for_workspace
 from app.services.divorce_report_generation import PRO_REPORT_TYPES, generate_divorce_report
 from app.services.divorce_timeline_extraction import extract_timeline_for_workspace
+from app.services.divorce_communication_extraction import extract_communications_for_workspace
 from app.services.subscriptions import ensure_default_free_subscription, get_user_plan
 
 router = APIRouter(prefix='/divorce', tags=['divorce'])
@@ -156,10 +157,14 @@ def divorce_dashboard(workspace_id: str, db: Session = Depends(get_db), current_
     timeline_suggested = db.query(func.count(DivorceTimelineItem.id)).filter(DivorceTimelineItem.workspace_id == workspace_id, DivorceTimelineItem.review_status == 'suggested').scalar() or 0
     timeline_accepted = db.query(func.count(DivorceTimelineItem.id)).filter(DivorceTimelineItem.workspace_id == workspace_id, DivorceTimelineItem.review_status.in_(['accepted','edited'])).scalar() or 0
     timeline_high = db.query(func.count(DivorceTimelineItem.id)).filter(DivorceTimelineItem.workspace_id == workspace_id, DivorceTimelineItem.confidence >= 0.8).scalar() or 0
+    communication_count = db.query(func.count(DivorceCommunication.id)).filter(DivorceCommunication.workspace_id == workspace_id).scalar() or 0
+    suggested_communication_count = db.query(func.count(DivorceCommunication.id)).filter(DivorceCommunication.workspace_id == workspace_id, DivorceCommunication.review_status == 'suggested').scalar() or 0
+    hostile_or_urgent_count = db.query(func.count(DivorceCommunication.id)).filter(DivorceCommunication.workspace_id == workspace_id, DivorceCommunication.tone.in_(['hostile','urgent','threatening'])).scalar() or 0
+    recent_communications = db.query(DivorceCommunication).filter(DivorceCommunication.workspace_id == workspace_id).order_by(DivorceCommunication.sent_at.desc().nullslast(), DivorceCommunication.created_at.desc()).limit(5).all()
     recent_timeline = db.query(DivorceTimelineItem).filter(DivorceTimelineItem.workspace_id == workspace_id).order_by(DivorceTimelineItem.created_at.desc()).limit(5).all()
     failed_reports = db.query(func.count(DivorceReport.id)).filter(DivorceReport.workspace_id == workspace_id, DivorceReport.status == 'failed').scalar() or 0
     report_count = db.query(func.count(DivorceReport.id)).filter(DivorceReport.workspace_id == workspace_id).scalar() or 0
-    return {'documents_uploaded': docs, 'emails_imported': 0, 'suggested_task_count': suggested, 'open_task_count': open_tasks, 'urgent_task_count': urgent, 'upcoming_due_dates': upcoming_tasks, 'recently_generated_tasks': recent, 'open_tasks': open_tasks, 'upcoming_deadlines': upcoming, 'key_timeline_events': upcoming, 'latest_reports': reports, 'report_count': report_count, 'failed_report_count': failed_reports, 'missing_information_checklist': ['Confirm jurisdiction details', 'Upload latest financial disclosure'], 'suggested_timeline_count': timeline_suggested, 'accepted_timeline_count': timeline_accepted, 'upcoming_timeline_events': upcoming, 'recent_timeline_events': recent_timeline, 'high_confidence_event_count': timeline_high}
+    return {'documents_uploaded': docs, 'emails_imported': 0, 'suggested_task_count': suggested, 'open_task_count': open_tasks, 'urgent_task_count': urgent, 'upcoming_due_dates': upcoming_tasks, 'recently_generated_tasks': recent, 'open_tasks': open_tasks, 'upcoming_deadlines': upcoming, 'key_timeline_events': upcoming, 'latest_reports': reports, 'report_count': report_count, 'failed_report_count': failed_reports, 'missing_information_checklist': ['Confirm jurisdiction details', 'Upload latest financial disclosure'], 'suggested_timeline_count': timeline_suggested, 'accepted_timeline_count': timeline_accepted, 'upcoming_timeline_events': upcoming, 'recent_timeline_events': recent_timeline, 'high_confidence_event_count': timeline_high, 'communication_count': communication_count, 'suggested_communication_count': suggested_communication_count, 'hostile_or_urgent_count': hostile_or_urgent_count, 'recent_communications': recent_communications}
 
 
 @router.get('/reports/{workspace_id}')
@@ -255,3 +260,59 @@ def create_divorce_timeline_manual(workspace_id: str, payload: DivorceTimelineCr
     _verify_access(db, workspace_id, current_user.id)
     item = DivorceTimelineItem(workspace_id=workspace_id, event_date=payload.event_date, date_precision=payload.date_precision or ('exact' if payload.event_date else 'unknown'), title=payload.title, description=payload.description, category=payload.category, include_in_report=True, review_status='edited', confidence=1.0, metadata_json={'source': 'manual'})
     db.add(item); db.commit(); db.refresh(item); return item
+
+
+class DivorceCommunicationUpdate(BaseModel):
+    sender: str | None = None
+    recipient: str | None = None
+    subject: str | None = None
+    category: str | None = None
+    tone: str | None = None
+    review_status: str | None = None
+    extracted_issues_json: dict | None = None
+    extracted_deadlines_json: list | None = None
+    extracted_offers_json: list | None = None
+    extracted_allegations_json: list | None = None
+
+@router.get('/communications/{workspace_id}')
+def list_divorce_communications(workspace_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    _verify_access(db, workspace_id, current_user.id)
+    return db.query(DivorceCommunication).filter(DivorceCommunication.workspace_id == workspace_id).order_by(DivorceCommunication.sent_at.desc().nullslast(), DivorceCommunication.created_at.desc()).all()
+
+@router.post('/communications/extract/{workspace_id}')
+def extract_divorce_communications(workspace_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    _verify_access(db, workspace_id, current_user.id)
+    created = extract_communications_for_workspace(db, workspace_id)
+    return {'created_count': created}
+
+@router.post('/communications/{communication_id}/accept')
+def accept_divorce_communication(communication_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    item = db.query(DivorceCommunication).filter(DivorceCommunication.id == communication_id).first()
+    if not item: raise HTTPException(404, 'Communication not found')
+    _verify_access(db, str(item.workspace_id), current_user.id)
+    item.review_status = 'accepted'; db.commit(); db.refresh(item); return item
+
+@router.post('/communications/{communication_id}/reject')
+def reject_divorce_communication(communication_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    item = db.query(DivorceCommunication).filter(DivorceCommunication.id == communication_id).first()
+    if not item: raise HTTPException(404, 'Communication not found')
+    _verify_access(db, str(item.workspace_id), current_user.id)
+    item.review_status = 'rejected'; db.commit(); db.refresh(item); return item
+
+@router.patch('/communications/{communication_id}')
+def patch_divorce_communication(communication_id: str, payload: DivorceCommunicationUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    item = db.query(DivorceCommunication).filter(DivorceCommunication.id == communication_id).first()
+    if not item: raise HTTPException(404, 'Communication not found')
+    _verify_access(db, str(item.workspace_id), current_user.id)
+    for f in ['sender','recipient','subject','category','tone','extracted_issues_json','extracted_deadlines_json','extracted_offers_json','extracted_allegations_json']:
+        v = getattr(payload, f)
+        if v is not None: setattr(item, f, v)
+    item.review_status = payload.review_status or 'edited'
+    db.commit(); db.refresh(item); return item
+
+@router.delete('/communications/{communication_id}')
+def delete_divorce_communication(communication_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    item = db.query(DivorceCommunication).filter(DivorceCommunication.id == communication_id).first()
+    if not item: raise HTTPException(404, 'Communication not found')
+    _verify_access(db, str(item.workspace_id), current_user.id)
+    db.delete(item); db.commit(); return {'deleted': True}

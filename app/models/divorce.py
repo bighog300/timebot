@@ -39,3 +39,28 @@ class DivorceReport(Base):
     error_message_sanitized = Column(Text, nullable=True)
     metadata_json = Column(JSONB, nullable=False, default=dict)
     created_at = Column(TIMESTAMP(timezone=True), nullable=False, default=func.now())
+
+
+class DivorceCommunication(Base):
+    __tablename__ = 'divorce_communications'
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    workspace_id = Column(UUID(as_uuid=True), ForeignKey('workspaces.id', ondelete='CASCADE'), nullable=False, index=True)
+    source_document_id = Column(UUID(as_uuid=True), ForeignKey('documents.id', ondelete='SET NULL'), nullable=True)
+    source_email_id = Column(String(255), nullable=True)
+    source_message_id = Column(String(255), nullable=True)
+    sender = Column(String(255), nullable=False, default='')
+    recipient = Column(Text, nullable=True)
+    subject = Column(String(255), nullable=True)
+    sent_at = Column(TIMESTAMP(timezone=True), nullable=True)
+    communication_type = Column(String(20), nullable=False, default='email')
+    category = Column(String(50), nullable=False, default='unknown')
+    tone = Column(String(30), nullable=False, default='unclear')
+    extracted_issues_json = Column(JSONB, nullable=False, default=dict)
+    extracted_deadlines_json = Column(JSONB, nullable=False, default=list)
+    extracted_offers_json = Column(JSONB, nullable=False, default=list)
+    extracted_allegations_json = Column(JSONB, nullable=False, default=list)
+    confidence = Column(Float)
+    review_status = Column(String(20), nullable=False, default='suggested')
+    metadata_json = Column(JSONB, nullable=False, default=dict)
+    created_at = Column(TIMESTAMP(timezone=True), nullable=False, default=func.now())
+    updated_at = Column(TIMESTAMP(timezone=True), nullable=False, default=func.now(), onupdate=func.now())
