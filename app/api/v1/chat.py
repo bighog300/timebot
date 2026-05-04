@@ -294,6 +294,8 @@ def create_session(payload: CreateSessionRequest, db: Session = Depends(get_db),
             raise HTTPException(status_code=404, detail="Assistant not found or disabled")
         if not can_use_assistant(db, user, assistant):
             require_upgrade("pro", "assistant_access", f"Upgrade to Pro to use {assistant.name}.")
+    if payload.prompt_template_id and _plan_rank(((get_effective_plan(db, user.id).get("plan") or None).slug if get_effective_plan(db, user.id).get("plan") else "free")) < _plan_rank("pro"):
+        raise HTTPException(status_code=402, detail={"code":"upgrade_required","required_plan":"pro","feature":"custom_prompts","message":"Upgrade required for selected prompt template."})
     selected_template_id = payload.prompt_template_id or (assistant.default_prompt_template_id if assistant else None)
     if selected_template_id:
         prompt_template = db.query(PromptTemplate).filter(PromptTemplate.id == selected_template_id, PromptTemplate.enabled.is_(True)).first()
@@ -302,7 +304,7 @@ def create_session(payload: CreateSessionRequest, db: Session = Depends(get_db),
         if assistant and prompt_template.assistant_id and prompt_template.assistant_id != assistant.id:
             raise HTTPException(status_code=400, detail="Prompt template is not compatible with selected assistant")
         if _plan_rank(((get_effective_plan(db, user.id).get("plan") or None).slug if get_effective_plan(db, user.id).get("plan") else "free")) < _plan_rank(prompt_template.required_plan):
-            raise HTTPException(status_code=402, detail={"code":"upgrade_required","required_plan":prompt_template.required_plan,"feature":"prompt_template_access","message":"Upgrade required for selected prompt template."})
+            raise HTTPException(status_code=402, detail={"code":"upgrade_required","required_plan":prompt_template.required_plan,"feature":"custom_prompts","message":"Upgrade required for selected prompt template."})
     session = ChatSession(user_id=user.id, title=payload.title, assistant_id=payload.assistant_id, prompt_template_id=selected_template_id)
     db.add(session)
     db.flush()
