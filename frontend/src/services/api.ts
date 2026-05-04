@@ -90,7 +90,7 @@ import type {
   CampaignSendStatus,
   EmailSuppression,
   SystemIntelligenceSubmission,
-  DivorceDashboard, DivorceReport, DivorceTask, DivorceTimelineEvent,
+  DivorceAdvisorMapping, DivorceDashboard, DivorceReport, DivorceTask, DivorceTimelineEvent,
 } from '@/types/api';
 
 
@@ -171,6 +171,7 @@ export const api = {
 
   createDivorceWorkspace: async (payload: { case_title: string; jurisdiction: string; current_stage: string; children_involved: boolean; financial_disclosure_started: boolean; lawyer_involved: boolean }): Promise<Workspace> => (await http.post('/divorce/setup', payload)).data,
   getDivorceDashboard: async (workspaceId: string): Promise<DivorceDashboard> => (await http.get(`/divorce/dashboard/${workspaceId}`)).data,
+  getDivorceAdvisors: async (): Promise<DivorceAdvisorMapping[]> => (await http.get('/divorce/advisors')).data,
   listDivorceTasks: async (workspaceId: string): Promise<DivorceTask[]> => (await http.get(`/divorce/tasks/${workspaceId}`)).data,
   acceptDivorceTask: async (taskId: string): Promise<DivorceTask> => (await http.post(`/divorce/tasks/${taskId}/accept`)).data,
   rejectDivorceTask: async (taskId: string): Promise<DivorceTask> => (await http.post(`/divorce/tasks/${taskId}/reject`)).data,
