@@ -11,6 +11,7 @@ vi.mock('@/services/api', ()=>({ api }));
 
 describe('admin suppressions page', ()=>{
   it('renders and add/remove calls API', async()=>{
+    vi.stubGlobal('confirm', vi.fn(() => true));
     render(<AdminEmailSuppressionsPage/>);
     expect(await screen.findByText(/x@example.com/)).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('suppression email'), {target:{value:'z@example.com'}});
