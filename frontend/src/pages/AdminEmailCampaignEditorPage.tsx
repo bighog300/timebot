@@ -3,6 +3,10 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { api, getErrorDetail } from '@/services/api';
 import type { EmailCampaign, EmailCampaignCreate, EmailCampaignPreviewResponse, CampaignRecipientPreview, CampaignSendResult, CampaignSendStatus } from '@/types/api';
 
+type CampaignAudienceFilters = {
+  emails?: string[];
+};
+
 export function AdminEmailCampaignEditorPage(){
   const {campaignId}=useParams(); const nav=useNavigate();
   const [f,setF]=useState<EmailCampaignCreate>({name:'',template_id:'',audience_type:'all_users',status:'draft',subject_override:'',preheader_override:'',variables_json:{}});
@@ -10,7 +14,7 @@ export function AdminEmailCampaignEditorPage(){
   const [sendStatus, setSendStatus] = useState<CampaignSendStatus | null>(null);
   const [manualList, setManualList] = useState('');
   const [recipientsChecked, setRecipientsChecked] = useState(false);
-  useEffect(()=>{api.listEmailTemplates().then((list)=>setTemplates(list.map(t=>({id:t.id,name:t.name})))); if(campaignId) api.getEmailCampaign(campaignId).then((c: EmailCampaign)=>{setF({name:c.name,template_id:c.template_id,audience_type:c.audience_type,audience_filters_json:c.audience_filters_json??null,status:c.status,subject_override:c.subject_override??'',preheader_override:c.preheader_override??'',variables_json:c.variables_json??{}}); setManualList(Array.isArray((c.audience_filters_json as any)?.emails) ? (c.audience_filters_json as any).emails.join('\n') : '');}).catch(e=>setErr(getErrorDetail(e)));},[campaignId]);
+  useEffect(()=>{api.listEmailTemplates().then((list)=>setTemplates(list.map(t=>({id:t.id,name:t.name})))); if(campaignId) api.getEmailCampaign(campaignId).then((c: EmailCampaign)=>{setF({name:c.name,template_id:c.template_id,audience_type:c.audience_type,audience_filters_json:c.audience_filters_json??null,status:c.status,subject_override:c.subject_override??'',preheader_override:c.preheader_override??'',variables_json:c.variables_json??{}}); const audienceFilters = c.audience_filters_json as CampaignAudienceFilters | null | undefined; setManualList(Array.isArray(audienceFilters?.emails) ? audienceFilters.emails.join('\n') : '');}).catch(e=>setErr(getErrorDetail(e)));},[campaignId]);
   useEffect(()=>{
     if(!campaignId || !sendStatus || !['queued','sending'].includes(sendStatus.status)) return;
     const id=window.setInterval(async()=>{
