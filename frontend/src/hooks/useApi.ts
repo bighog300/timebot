@@ -737,6 +737,7 @@ export function useTestPromptTemplate() {
 export function useUsage() { const authReady = useAuthReady(); return useQuery({ queryKey: keys.usage, queryFn: api.getUsage, enabled: authReady }); }
 export function useSubscription() { const authReady = useAuthReady(); return useQuery({ queryKey: keys.subscription, queryFn: api.getSubscription, enabled: authReady }); }
 export function usePlans() { const authReady = useAuthReady(); return useQuery({ queryKey: keys.plans, queryFn: api.listPlans, enabled: authReady }); }
+export function useBillingStatus() { const authReady = useAuthReady(); return useQuery({ queryKey: ['billing-status'], queryFn: api.getBillingStatus, enabled: authReady }); }
 export function useCreateCheckoutSession() { return useMutation({ mutationFn: (plan: string) => api.createCheckoutSession(plan) }); }
 export function useCreateCustomerPortalSession() { return useMutation({ mutationFn: () => api.createCustomerPortalSession() }); }
 
