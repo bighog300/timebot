@@ -90,7 +90,7 @@ import type {
   CampaignSendStatus,
   EmailSuppression,
   SystemIntelligenceSubmission,
-  DivorceDashboard, DivorceTask, DivorceTimelineEvent,
+  DivorceDashboard, DivorceReport, DivorceTask, DivorceTimelineEvent,
 } from '@/types/api';
 
 
@@ -183,6 +183,11 @@ export const api = {
   patchDivorceTimeline: async (eventId: string, payload: Partial<DivorceTimelineEvent>): Promise<DivorceTimelineEvent> => (await http.patch(`/divorce/timeline/${eventId}`, payload)).data,
   deleteDivorceTimeline: async (eventId: string): Promise<{ deleted: boolean }> => (await http.delete(`/divorce/timeline/${eventId}`)).data,
   createDivorceTimelineManual: async (workspaceId: string, payload: { title: string; event_date?: string | null; category: string }): Promise<DivorceTimelineEvent> => (await http.post(`/divorce/timeline/${workspaceId}/manual`, payload)).data,
+  listDivorceReports: async (workspaceId: string): Promise<DivorceReport[]> => (await http.get(`/divorce/reports/${workspaceId}`)).data,
+  generateDivorceReport: async (workspaceId: string, payload: { report_type: string; title?: string; date_range?: Record<string, string>; include_task_ids?: string[]; include_timeline_item_ids?: string[]; include_document_ids?: string[] }): Promise<DivorceReport> => (await http.post(`/divorce/reports/${workspaceId}/generate`, payload)).data,
+  getDivorceReportDetail: async (reportId: string): Promise<DivorceReport> => (await http.get(`/divorce/reports/detail/${reportId}`)).data,
+  patchDivorceReport: async (reportId: string, payload: { title?: string; status?: string }): Promise<DivorceReport> => (await http.patch(`/divorce/reports/${reportId}`, payload)).data,
+  deleteDivorceReport: async (reportId: string): Promise<{ deleted: boolean }> => (await http.delete(`/divorce/reports/${reportId}`)).data,
 
 
   listWorkspaces: async (): Promise<Workspace[]> => (await http.get("/workspaces")).data,
