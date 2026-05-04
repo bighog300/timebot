@@ -11,6 +11,7 @@ from app.models.intelligence import DocumentActionItem
 from app.models.user import User
 from app.models.workspace import Workspace, WorkspaceMember
 from app.services.divorce_task_extraction import extract_tasks_for_workspace
+from app.services.divorce_timeline_extraction import extract_timeline_for_workspace
 
 router = APIRouter(prefix='/divorce', tags=['divorce'])
 
@@ -26,6 +27,20 @@ class DivorceTaskUpdate(BaseModel):
     status: str | None = None
     priority: str | None = None
     due_date: date | None = None
+
+
+class DivorceTimelineUpdate(BaseModel):
+    event_date: date | None = None
+    date_precision: str | None = None
+    title: str | None = None
+    description: str | None = None
+    category: str | None = None
+    include_in_report: bool | None = None
+
+
+class DivorceTimelineCreate(DivorceTimelineUpdate):
+    title: str
+    category: str = 'other'
 
 
 def _verify_access(db: Session, workspace_id: str, user_id):
@@ -85,4 +100,61 @@ def divorce_dashboard(workspace_id: str, db: Session = Depends(get_db), current_
     recent = db.query(DocumentActionItem).filter(DocumentActionItem.workspace_id == workspace_id).order_by(DocumentActionItem.created_at.desc()).limit(5).all()
     upcoming = db.query(DivorceTimelineItem).filter(DivorceTimelineItem.workspace_id == workspace_id, DivorceTimelineItem.event_date >= date.today()).order_by(DivorceTimelineItem.event_date.asc()).limit(5).all()
     reports = db.query(DivorceReport).filter_by(workspace_id=workspace_id).order_by(DivorceReport.created_at.desc()).limit(5).all()
-    return {'documents_uploaded': docs, 'emails_imported': 0, 'suggested_task_count': suggested, 'open_task_count': open_tasks, 'urgent_task_count': urgent, 'upcoming_due_dates': upcoming_tasks, 'recently_generated_tasks': recent, 'open_tasks': open_tasks, 'upcoming_deadlines': upcoming, 'key_timeline_events': upcoming, 'latest_reports': reports, 'missing_information_checklist': ['Confirm jurisdiction details', 'Upload latest financial disclosure']}
+    timeline_suggested = db.query(func.count(DivorceTimelineItem.id)).filter(DivorceTimelineItem.workspace_id == workspace_id, DivorceTimelineItem.review_status == 'suggested').scalar() or 0
+    timeline_accepted = db.query(func.count(DivorceTimelineItem.id)).filter(DivorceTimelineItem.workspace_id == workspace_id, DivorceTimelineItem.review_status.in_(['accepted','edited'])).scalar() or 0
+    timeline_high = db.query(func.count(DivorceTimelineItem.id)).filter(DivorceTimelineItem.workspace_id == workspace_id, DivorceTimelineItem.confidence >= 0.8).scalar() or 0
+    recent_timeline = db.query(DivorceTimelineItem).filter(DivorceTimelineItem.workspace_id == workspace_id).order_by(DivorceTimelineItem.created_at.desc()).limit(5).all()
+    return {'documents_uploaded': docs, 'emails_imported': 0, 'suggested_task_count': suggested, 'open_task_count': open_tasks, 'urgent_task_count': urgent, 'upcoming_due_dates': upcoming_tasks, 'recently_generated_tasks': recent, 'open_tasks': open_tasks, 'upcoming_deadlines': upcoming, 'key_timeline_events': upcoming, 'latest_reports': reports, 'missing_information_checklist': ['Confirm jurisdiction details', 'Upload latest financial disclosure'], 'suggested_timeline_count': timeline_suggested, 'accepted_timeline_count': timeline_accepted, 'upcoming_timeline_events': upcoming, 'recent_timeline_events': recent_timeline, 'high_confidence_event_count': timeline_high}
+
+
+@router.get('/timeline/{workspace_id}')
+def list_divorce_timeline(workspace_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    _verify_access(db, workspace_id, current_user.id)
+    return db.query(DivorceTimelineItem).filter(DivorceTimelineItem.workspace_id == workspace_id).order_by(DivorceTimelineItem.event_date.asc().nulls_last(), DivorceTimelineItem.created_at.asc()).all()
+
+@router.post('/timeline/extract/{workspace_id}')
+def extract_divorce_timeline(workspace_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    _verify_access(db, workspace_id, current_user.id)
+    created = extract_timeline_for_workspace(db, workspace_id)
+    return {'created_count': created}
+
+@router.post('/timeline/{event_id}/accept')
+def accept_divorce_timeline(event_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    event = db.query(DivorceTimelineItem).filter(DivorceTimelineItem.id == event_id).first()
+    if not event: raise HTTPException(404, 'Event not found')
+    _verify_access(db, str(event.workspace_id), current_user.id)
+    event.review_status = 'accepted'; db.commit(); db.refresh(event); return event
+
+@router.post('/timeline/{event_id}/reject')
+def reject_divorce_timeline(event_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    event = db.query(DivorceTimelineItem).filter(DivorceTimelineItem.id == event_id).first()
+    if not event: raise HTTPException(404, 'Event not found')
+    _verify_access(db, str(event.workspace_id), current_user.id)
+    event.review_status = 'rejected'; db.commit(); db.refresh(event); return event
+
+@router.patch('/timeline/{event_id}')
+def patch_divorce_timeline(event_id: str, payload: DivorceTimelineUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    event = db.query(DivorceTimelineItem).filter(DivorceTimelineItem.id == event_id).first()
+    if not event: raise HTTPException(404, 'Event not found')
+    _verify_access(db, str(event.workspace_id), current_user.id)
+    if payload.event_date is not None: event.event_date = payload.event_date
+    if payload.date_precision is not None: event.date_precision = payload.date_precision
+    if payload.title is not None: event.title = payload.title
+    if payload.description is not None: event.description = payload.description
+    if payload.category is not None: event.category = payload.category
+    if payload.include_in_report is not None: event.include_in_report = payload.include_in_report
+    event.review_status = 'edited'
+    db.commit(); db.refresh(event); return event
+
+@router.delete('/timeline/{event_id}')
+def delete_divorce_timeline(event_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    event = db.query(DivorceTimelineItem).filter(DivorceTimelineItem.id == event_id).first()
+    if not event: raise HTTPException(404, 'Event not found')
+    _verify_access(db, str(event.workspace_id), current_user.id)
+    db.delete(event); db.commit(); return {'deleted': True}
+
+@router.post('/timeline/{workspace_id}/manual')
+def create_divorce_timeline_manual(workspace_id: str, payload: DivorceTimelineCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    _verify_access(db, workspace_id, current_user.id)
+    item = DivorceTimelineItem(workspace_id=workspace_id, event_date=payload.event_date, date_precision=payload.date_precision or ('exact' if payload.event_date else 'unknown'), title=payload.title, description=payload.description, category=payload.category, include_in_report=True, review_status='edited', confidence=1.0, metadata_json={'source': 'manual'})
+    db.add(item); db.commit(); db.refresh(item); return item

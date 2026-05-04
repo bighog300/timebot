@@ -90,7 +90,7 @@ import type {
   CampaignSendStatus,
   EmailSuppression,
   SystemIntelligenceSubmission,
-  DivorceDashboard, DivorceTask,
+  DivorceDashboard, DivorceTask, DivorceTimelineEvent,
 } from '@/types/api';
 
 
@@ -176,6 +176,14 @@ export const api = {
   rejectDivorceTask: async (taskId: string): Promise<DivorceTask> => (await http.post(`/divorce/tasks/${taskId}/reject`)).data,
   patchDivorceTask: async (taskId: string, payload: { status?: string; priority?: string; due_date?: string | null }): Promise<DivorceTask> => (await http.patch(`/divorce/tasks/${taskId}`, payload)).data,
   extractDivorceTasks: async (workspaceId: string): Promise<{ created_count: number }> => (await http.post(`/divorce/tasks/extract/${workspaceId}`)).data,
+  listDivorceTimeline: async (workspaceId: string): Promise<DivorceTimelineEvent[]> => (await http.get(`/divorce/timeline/${workspaceId}`)).data,
+  extractDivorceTimeline: async (workspaceId: string): Promise<{ created_count: number }> => (await http.post(`/divorce/timeline/extract/${workspaceId}`)).data,
+  acceptDivorceTimeline: async (eventId: string): Promise<DivorceTimelineEvent> => (await http.post(`/divorce/timeline/${eventId}/accept`)).data,
+  rejectDivorceTimeline: async (eventId: string): Promise<DivorceTimelineEvent> => (await http.post(`/divorce/timeline/${eventId}/reject`)).data,
+  patchDivorceTimeline: async (eventId: string, payload: Partial<DivorceTimelineEvent>): Promise<DivorceTimelineEvent> => (await http.patch(`/divorce/timeline/${eventId}`, payload)).data,
+  deleteDivorceTimeline: async (eventId: string): Promise<{ deleted: boolean }> => (await http.delete(`/divorce/timeline/${eventId}`)).data,
+  createDivorceTimelineManual: async (workspaceId: string, payload: { title: string; event_date?: string | null; category: string }): Promise<DivorceTimelineEvent> => (await http.post(`/divorce/timeline/${workspaceId}/manual`, payload)).data,
+
 
   listWorkspaces: async (): Promise<Workspace[]> => (await http.get("/workspaces")).data,
   getWorkspace: async (workspaceId: string): Promise<Workspace> => (await http.get(`/workspaces/${workspaceId}`)).data,
