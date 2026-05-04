@@ -304,7 +304,7 @@ def post_message(session_id: UUID, payload: MessageRequest, db: Session = Depend
         assistant_content = (response.choices[0].message.content or "").strip() or "Not enough information was found in accessible Timebot documents."
         assistant_content = _append_sources(assistant_content, context["source_refs"])
     success = True
-    assistant_message = ChatMessage(session_id=s.id, role="assistant", content=assistant_content, source_refs=context["source_refs"], metadata_json={"assistant_id": str(s.assistant_id) if s.assistant_id else None, "prompt_template_id": str(s.prompt_template_id) if s.prompt_template_id else None, "model": bot_settings.model, "provider": "openai", "document_references": context["source_refs"]})
+    assistant_message = ChatMessage(session_id=s.id, role="assistant", content=assistant_content, source_refs=context["source_refs"], metadata_json={"assistant_id": str(s.assistant_id) if s.assistant_id else None, "prompt_template_id": str(s.prompt_template_id) if s.prompt_template_id else None, "model": bot_settings.model, "provider": "openai", "document_references": context["source_refs"], "user_evidence_refs": context.get("user_evidence_refs", []), "system_intelligence_refs": context.get("system_intelligence_refs", []), "legal_web_refs": context.get("legal_web_refs", [])})
     db.add(user_message)
     db.add(assistant_message)
     db.commit()
@@ -383,7 +383,7 @@ def stream_message(session_id: UUID, payload: MessageRequest, db: Session = Depe
             )
 
         assistant_text = _append_sources(assistant_text, context["source_refs"])
-        assistant_message = ChatMessage(session_id=s.id, role="assistant", content=assistant_text, source_refs=context["source_refs"])
+        assistant_message = ChatMessage(session_id=s.id, role="assistant", content=assistant_text, source_refs=context["source_refs"], metadata_json={"user_evidence_refs": context.get("user_evidence_refs", []), "system_intelligence_refs": context.get("system_intelligence_refs", []), "legal_web_refs": context.get("legal_web_refs", [])})
         db.add(assistant_message)
         db.commit()
         success = True

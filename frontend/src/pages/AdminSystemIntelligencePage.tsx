@@ -2,110 +2,39 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { http } from '@/services/http';
 
+type Doc = { id: string; title: string; category?: string|null; jurisdiction?: string|null; source_type: string; status: string; indexed_at?: string|null; description?: string|null };
+type Sub = { id: string; title: string; status: string; suggested_category?: string|null; suggested_jurisdiction?: string|null; reason?: string|null; admin_notes?: string|null };
+type Ref = { id: string; url: string; title: string; source_domain?: string|null; legal_area?: string|null; document_type?: string|null; status: string };
+type Log = { id: string; actor: string; action: string; target_type: string; target_id: string; created_at: string; metadata_json?: Record<string, unknown>|null };
+
 const tabs = ['Library', 'Upload', 'Review Submissions', 'Web References', 'Audit Log'] as const;
 
 export function AdminSystemIntelligencePage() {
   const qc = useQueryClient();
   const [tab, setTab] = useState<(typeof tabs)[number]>('Library');
+  const [titleError, setTitleError] = useState<string | null>(null);
 
-  const docs = useQuery({
-    queryKey: ['si-docs'],
-    queryFn: async () => (await http.get('/api/v1/admin/system-intelligence/documents')).data,
-  });
+  const docs = useQuery<Doc[]>({ queryKey: ['si-docs'], queryFn: async () => (await http.get('/api/v1/admin/system-intelligence/documents')).data });
+  const submissions = useQuery<Sub[]>({ queryKey: ['si-subs'], queryFn: async () => (await http.get('/api/v1/admin/system-intelligence/submissions')).data });
+  const refs = useQuery<Ref[]>({ queryKey: ['si-refs'], queryFn: async () => (await http.get('/api/v1/admin/system-intelligence/web-references')).data });
+  const logs = useQuery<Log[]>({ queryKey: ['si-audit'], queryFn: async () => (await http.get('/api/v1/admin/system-intelligence/audit-log')).data });
 
-  const submissions = useQuery({
-    queryKey: ['si-subs'],
-    queryFn: async () => (await http.get('/api/v1/admin/system-intelligence/submissions')).data,
-  });
+  const refresh = () => { qc.invalidateQueries({ queryKey: ['si-docs'] }); qc.invalidateQueries({ queryKey: ['si-subs'] }); qc.invalidateQueries({ queryKey: ['si-refs'] }); qc.invalidateQueries({ queryKey: ['si-audit'] }); };
+  const docAction = useMutation({ mutationFn: async ({ id, action }: { id: string; action: 'activate'|'archive'|'reindex'|'delete' }) => action === 'delete' ? (await http.delete(`/api/v1/admin/system-intelligence/documents/${id}`)).data : (await http.post(`/api/v1/admin/system-intelligence/documents/${id}/${action}`)).data, onSuccess: refresh });
+  const createDoc = useMutation({ mutationFn: async (payload: Record<string, unknown>) => (await http.post('/api/v1/admin/system-intelligence/documents', payload)).data, onSuccess: refresh });
+  const moderateSub = useMutation({ mutationFn: async ({ id, action, payload }: { id: string; action: 'approve'|'reject'; payload: Record<string, unknown> }) => (await http.post(`/api/v1/admin/system-intelligence/submissions/${id}/${action}`, payload)).data, onSuccess: refresh });
+  const refAction = useMutation({ mutationFn: async ({ id, action }: { id: string; action: 'approve'|'archive'|'delete' }) => action === 'delete' ? (await http.delete(`/api/v1/admin/system-intelligence/web-references/${id}`)).data : (await http.post(`/api/v1/admin/system-intelligence/web-references/${id}/${action}`)).data, onSuccess: refresh });
+  const createRef = useMutation({ mutationFn: async (payload: Record<string, unknown>) => (await http.post('/api/v1/admin/system-intelligence/web-references', payload)).data, onSuccess: refresh });
 
-  const refs = useQuery({
-    queryKey: ['si-refs'],
-    queryFn: async () => (await http.get('/api/v1/admin/system-intelligence/web-references')).data,
-  });
-
-  const logs = useQuery({
-    queryKey: ['si-audit'],
-    queryFn: async () => (await http.get('/api/v1/admin/system-intelligence/audit-log')).data,
-  });
-
-  const createDoc = useMutation({
-    mutationFn: async (payload: { title: string; description?: string }) =>
-      (
-        await http.post('/api/v1/admin/system-intelligence/documents', {
-          source_type: 'admin_upload',
-          ...payload,
-        })
-      ).data,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['si-docs'] }),
-  });
-
-  return (
-    <div className="space-y-4">
-      <h1 className="text-2xl font-semibold">System Intelligence</h1>
-      <p className="text-sm text-slate-400">
-        Admin-only controls for system document curation and legal web reference approval.
-      </p>
-
-      <div className="flex flex-wrap gap-2">
-        {tabs.map((t) => (
-          <button
-            key={t}
-            type="button"
-            onClick={() => setTab(t)}
-            className={`rounded border px-3 py-1 text-sm ${
-              tab === t
-                ? 'border-blue-500 bg-blue-600 text-white'
-                : 'border-slate-700 bg-slate-900 text-slate-100'
-            }`}
-          >
-            {t}
-          </button>
-        ))}
-      </div>
-
-      {tab === 'Library' && (
-        <pre className="overflow-auto rounded border border-slate-800 bg-slate-950 p-4 text-xs">
-          {JSON.stringify(docs.data ?? [], null, 2)}
-        </pre>
-      )}
-
-      {tab === 'Upload' && (
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            const fd = new FormData(e.currentTarget);
-            createDoc.mutate({
-              title: String(fd.get('title') || ''),
-              description: String(fd.get('description') || ''),
-            });
-          }}
-          className="space-y-2 rounded border border-slate-800 bg-slate-950 p-4"
-        >
-          <input name="title" placeholder="Title" className="w-full rounded bg-slate-800 p-2" />
-          <textarea name="description" placeholder="Description" className="w-full rounded bg-slate-800 p-2" />
-          <button type="submit" className="rounded bg-blue-600 px-3 py-2 text-white">
-            Create
-          </button>
-        </form>
-      )}
-
-      {tab === 'Review Submissions' && (
-        <pre className="overflow-auto rounded border border-slate-800 bg-slate-950 p-4 text-xs">
-          {JSON.stringify(submissions.data ?? [], null, 2)}
-        </pre>
-      )}
-
-      {tab === 'Web References' && (
-        <pre className="overflow-auto rounded border border-slate-800 bg-slate-950 p-4 text-xs">
-          {JSON.stringify(refs.data ?? [], null, 2)}
-        </pre>
-      )}
-
-      {tab === 'Audit Log' && (
-        <pre className="overflow-auto rounded border border-slate-800 bg-slate-950 p-4 text-xs">
-          {JSON.stringify(logs.data ?? [], null, 2)}
-        </pre>
-      )}
-    </div>
-  );
+  return <div className="space-y-4"><h1 className="text-2xl font-semibold">System Intelligence</h1>
+    <div className="flex flex-wrap gap-2">{tabs.map((t)=><button key={t} type="button" onClick={()=>setTab(t)} className={`rounded border px-3 py-1 text-sm ${tab===t?'border-blue-500 bg-blue-600 text-white':'border-slate-700 bg-slate-900 text-slate-100'}`}>{t}</button>)}</div>
+    {tab==='Library' && <table className='w-full text-sm'><thead><tr><th>Title</th><th>Category</th><th>Jurisdiction</th><th>Source</th><th>Status</th><th>Indexed</th><th>Actions</th></tr></thead><tbody>{(docs.data||[]).map((d)=><tr key={d.id}><td>{d.title}</td><td>{d.category||'-'}</td><td>{d.jurisdiction||'-'}</td><td>{d.source_type}</td><td>{d.status}</td><td>{d.indexed_at||'-'}</td><td className='space-x-1'>{['activate','archive','reindex','delete'].map((a)=><button key={a} onClick={()=>docAction.mutate({id:d.id,action:a as never})} className='rounded border px-2'>{a}</button>)}</td></tr>)}</tbody></table>}
+    {tab==='Upload' && <form onSubmit={(e)=>{e.preventDefault(); const fd=new FormData(e.currentTarget); const title=String(fd.get('title')||'').trim(); if(!title){setTitleError('Title is required'); return;} setTitleError(null); createDoc.mutate({title,description:String(fd.get('description')||''),category:String(fd.get('category')||''),jurisdiction:String(fd.get('jurisdiction')||''),source_type:String(fd.get('source_type')||'admin_upload'),status:String(fd.get('status')||'draft')});}} className='space-y-2'>
+      <input name='title' placeholder='Title' className='w-full rounded bg-slate-800 p-2'/>{titleError && <div className='text-red-300'>{titleError}</div>}
+      <textarea name='description' placeholder='Description' className='w-full rounded bg-slate-800 p-2'/><input name='category' placeholder='Category' className='w-full rounded bg-slate-800 p-2'/><input name='jurisdiction' placeholder='Jurisdiction' className='w-full rounded bg-slate-800 p-2'/><input name='source_type' placeholder='source_type' defaultValue='admin_upload' className='w-full rounded bg-slate-800 p-2'/><input name='status' placeholder='status' defaultValue='draft' className='w-full rounded bg-slate-800 p-2'/><button className='rounded bg-blue-600 px-3 py-2 text-white'>Create</button></form>}
+    {tab==='Review Submissions' && <div className='space-y-2'>{(submissions.data||[]).map((s)=><div key={s.id} className='rounded border p-2'><div className='font-medium'>{s.title} ({s.status})</div><div className='text-xs text-slate-400'>{s.reason||''}</div><div className='mt-1 space-x-1'><button className='rounded border px-2' onClick={()=>{const admin_notes=window.prompt('Admin notes')||''; moderateSub.mutate({id:s.id,action:'approve',payload:{admin_notes}})}}>Approve</button><button className='rounded border px-2' onClick={()=>{const admin_notes=window.prompt('Reject reason / notes')||''; moderateSub.mutate({id:s.id,action:'reject',payload:{admin_notes}})}}>Reject</button></div></div>)}</div>}
+    {tab==='Web References' && <div className='space-y-3'><table className='w-full text-sm'><thead><tr><th>URL</th><th>Title</th><th>Domain</th><th>Legal Area</th><th>Doc Type</th><th>Status</th><th>Actions</th></tr></thead><tbody>{(refs.data||[]).map((r)=><tr key={r.id}><td>{r.url}</td><td>{r.title}</td><td>{r.source_domain||'-'}</td><td>{r.legal_area||'-'}</td><td>{r.document_type||'-'}</td><td>{r.status}</td><td className='space-x-1'><button className='rounded border px-2' onClick={()=>refAction.mutate({id:r.id,action:'approve'})}>approve/activate</button><button className='rounded border px-2' onClick={()=>refAction.mutate({id:r.id,action:'archive'})}>archive</button><button className='rounded border px-2' onClick={()=>refAction.mutate({id:r.id,action:'delete'})}>delete</button></td></tr>)}</tbody></table>
+      <form onSubmit={(e)=>{e.preventDefault(); const fd=new FormData(e.currentTarget); createRef.mutate({url:String(fd.get('url')||''),title:String(fd.get('title')||''),source_domain:String(fd.get('source_domain')||''),legal_area:String(fd.get('legal_area')||''),document_type:String(fd.get('document_type')||'')}); e.currentTarget.reset();}} className='grid grid-cols-2 gap-2'><input name='url' placeholder='URL' className='rounded bg-slate-800 p-2'/><input name='title' placeholder='Title' className='rounded bg-slate-800 p-2'/><input name='source_domain' placeholder='source_domain' className='rounded bg-slate-800 p-2'/><input name='legal_area' placeholder='legal_area' className='rounded bg-slate-800 p-2'/><input name='document_type' placeholder='document_type' className='rounded bg-slate-800 p-2'/><button className='rounded bg-blue-600 px-3 py-2 text-white'>Add candidate</button></form></div>}
+    {tab==='Audit Log' && <table className='w-full text-sm'><thead><tr><th>Actor</th><th>Action</th><th>Target</th><th>Timestamp</th><th>Metadata</th></tr></thead><tbody>{(logs.data||[]).map((l)=><tr key={l.id}><td>{l.actor}</td><td>{l.action}</td><td>{l.target_type}:{l.target_id}</td><td>{l.created_at}</td><td>{JSON.stringify(l.metadata_json||{})}</td></tr>)}</tbody></table>}
+  </div>;
 }
