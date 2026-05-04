@@ -9,8 +9,10 @@
     "preview": "vite preview",
     "type-check": "tsc --noEmit",
     "lint": "ESLINT_USE_FLAT_CONFIG=false eslint . --ext ts,tsx --max-warnings 0",
-    "test": "vitest run",
-    "test:e2e": "node -e \"console.log('Playwright spec added in tests/e2e/smoke.spec.ts')\""
+    "test": "npm run test:frontend:unit",
+    "test:e2e": "node -e \"console.log('Playwright spec added in tests/e2e/smoke.spec.ts')\"",
+    "typecheck": "tsc --noEmit",
+    "test:frontend:unit": "vitest run"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.80.0",

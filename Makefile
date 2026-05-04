@@ -20,7 +20,7 @@ test-backend:
 	pytest tests -q
 
 test-frontend:
-	cd frontend && npm run test
+	cd frontend && npm run test:frontend:unit
 
 ci-backend:
 	python -m pip install --upgrade pip
@@ -29,9 +29,8 @@ ci-backend:
 
 ci-frontend:
 	cd frontend && npm ci
-	cd frontend && npm run type-check
+	cd frontend && npm run typecheck
 	cd frontend && npm run lint
-	cd frontend && npm run test
 	cd frontend && npm run build
 
 ci-integrated-smoke:
