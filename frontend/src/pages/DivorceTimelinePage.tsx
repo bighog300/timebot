@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/services/api';
+import { getActiveWorkspaceId } from '@/services/workspace';
 
 export function DivorceTimelinePage() {
-  const ws = localStorage.getItem('active_workspace_id') || '';
+  const ws = getActiveWorkspaceId();
   const qc = useQueryClient();
   const [category, setCategory] = useState('all');
   const [status, setStatus] = useState('all');
@@ -16,7 +17,7 @@ export function DivorceTimelinePage() {
   const create = useMutation({ mutationFn: () => api.createDivorceTimelineManual(ws, { title: newTitle, event_date: newDate || null, category: 'other' }), onSuccess: () => { setNewTitle(''); setNewDate(''); qc.invalidateQueries({ queryKey: ['divorce-timeline', ws] }); } });
   const items = timeline.data || [];
   const filtered = useMemo(() => items.filter((i) => (category === 'all' || i.category === category) && (status === 'all' || i.review_status === status)), [items, category, status]);
-  return <div className='space-y-3'><h1>Divorce Timeline</h1><p>AI-suggested chronology — verify before legal use.</p>
+  return <div className='space-y-3'><h1>Divorce Timeline</h1><p>Legal disclaimer: informational support only, not legal advice. Verify AI output before legal use.</p>
     <button onClick={() => extract.mutate()}>Extract timeline</button>
     <div><input value={newTitle} onChange={(e) => setNewTitle(e.target.value)} placeholder='Manual event title' /><input type='date' value={newDate} onChange={(e) => setNewDate(e.target.value)} /><button onClick={() => create.mutate()}>Add event</button></div>
     <div><select value={category} onChange={(e) => setCategory(e.target.value)}><option value='all'>all categories</option>{['legal','financial','children','communication','evidence','court','admin','safety','other'].map((c)=><option key={c} value={c}>{c}</option>)}</select>

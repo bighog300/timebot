@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/services/api';
+import { getActiveWorkspaceId } from '@/services/workspace';
 
 export function DivorceCommunicationsPage(){
-  const ws = localStorage.getItem('activeWorkspaceId') || localStorage.getItem('active_workspace_id') || '';
+  const ws = getActiveWorkspaceId();
   const qc = useQueryClient();
   const [category, setCategory] = useState('all');
   const [tone, setTone] = useState('all');
