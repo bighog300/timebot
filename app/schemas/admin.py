@@ -451,7 +451,7 @@ class AdminEmailTestSendResponse(BaseModel):
     status: str
     provider: str
     provider_message_id: str | None
-    log_id: UUID
+    log_id: str
 
 
 class EmailSendLogResponse(BaseModel):
