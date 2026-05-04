@@ -403,6 +403,16 @@ def test_invite_resend_rotates_hash_and_cancel_marks_canceled_at(client, test_us
     assert invite.canceled_at is not None
 
 
+def test_admin_can_list_invites(client, test_user, db):
+    test_user.role = 'admin'; db.commit()
+    created = client.post('/api/v1/admin/users/invite', json={'email': 'listable@example.com', 'role': 'viewer', 'expires_in_days': 7})
+    assert created.status_code == 200
+    response = client.get('/api/v1/admin/users/invites')
+    assert response.status_code == 200
+    payload = response.json()
+    assert any(inv['email'] == 'listable@example.com' for inv in payload)
+
+
 def test_role_deactivate_reactivate_delete_are_audited(client, test_user, db):
     test_user.role = 'admin'; db.commit()
     target = User(id=uuid.uuid4(), email='audited@example.com', password_hash='x', display_name='Audited', is_active=True, role='viewer')
