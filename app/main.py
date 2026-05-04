@@ -31,6 +31,7 @@ from app.api.v1 import (
     workspaces,
     messaging,
     email_webhooks,
+    system_intelligence,
 )
 
 logger = logging.getLogger(__name__)
@@ -217,3 +218,4 @@ def root():
 app.include_router(workspaces.router, prefix="/api/v1")
 app.include_router(messaging.router, prefix="/api/v1")
 app.include_router(messaging.admin_router, prefix="/api/v1")
+app.include_router(system_intelligence.router, prefix="/api/v1")
