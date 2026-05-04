@@ -11,6 +11,8 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user, get_db
 from app.api.v1.admin import _get_or_create_chatbot_settings
 from app.models.chat import AssistantProfile, ChatDocumentLink, ChatMessage, ChatSession
+from app.models.document import Document
+from app.models.prompt_template import PromptTemplate
 from app.models.user import User
 from app.services.chat_retrieval import format_chat_context, retrieve_chat_context
 from app.services.openai_client import APIError, openai_client_service
@@ -137,7 +139,7 @@ def _build_model_messages(db: Session, bot_settings, prompt: str, prior_messages
     return model_messages
 
 
-def _build_chat_payload(db: Session, user: User, payload: MessageRequest, session_id: UUID | None = None, assistant_type: str | None = None):
+def _build_chat_payload(db: Session, user: User, payload: MessageRequest, session_id: UUID | None = None, assistant_type: str | None = None, retrieval_prompt_override: str | None = None):
     bot_settings = _get_or_create_chatbot_settings(db)
     if not openai_client_service.enabled:
         raise HTTPException(status_code=503, detail="Chat AI is unavailable: OPENAI_API_KEY is not configured.")
@@ -171,7 +173,7 @@ def _build_chat_payload(db: Session, user: User, payload: MessageRequest, sessio
     )
     if not context["documents"]:
         return bot_settings, context, None
-    retrieval_prompt_content = get_active_prompt_content(db, "retrieval", bot_settings.retrieval_prompt)
+    retrieval_prompt_content = retrieval_prompt_override or get_active_prompt_content(db, "retrieval", bot_settings.retrieval_prompt)
     answer_mode = _detect_answer_mode(payload.message)
     answer_mode_instruction = ANSWER_MODE_INSTRUCTIONS[answer_mode]
     prompt = (
@@ -250,14 +252,22 @@ def create_session(payload: CreateSessionRequest, db: Session = Depends(get_db),
         require_upgrade("pro", "chat_sessions", "Upgrade to Pro to create more chat sessions.")
     if payload.assistant_id:
         assistant = db.query(AssistantProfile).filter(AssistantProfile.id == payload.assistant_id, AssistantProfile.enabled.is_(True)).first()
+        if not assistant:
+            raise HTTPException(status_code=404, detail="Assistant not found or disabled")
         if assistant and not can_use_assistant(db, user, assistant):
             require_upgrade("pro", "assistant_access", f"Upgrade to Pro to use {assistant.name}.")
     if payload.prompt_template_id and not can_create_custom_prompt(db, user):
         require_upgrade("pro", "custom_prompts", "Upgrade to Pro to use custom prompt templates.")
+    if payload.prompt_template_id:
+        prompt_template = db.query(PromptTemplate).filter(PromptTemplate.id == payload.prompt_template_id, PromptTemplate.enabled.is_(True)).first()
+        if not prompt_template:
+            raise HTTPException(status_code=404, detail="Prompt template not found or inaccessible")
     session = ChatSession(user_id=user.id, title=payload.title, assistant_id=payload.assistant_id, prompt_template_id=payload.prompt_template_id)
     db.add(session)
     db.flush()
     for doc_id in (payload.linked_document_ids or []):
+        if not db.query(Document.id).filter(Document.id == doc_id, Document.user_id == user.id).first():
+            raise HTTPException(status_code=404, detail=f"Linked document not found or inaccessible: {doc_id}")
         db.add(ChatDocumentLink(session_id=session.id, document_id=doc_id))
     db.commit()
     db.refresh(session)
@@ -293,7 +303,11 @@ def post_message(session_id: UUID, payload: MessageRequest, db: Session = Depend
     if s.assistant_id:
         assistant_row = db.query(AssistantProfile).filter(AssistantProfile.id == s.assistant_id).first()
         assistant_type = assistant_row.name if assistant_row else None
-    bot_settings, context, prompt = _build_chat_payload(db, user, payload, s.id, assistant_type)
+    retrieval_prompt_override = None
+    if s.prompt_template_id:
+        template = db.query(PromptTemplate).filter(PromptTemplate.id == s.prompt_template_id, PromptTemplate.enabled.is_(True)).first()
+        retrieval_prompt_override = template.content if template else None
+    bot_settings, context, prompt = _build_chat_payload(db, user, payload, s.id, assistant_type, retrieval_prompt_override)
     if not can_use_system_intelligence(db, user):
         context["system_intelligence_refs"] = []
         context["legal_web_refs"] = []
@@ -361,7 +375,15 @@ def stream_message(session_id: UUID, payload: MessageRequest, db: Session = Depe
             require_upgrade("pro", "legal_assistant", f"Upgrade to Pro to use {assistant.name}.")
     enforce_message_limit(db, user)
     enforce_limit(db, user.id, "processing_jobs_per_month", quantity=1)
-    bot_settings, context, prompt = _build_chat_payload(db, user, payload, s.id)
+    assistant_type = None
+    if s.assistant_id:
+        assistant_row = db.query(AssistantProfile).filter(AssistantProfile.id == s.assistant_id).first()
+        assistant_type = assistant_row.name if assistant_row else None
+    retrieval_prompt_override = None
+    if s.prompt_template_id:
+        template = db.query(PromptTemplate).filter(PromptTemplate.id == s.prompt_template_id, PromptTemplate.enabled.is_(True)).first()
+        retrieval_prompt_override = template.content if template else None
+    bot_settings, context, prompt = _build_chat_payload(db, user, payload, s.id, assistant_type, retrieval_prompt_override)
     if not can_use_system_intelligence(db, user):
         context["system_intelligence_refs"] = []
         context["legal_web_refs"] = []
@@ -422,7 +444,7 @@ def stream_message(session_id: UUID, payload: MessageRequest, db: Session = Depe
             )
 
         assistant_text = _append_sources(assistant_text, context["source_refs"])
-        assistant_message = ChatMessage(session_id=s.id, role="assistant", content=assistant_text, source_refs=context["source_refs"], metadata_json={"user_evidence_refs": context.get("user_evidence_refs", []), "system_intelligence_refs": context.get("system_intelligence_refs", []), "legal_web_refs": context.get("legal_web_refs", [])})
+        assistant_message = ChatMessage(session_id=s.id, role="assistant", content=assistant_text, source_refs=context["source_refs"], metadata_json={"assistant_id": str(s.assistant_id) if s.assistant_id else None, "prompt_template_id": str(s.prompt_template_id) if s.prompt_template_id else None, "model": bot_settings.model, "provider": "openai", "document_references": context["source_refs"], "user_evidence_refs": context.get("user_evidence_refs", []), "system_intelligence_refs": context.get("system_intelligence_refs", []), "legal_web_refs": context.get("legal_web_refs", []), "retrieval_meta": context.get("retrieval_meta", {})})
         db.add(assistant_message)
         db.commit()
         success = True

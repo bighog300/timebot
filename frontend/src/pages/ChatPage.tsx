@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useAssistants, useChatSession, useChatSessions, useCreateChatSession, useDeleteChatSession, useUpdateChatSession } from '@/hooks/useApi';
+import { useAssistants, useChatSession, useChatSessions, useCreateChatSession, useDeleteChatSession, useDocuments, useUpdateChatSession } from '@/hooks/useApi';
 import { api, getErrorDetail } from '@/services/api';
 import { useUIStore } from '@/store/uiStore';
 import { UpgradePrompt } from '@/components/billing/UpgradePrompt';
@@ -11,6 +11,7 @@ export function ChatPage() {
   const sessions = useChatSessions();
   const assistants = useAssistants();
   const createSession = useCreateChatSession();
+  const documents = useDocuments();
   const updateSession = useUpdateChatSession();
   const deleteSession = useDeleteChatSession();
   const [sessionId, setSessionId] = useState('');
@@ -18,7 +19,7 @@ export function ChatPage() {
   const [title, setTitle] = useState('New chat');
   const [assistantId, setAssistantId] = useState('');
   const [promptTemplateId, setPromptTemplateId] = useState('');
-  const [linkedDocuments, setLinkedDocuments] = useState('');
+  const [linkedDocumentIds, setLinkedDocumentIds] = useState<string[]>([]);
   const [message, setMessage] = useState('');
   const [monetizationError, setMonetizationError] = useState<string | null>(null);
   const [upgradeModal, setUpgradeModal] = useState<UpgradeRequirement | null>(null);
@@ -39,7 +40,7 @@ export function ChatPage() {
       setUpgradeModal({ feature: 'specialist assistants', requiredPlan: 'pro', message: `Upgrade to Pro to use ${chosen.name}.` });
       return;
     }
-    const created = await createSession.mutateAsync({ title, assistant_id: assistantId || null, prompt_template_id: promptTemplateId || null, linked_document_ids: linkedDocuments.split(',').map((x) => x.trim()).filter(Boolean) });
+    const created = await createSession.mutateAsync({ title, assistant_id: assistantId || null, prompt_template_id: promptTemplateId || null, linked_document_ids: linkedDocumentIds });
     setSessionId(created.id);
     setShowCreate(false);
   };
@@ -90,7 +91,7 @@ export function ChatPage() {
       <div className='text-sm'>System intelligence refs: {((lastAssistantMessage?.metadata_json?.system_intelligence_refs as { title?: string }[]|undefined) || []).map((r) => r.title || 'Untitled').join(', ') || 'None'}</div>
       <div className='text-sm'>Legal web refs: {((lastAssistantMessage?.metadata_json?.legal_web_refs as { title?: string }[]|undefined) || []).map((r) => r.title || 'Untitled').join(', ') || 'None'}</div>
     </aside>
-    {showCreate && <div className='fixed inset-0 bg-black/60 p-6'><div className='mx-auto max-w-lg rounded bg-slate-900 p-4'><h2 className='text-lg'>Create chat</h2><input className='mt-2 w-full rounded border border-slate-700 bg-slate-800 p-2' value={title} onChange={(e) => setTitle(e.target.value)} placeholder='title' /><select className='mt-2 w-full rounded border border-slate-700 bg-slate-800 p-2' value={assistantId} onChange={(e) => setAssistantId(e.target.value)}><option value=''>Select assistant</option>{(assistants.data || []).map((a) => <option key={a.id} value={a.id}>{a.name}{a.required_plan !== 'free' ? ' 🔒 Pro' : ''}{a.locked ? ' (Locked)' : ''}</option>)}</select><input className='mt-2 w-full rounded border border-slate-700 bg-slate-800 p-2' value={promptTemplateId} onChange={(e) => setPromptTemplateId(e.target.value)} placeholder='prompt template id' /><input className='mt-2 w-full rounded border border-slate-700 bg-slate-800 p-2' value={linkedDocuments} onChange={(e) => setLinkedDocuments(e.target.value)} placeholder='linked documents comma-separated' /><div className='mt-3 flex justify-end gap-2'><button onClick={() => setShowCreate(false)}>Cancel</button><button onClick={onCreate} className='rounded bg-indigo-700 px-3 py-1'>Create</button></div></div></div>}
+    {showCreate && <div className='fixed inset-0 bg-black/60 p-6'><div className='mx-auto max-w-lg rounded bg-slate-900 p-4'><h2 className='text-lg'>Create chat</h2><input className='mt-2 w-full rounded border border-slate-700 bg-slate-800 p-2' value={title} onChange={(e) => setTitle(e.target.value)} placeholder='title' /><select className='mt-2 w-full rounded border border-slate-700 bg-slate-800 p-2' value={assistantId} onChange={(e) => setAssistantId(e.target.value)}><option value=''>Select assistant</option>{(assistants.data || []).map((a) => <option key={a.id} value={a.id}>{a.name}{a.required_plan !== 'free' ? ' 🔒 Pro' : ''}{a.locked ? ' (Locked)' : ''}</option>)}</select><select className='mt-2 w-full rounded border border-slate-700 bg-slate-800 p-2' value={promptTemplateId} onChange={(e) => setPromptTemplateId(e.target.value)}><option value=''>Default prompt template</option><option value='pt-new'>pt-new</option></select><select multiple className='mt-2 w-full rounded border border-slate-700 bg-slate-800 p-2' value={linkedDocumentIds} onChange={(e) => setLinkedDocumentIds(Array.from(e.target.selectedOptions).map((o) => o.value))}>{(documents.data || []).map((d) => <option key={d.id} value={d.id}>{d.filename || d.id}</option>)}</select><div className='mt-3 flex justify-end gap-2'><button onClick={() => setShowCreate(false)}>Cancel</button><button onClick={onCreate} className='rounded bg-indigo-700 px-3 py-1'>Create</button></div></div></div>}
     <UpgradeRequiredModal requirement={upgradeModal} onClose={() => setUpgradeModal(null)} />
   </div>;
 }
