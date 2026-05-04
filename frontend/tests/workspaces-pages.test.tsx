@@ -9,7 +9,8 @@ const mockCreate = vi.fn();
 const mockInvite = vi.fn();
 const mockAccept = vi.fn();
 type TestWorkspace = { id: string; name: string; type: 'personal' | 'team' };
-type TestWorkspaceDetail = TestWorkspace & { members?: Array<{ user_id: string; role: 'owner' | 'admin' | 'member'; email?: string | null }>; invites?: Array<{ id: string; workspace_id: string; email: string; role: string; status: string; created_at: string; dev_invite_link?: string }> };
+type TestWorkspaceInvite = { id: string; workspace_id: string; email: string; role: string; status: string; created_at: string; dev_invite_link?: string };
+type TestWorkspaceDetail = TestWorkspace & { members?: Array<{ user_id: string; role: 'owner' | 'admin' | 'member'; email?: string | null }>; invites?: TestWorkspaceInvite[] };
 let workspaceData: TestWorkspace[] = [];
 let workspaceDetail: TestWorkspaceDetail | null = null;
 let acceptState = { isPending: false, isSuccess: true, isError: false };
@@ -35,7 +36,7 @@ vi.mock('@/auth/AuthContext', () => ({ useAuth: () => ({ user: { id: 'u1' } }) }
 
 function wrap(ui: React.ReactNode) { return render(<QueryClientProvider client={new QueryClient()}>{ui}</QueryClientProvider>); }
 
-beforeEach(() => { workspaceData = [{ id: 'ws1', name: 'My Team', type: 'team' }]; workspaceDetail = { id: 'ws1', name: 'My Team', type: 'team', members: [{ user_id: 'u1', role: 'owner', email: 'o@example.com' }], invites: [{ id: 'i1', workspace_id: 'ws1', email: 'x@example.com', role: 'member', status: 'pending', created_at: '2026-01-01', dev_invite_link: '/workspaces/invites/abc/accept' }] as any }; acceptState = { isPending: false, isSuccess: true, isError: false }; mockCreate.mockReset(); mockInvite.mockReset(); mockAccept.mockReset(); });
+beforeEach(() => { workspaceData = [{ id: 'ws1', name: 'My Team', type: 'team' }]; workspaceDetail = { id: 'ws1', name: 'My Team', type: 'team', members: [{ user_id: 'u1', role: 'owner', email: 'o@example.com' }], invites: [{ id: 'i1', workspace_id: 'ws1', email: 'x@example.com', role: 'member', status: 'pending', created_at: '2026-01-01', dev_invite_link: '/workspaces/invites/abc/accept' }] }; acceptState = { isPending: false, isSuccess: true, isError: false }; mockCreate.mockReset(); mockInvite.mockReset(); mockAccept.mockReset(); });
 
 test('workspace list renders and create flow submits', async () => {
   mockCreate.mockResolvedValue({ id: 'ws2' });

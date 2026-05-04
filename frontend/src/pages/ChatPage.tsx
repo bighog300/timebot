@@ -3,7 +3,7 @@ import { useAssistants, useChatSession, useChatSessions, useCreateChatSession, u
 import { api, getErrorDetail } from '@/services/api';
 import { useUIStore } from '@/store/uiStore';
 import { UpgradePrompt } from '@/components/billing/UpgradePrompt';
-import type { ChatSession, PromptTemplate } from '@/types/api';
+import type { ChatSession } from '@/types/api';
 
 export function ChatPage() {
   const { pushToast } = useUIStore();
