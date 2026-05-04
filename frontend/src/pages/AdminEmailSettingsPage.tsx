@@ -67,8 +67,8 @@ export function AdminEmailSettingsPage() {
     {status && <Card><div className='text-emerald-300'>{status}</div></Card>}
     {!loading && items.map((i) => <Card key={i.provider}>
       <h3 className='text-base font-semibold'>{i.provider}</h3>
-      <p className='text-sm text-slate-300'>{i.configured ? 'API key configured' : 'API key not configured'} · {i.webhook_configured ? 'Webhook secret configured' : 'Webhook secret not configured'} · Resend uses API key starting re_; SendGrid uses SG.</p>
-      <p className='text-xs text-slate-400'>Webhook endpoint: {webhookBase}/{i.provider}. In Resend, add as HTTP webhook URL and use the signing secret here. In SendGrid, enable Event Webhook and copy the signed payload verification key here.</p>
+      <p className='text-sm text-slate-300'>{i.configured ? 'API key configured' : 'API key not configured'} · {i.webhook_configured ? 'Webhook secret configured' : 'Webhook secret not configured'} · {i.provider==='resend' ? 'Resend API keys usually start with re_ and your From email must be a verified domain in Resend.' : 'SendGrid API keys usually start with SG. and sender identity must be verified in SendGrid.'}</p>
+      <p className='text-xs text-slate-400'>Webhook endpoint: {webhookBase}/{i.provider}. {i.provider==='resend' ? 'Resend → Webhooks: add this URL, subscribe to delivered/opened/clicked/bounced/complained events, then paste the webhook signing secret here.' : 'SendGrid → Settings → Mail Settings → Event Webhook: enable signed event webhook, add this URL, then paste the verification key here as webhook secret.'}</p>
       <div className='mt-3 grid gap-2 md:grid-cols-2'>
         <label>Enabled <input type='checkbox' checked={i.enabled} onChange={(e) => setItems((v) => v.map((x) => x.provider === i.provider ? { ...x, enabled: e.target.checked } : x))} /></label>
         <label>From email <input value={i.from_email} onChange={(e) => setItems((v) => v.map((x) => x.provider === i.provider ? { ...x, from_email: e.target.value } : x))} /></label>
