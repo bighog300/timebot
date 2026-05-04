@@ -90,7 +90,7 @@ import type {
   CampaignSendStatus,
   EmailSuppression,
   SystemIntelligenceSubmission,
-  DivorceDashboard,
+  DivorceDashboard, DivorceTask,
 } from '@/types/api';
 
 
@@ -171,6 +171,12 @@ export const api = {
 
   createDivorceWorkspace: async (payload: { case_title: string; jurisdiction: string; current_stage: string; children_involved: boolean; financial_disclosure_started: boolean; lawyer_involved: boolean }): Promise<Workspace> => (await http.post('/divorce/setup', payload)).data,
   getDivorceDashboard: async (workspaceId: string): Promise<DivorceDashboard> => (await http.get(`/divorce/dashboard/${workspaceId}`)).data,
+  listDivorceTasks: async (workspaceId: string): Promise<DivorceTask[]> => (await http.get(`/divorce/tasks/${workspaceId}`)).data,
+  acceptDivorceTask: async (taskId: string): Promise<DivorceTask> => (await http.post(`/divorce/tasks/${taskId}/accept`)).data,
+  rejectDivorceTask: async (taskId: string): Promise<DivorceTask> => (await http.post(`/divorce/tasks/${taskId}/reject`)).data,
+  patchDivorceTask: async (taskId: string, payload: { status?: string; priority?: string; due_date?: string | null }): Promise<DivorceTask> => (await http.patch(`/divorce/tasks/${taskId}`, payload)).data,
+  extractDivorceTasks: async (workspaceId: string): Promise<{ created_count: number }> => (await http.post(`/divorce/tasks/extract/${workspaceId}`)).data,
+
   listWorkspaces: async (): Promise<Workspace[]> => (await http.get("/workspaces")).data,
   getWorkspace: async (workspaceId: string): Promise<Workspace> => (await http.get(`/workspaces/${workspaceId}`)).data,
   createWorkspace: async (payload: { name: string }): Promise<Workspace> => (await http.post('/workspaces', payload)).data,

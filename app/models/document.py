@@ -95,6 +95,7 @@ class Document(Base):
         "DocumentActionItem",
         back_populates="document",
         cascade="all, delete-orphan",
+        foreign_keys="DocumentActionItem.document_id",
     )
     review_audit_events = relationship(
         "ReviewAuditEvent",
