@@ -11,7 +11,9 @@ from app.models.intelligence import DocumentActionItem
 from app.models.user import User
 from app.models.workspace import Workspace, WorkspaceMember
 from app.services.divorce_task_extraction import extract_tasks_for_workspace
+from app.services.divorce_report_generation import PRO_REPORT_TYPES, generate_divorce_report
 from app.services.divorce_timeline_extraction import extract_timeline_for_workspace
+from app.services.subscriptions import ensure_default_free_subscription, get_user_plan
 
 router = APIRouter(prefix='/divorce', tags=['divorce'])
 
@@ -41,6 +43,20 @@ class DivorceTimelineUpdate(BaseModel):
 class DivorceTimelineCreate(DivorceTimelineUpdate):
     title: str
     category: str = 'other'
+
+
+class DivorceReportGeneratePayload(BaseModel):
+    report_type: str
+    title: str | None = None
+    date_range: dict | None = None
+    include_task_ids: list[str] | None = None
+    include_timeline_item_ids: list[str] | None = None
+    include_document_ids: list[str] | None = None
+
+
+class DivorceReportPatchPayload(BaseModel):
+    title: str | None = None
+    status: str | None = None
 
 
 def _verify_access(db: Session, workspace_id: str, user_id):
@@ -104,7 +120,51 @@ def divorce_dashboard(workspace_id: str, db: Session = Depends(get_db), current_
     timeline_accepted = db.query(func.count(DivorceTimelineItem.id)).filter(DivorceTimelineItem.workspace_id == workspace_id, DivorceTimelineItem.review_status.in_(['accepted','edited'])).scalar() or 0
     timeline_high = db.query(func.count(DivorceTimelineItem.id)).filter(DivorceTimelineItem.workspace_id == workspace_id, DivorceTimelineItem.confidence >= 0.8).scalar() or 0
     recent_timeline = db.query(DivorceTimelineItem).filter(DivorceTimelineItem.workspace_id == workspace_id).order_by(DivorceTimelineItem.created_at.desc()).limit(5).all()
-    return {'documents_uploaded': docs, 'emails_imported': 0, 'suggested_task_count': suggested, 'open_task_count': open_tasks, 'urgent_task_count': urgent, 'upcoming_due_dates': upcoming_tasks, 'recently_generated_tasks': recent, 'open_tasks': open_tasks, 'upcoming_deadlines': upcoming, 'key_timeline_events': upcoming, 'latest_reports': reports, 'missing_information_checklist': ['Confirm jurisdiction details', 'Upload latest financial disclosure'], 'suggested_timeline_count': timeline_suggested, 'accepted_timeline_count': timeline_accepted, 'upcoming_timeline_events': upcoming, 'recent_timeline_events': recent_timeline, 'high_confidence_event_count': timeline_high}
+    failed_reports = db.query(func.count(DivorceReport.id)).filter(DivorceReport.workspace_id == workspace_id, DivorceReport.status == 'failed').scalar() or 0
+    report_count = db.query(func.count(DivorceReport.id)).filter(DivorceReport.workspace_id == workspace_id).scalar() or 0
+    return {'documents_uploaded': docs, 'emails_imported': 0, 'suggested_task_count': suggested, 'open_task_count': open_tasks, 'urgent_task_count': urgent, 'upcoming_due_dates': upcoming_tasks, 'recently_generated_tasks': recent, 'open_tasks': open_tasks, 'upcoming_deadlines': upcoming, 'key_timeline_events': upcoming, 'latest_reports': reports, 'report_count': report_count, 'failed_report_count': failed_reports, 'missing_information_checklist': ['Confirm jurisdiction details', 'Upload latest financial disclosure'], 'suggested_timeline_count': timeline_suggested, 'accepted_timeline_count': timeline_accepted, 'upcoming_timeline_events': upcoming, 'recent_timeline_events': recent_timeline, 'high_confidence_event_count': timeline_high}
+
+
+@router.get('/reports/{workspace_id}')
+def list_divorce_reports(workspace_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    _verify_access(db, workspace_id, current_user.id)
+    return db.query(DivorceReport).filter(DivorceReport.workspace_id == workspace_id).order_by(DivorceReport.created_at.desc()).all()
+
+
+@router.post('/reports/{workspace_id}/generate')
+def generate_report(workspace_id: str, payload: DivorceReportGeneratePayload, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    _verify_access(db, workspace_id, current_user.id)
+    ensure_default_free_subscription(db, current_user.id)
+    plan = get_user_plan(db, current_user.id)
+    if payload.report_type in PRO_REPORT_TYPES and (not plan or plan.slug == 'free'):
+        raise HTTPException(status_code=402, detail='upgrade_required')
+    return generate_divorce_report(db, workspace_id=workspace_id, user_id=current_user.id, report_type=payload.report_type, title=payload.title, include_task_ids=payload.include_task_ids, include_timeline_item_ids=payload.include_timeline_item_ids, include_document_ids=payload.include_document_ids, date_range=payload.date_range)
+
+
+@router.get('/reports/detail/{report_id}')
+def report_detail(report_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    report = db.query(DivorceReport).filter(DivorceReport.id == report_id).first()
+    if not report: raise HTTPException(404, 'Report not found')
+    _verify_access(db, str(report.workspace_id), current_user.id)
+    return report
+
+
+@router.patch('/reports/{report_id}')
+def patch_report(report_id: str, payload: DivorceReportPatchPayload, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    report = db.query(DivorceReport).filter(DivorceReport.id == report_id).first()
+    if not report: raise HTTPException(404, 'Report not found')
+    _verify_access(db, str(report.workspace_id), current_user.id)
+    if payload.title is not None: report.title = payload.title
+    if payload.status is not None: report.status = payload.status
+    db.commit(); db.refresh(report); return report
+
+
+@router.delete('/reports/{report_id}')
+def delete_report(report_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    report = db.query(DivorceReport).filter(DivorceReport.id == report_id).first()
+    if not report: raise HTTPException(404, 'Report not found')
+    _verify_access(db, str(report.workspace_id), current_user.id)
+    db.delete(report); db.commit(); return {'deleted': True}
 
 
 @router.get('/timeline/{workspace_id}')
