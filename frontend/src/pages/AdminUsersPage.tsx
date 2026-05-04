@@ -1,4 +1,4 @@
-import { FormEvent, useMemo, useState } from 'react';
+import { FormEvent, useState } from 'react';
 import { Card } from '@/components/ui/Card';
 import { useUIStore } from '@/store/uiStore';
 import { getErrorDetail } from '@/services/api';
@@ -36,7 +36,6 @@ export function AdminUsersPage() {
   const resendInvite = useResendAdminInvite();
   const cancelInvite = useCancelAdminInvite();
 
-  const deletePhrase = useMemo(() => `delete ${deleteTarget?.email ?? ''}`, [deleteTarget]);
 
   async function handleDelete() {
     if (!deleteTarget || (deleteConfirm !== deleteTarget.email && deleteConfirm !== 'DELETE')) return;

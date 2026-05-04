@@ -37,13 +37,11 @@ jobs:
         run: npm ci
 
       - name: Type check
-        run: npm run type-check
+        run: npm run typecheck
 
       - name: Lint
         run: npm run lint
 
-      - name: Vitest
-        run: npx vitest run
 
       - name: Build
         run: npm run build

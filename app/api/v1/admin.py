@@ -862,7 +862,10 @@ def _invite_status(invite: UserInvite) -> str:
         return "accepted"
     if invite.canceled_at:
         return "canceled"
-    if invite.expires_at < now:
+    expires_at = invite.expires_at
+    if expires_at and expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    if expires_at and expires_at < now:
         return "expired"
     return "pending"
 
