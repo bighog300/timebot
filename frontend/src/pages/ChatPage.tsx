@@ -3,6 +3,7 @@ import { useAssistants, useChatSession, useChatSessions, useCreateChatSession, u
 import { api, getErrorDetail } from '@/services/api';
 import { useUIStore } from '@/store/uiStore';
 import { UpgradePrompt } from '@/components/billing/UpgradePrompt';
+import { UpgradeRequiredModal, type UpgradeRequirement } from '@/components/billing/UpgradeRequiredModal';
 import type { ChatSession } from '@/types/api';
 
 export function ChatPage() {
@@ -20,6 +21,7 @@ export function ChatPage() {
   const [linkedDocuments, setLinkedDocuments] = useState('');
   const [message, setMessage] = useState('');
   const [monetizationError, setMonetizationError] = useState<string | null>(null);
+  const [upgradeModal, setUpgradeModal] = useState<UpgradeRequirement | null>(null);
 
   const currentSessionId = sessionId || sessions.data?.find((s) => !s.is_archived)?.id || '';
   const session = useChatSession(currentSessionId);
@@ -34,6 +36,7 @@ export function ChatPage() {
     const chosen = (assistants.data || []).find((a) => a.id === assistantId);
     if (chosen?.locked) {
       setMonetizationError(`Upgrade to Pro to use ${chosen.name}.`);
+      setUpgradeModal({ feature: 'specialist assistants', requiredPlan: 'pro', message: `Upgrade to Pro to use ${chosen.name}.` });
       return;
     }
     const created = await createSession.mutateAsync({ title, assistant_id: assistantId || null, prompt_template_id: promptTemplateId || null, linked_document_ids: linkedDocuments.split(',').map((x) => x.trim()).filter(Boolean) });
@@ -48,9 +51,12 @@ export function ChatPage() {
       await api.sendChatMessageStream(currentSessionId, { message }, { onEvent: () => undefined });
       setMessage('');
     } catch (e) {
+      const detailRaw = (e as { response?: { data?: { detail?: { error?: string; code?: string; feature?: string; required_plan?: string; message?: string } } } })?.response?.data?.detail;
       const detail = getErrorDetail(e);
-      if (detail.includes('402') || detail.includes('upgrade_required')) {
-        setMonetizationError('Upgrade required. Free plan includes limited chats/messages. Upgrade to Pro for more.');
+      if ((e as { response?: { status?: number } })?.response?.status === 402 || detailRaw?.error === 'upgrade_required' || detailRaw?.code === 'upgrade_required') {
+        const message = detailRaw?.message ?? 'Upgrade required. Free plan includes limited chats/messages. Upgrade to Pro for more.';
+        setMonetizationError(message);
+        setUpgradeModal({ feature: detailRaw?.feature ?? 'chat send', requiredPlan: detailRaw?.required_plan ?? 'pro', message });
       }
       pushToast(detail, 'error');
     }
@@ -85,5 +91,6 @@ export function ChatPage() {
       <div className='text-sm'>Legal web refs: {((lastAssistantMessage?.metadata_json?.legal_web_refs as { title?: string }[]|undefined) || []).map((r) => r.title || 'Untitled').join(', ') || 'None'}</div>
     </aside>
     {showCreate && <div className='fixed inset-0 bg-black/60 p-6'><div className='mx-auto max-w-lg rounded bg-slate-900 p-4'><h2 className='text-lg'>Create chat</h2><input className='mt-2 w-full rounded border border-slate-700 bg-slate-800 p-2' value={title} onChange={(e) => setTitle(e.target.value)} placeholder='title' /><select className='mt-2 w-full rounded border border-slate-700 bg-slate-800 p-2' value={assistantId} onChange={(e) => setAssistantId(e.target.value)}><option value=''>Select assistant</option>{(assistants.data || []).map((a) => <option key={a.id} value={a.id}>{a.name}{a.required_plan !== 'free' ? ' 🔒 Pro' : ''}{a.locked ? ' (Locked)' : ''}</option>)}</select><input className='mt-2 w-full rounded border border-slate-700 bg-slate-800 p-2' value={promptTemplateId} onChange={(e) => setPromptTemplateId(e.target.value)} placeholder='prompt template id' /><input className='mt-2 w-full rounded border border-slate-700 bg-slate-800 p-2' value={linkedDocuments} onChange={(e) => setLinkedDocuments(e.target.value)} placeholder='linked documents comma-separated' /><div className='mt-3 flex justify-end gap-2'><button onClick={() => setShowCreate(false)}>Cancel</button><button onClick={onCreate} className='rounded bg-indigo-700 px-3 py-1'>Create</button></div></div></div>}
+    <UpgradeRequiredModal requirement={upgradeModal} onClose={() => setUpgradeModal(null)} />
   </div>;
 }

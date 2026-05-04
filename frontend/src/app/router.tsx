@@ -63,6 +63,8 @@ export const router = createBrowserRouter([
       { path: 'messages', element: <MessagesPage /> },
       { path: 'notifications', element: <NotificationsPage /> },
       { path: 'pricing', element: <PricingPage /> },
+      { path: 'upgrade', element: <PricingPage /> },
+      { path: 'billing', element: <PricingPage /> },
       { path: 'workspaces', element: <WorkspacesPage /> },
       { path: 'workspaces/:workspaceId', element: <WorkspaceDetailPage /> },
       { path: 'workspaces/invites/:token/accept', element: <WorkspaceInviteAcceptPage /> },

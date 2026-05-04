@@ -4,6 +4,7 @@ import { api, getErrorDetail } from '@/services/api';
 import { useUIStore } from '@/store/uiStore';
 import { PageHeader, ResponsiveGrid, ResponsivePage, StickyActionBar } from '@/components/layout/ResponsiveLayout';
 import { getSeverityBadgeClass, getSeverityLabel, sortInsightsBySeverity } from '@/lib/insights';
+import { UpgradeRequiredModal, type UpgradeRequirement } from '@/components/billing/UpgradeRequiredModal';
 
 function ReportSection({
   title, content, canEdit, isSaving, onSave,
@@ -38,6 +39,7 @@ export function ReportsPage() {
   const { pushToast } = useUIStore();
   const [title, setTitle] = useState(''); const [prompt, setPrompt] = useState(''); const [docIds, setDocIds] = useState('');
   const [includeTimeline, setIncludeTimeline] = useState(true); const [includeRelationships, setIncludeRelationships] = useState(true); const [includeFullText, setIncludeFullText] = useState(false);
+  const [upgradeModal, setUpgradeModal] = useState<UpgradeRequirement | null>(null);
   const sections = detail.data?.sections;
   const summaryContent = sections?.executive_summary || sections?.summary;
   const timelineContent = sections?.timeline_analysis || sections?.timeline;
@@ -54,6 +56,14 @@ export function ReportsPage() {
     await update.mutateAsync({ reportId: detail.data.id, payload: { sections: nextSections } });
   };
 
+  const handleExportClick = (format: 'md'|'pdf') => {
+    if (format === 'pdf') {
+      setUpgradeModal({ feature: 'report export', requiredPlan: 'pro', message: 'PDF export is available on Pro plans.' });
+      return;
+    }
+    if (detail.data) window.open(api.getReportDownloadUrl(detail.data.id, format), '_blank', 'noopener,noreferrer');
+  };
+
   return <ResponsivePage><ResponsiveGrid><div className='space-y-2'>
     <PageHeader><h1 className='text-xl font-semibold'>Reports</h1></PageHeader>
     <input value={title} onChange={(e)=>setTitle(e.target.value)} placeholder='title' className='w-full rounded border border-slate-700 bg-slate-900 p-2 text-sm' />
@@ -64,7 +74,7 @@ export function ReportsPage() {
     <label className='ml-2'><input type='checkbox' checked={includeFullText} onChange={(e)=>setIncludeFullText(e.target.checked)} /> full text</label>
     <StickyActionBar><button onClick={async()=>{try{const r=await create.mutateAsync({title,prompt,document_ids:docIds.split(',').map(s=>s.trim()).filter(Boolean),include_timeline:includeTimeline,include_relationships:includeRelationships,include_full_text:includeFullText}); setSelectedId(r.id); pushToast('Report created');}catch(e){pushToast(getErrorDetail(e),'error')}}} className='w-full rounded bg-indigo-700 px-3 py-2 text-sm'>Create report</button></StickyActionBar>
     {(reports.data||[]).map(r=><button key={r.id} onClick={()=>setSelectedId(r.id)} className='block w-full rounded border border-slate-700 p-2 text-left text-sm'>{r.title}</button>)}
-  </div><div className='min-w-0'>{detail.data && <div className='min-w-0'><h2 className='text-lg break-words'>{detail.data.title}</h2><div className='mt-2 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm'><a className='break-words underline-offset-2 hover:underline' href={api.getReportDownloadUrl(detail.data.id, 'md')} target='_blank'>Download Markdown</a><a className='break-words underline-offset-2 hover:underline' href={api.getReportDownloadUrl(detail.data.id, 'pdf')} target='_blank'>Download PDF</a></div>{hasStructuredSections ? <div className='mt-3 space-y-3'>
+  </div><div className='min-w-0'>{detail.data && <div className='min-w-0'><h2 className='text-lg break-words'>{detail.data.title}</h2><div className='mt-2 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm'><button className='underline-offset-2 hover:underline' onClick={()=>handleExportClick('md')}>Download Markdown</button><button className='underline-offset-2 hover:underline' onClick={()=>handleExportClick('pdf')}>Download PDF 🔒 Pro</button></div>{hasStructuredSections ? <div className='mt-3 space-y-3'>
     {summaryContent && <ReportSection title='Executive Summary / Summary' content={summaryContent} canEdit={hasStructuredSections} isSaving={update.isPending} onSave={(value)=>saveSection(['executive_summary', 'summary'], value)} />}
     {timelineContent && <ReportSection title='Timeline Analysis' content={timelineContent} canEdit={hasStructuredSections} isSaving={update.isPending} onSave={(value)=>saveSection(['timeline_analysis', 'timeline'], value)} />}
     {relationshipContent && <ReportSection title='Relationship Analysis' content={relationshipContent} canEdit={hasStructuredSections} isSaving={update.isPending} onSave={(value)=>saveSection(['relationship_analysis', 'relationships'], value)} />}
@@ -80,5 +90,5 @@ export function ReportsPage() {
         </li>)}
       </ul>}
     </section>
-    </div>}</div></ResponsiveGrid></ResponsivePage>;
+    </div>}</div></ResponsiveGrid><UpgradeRequiredModal requirement={upgradeModal} onClose={() => setUpgradeModal(null)} /></ResponsivePage>;
 }
