@@ -28,6 +28,7 @@ vi.mock('@/hooks/useApi', () => ({
   useApproveDocumentCategory: vi.fn(),
   useOverrideDocumentCategory: vi.fn(),
   useStructuredInsights: vi.fn(),
+  useCreateSystemIntelligenceSubmission: vi.fn(),
   keys: {
     timeline: ['timeline'] as const,
     insightsStructured: ['insights-structured'] as const,
@@ -50,6 +51,7 @@ import {
   useOverrideDocumentCategory,
   usePatchDocumentIntelligence,
   useStructuredInsights,
+  useCreateSystemIntelligenceSubmission,
   keys,
 } from '@/hooks/useApi';
 
@@ -107,6 +109,7 @@ describe('DocumentDetailPage relationship filtering', () => {
     } as never);
     vi.mocked(useConfirmDocumentRelationship).mockReturnValue({ isPending: false, mutate: confirmMutate } as never);
     vi.mocked(useDismissDocumentRelationship).mockReturnValue({ isPending: false, mutate: dismissMutate } as never);
+    vi.mocked(useCreateSystemIntelligenceSubmission).mockReturnValue({ mutate: vi.fn(), isPending: false } as never);
   });
 
   it('renders filter buttons', async () => {
