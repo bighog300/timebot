@@ -196,7 +196,7 @@ export const api = {
   updateChatSession: async (sessionId: string, payload: { title?: string; is_archived?: boolean }): Promise<ChatSession> => (await http.patch(`/chat/sessions/${sessionId}`, payload)).data,
   deleteChatSession: async (sessionId: string): Promise<{ deleted: boolean }> => (await http.delete(`/chat/sessions/${sessionId}`)).data,
   listChatSessions: async (): Promise<ChatSession[]> => (await http.get('/chat/sessions')).data,
-  listChatPromptTemplates: async (): Promise<ChatPromptTemplateSummary[]> => (await http.get('/chat/prompt-templates')).data,
+  listChatPromptTemplates: async (assistantId?: string): Promise<ChatPromptTemplateSummary[]> => (await http.get('/chat/prompt-templates', { params: assistantId ? { assistant_id: assistantId } : undefined })).data,
   getChatSession: async (sessionId: string): Promise<ChatSession> => {
     const payload = (await http.get(`/chat/sessions/${sessionId}`)).data;
     if (payload?.session) {

@@ -78,6 +78,8 @@ class AssistantProfile(Base):
     created_at = Column(TIMESTAMP(timezone=True), nullable=False, default=func.now())
     updated_at = Column(TIMESTAMP(timezone=True), nullable=False, default=func.now(), onupdate=func.now())
 
+    default_prompt_template = relationship("PromptTemplate", foreign_keys=[default_prompt_template_id])
+
 
 class ChatDocumentLink(Base):
     __tablename__ = "chat_document_links"

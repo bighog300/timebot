@@ -27,6 +27,9 @@ class PromptTemplateBase(BaseModel):
     fallback_model: str | None = Field(default=None, min_length=1, max_length=120)
     enabled: bool = True
     is_default: bool = False
+    assistant_id: UUID | None = None
+    required_plan: str = "free"
+    visibility: str = "system"
 
     @field_validator("content")
     @classmethod
@@ -65,6 +68,9 @@ class PromptTemplateUpdate(BaseModel):
     retry_on_validation_error: bool | None = None
     fallback_provider: str | None = Field(default=None, pattern="^(openai|gemini)$")
     fallback_model: str | None = Field(default=None, min_length=1, max_length=120)
+    assistant_id: UUID | None = None
+    required_plan: str | None = None
+    visibility: str | None = None
 
     @field_validator("content")
     @classmethod

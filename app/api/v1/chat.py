@@ -106,6 +106,8 @@ class ChatPromptTemplateOut(BaseModel):
     name: str
     type: str
     required_plan: str | None = None
+    assistant_id: UUID | None = None
+    is_default: bool = False
     locked: bool = False
 
 
@@ -237,32 +239,32 @@ def _require_plan(db: Session, user_id: UUID, required_plan: str):
 
 def _seed_assistants(db: Session):
     defaults = [
-        ("General Assistant", "General purpose workspace assistant.", "free"),
-        ("Psychological Analyst", "Behavioral pattern analysis grounded in uploaded evidence.", "pro"),
-        ("South African Legal Defense Expert", "South African defense-oriented legal analysis assistant.", "pro"),
-        ("Document Research Assistant", "Finds and cites relevant workspace documents.", "free"),
+        ("General Assistant", "General purpose workspace assistant.", "free", "General Assistant Chat Template", "You are a practical general assistant. Ground all answers in available workspace evidence and be explicit about uncertainty."),
+        ("Psychological Analyst", "Behavioral pattern analysis grounded in uploaded evidence.", "pro", "Psychological Analyst Chat Template", "You are a psychological analyst. Provide behavioral pattern analysis using only cited evidence from the workspace."),
+        ("South African Legal Defense Expert", "South African defense-oriented legal analysis assistant.", "pro", "South African Legal Defense Expert Chat Template", "You are a South African legal defense expert. Provide defense-oriented legal analysis with clear caveats and cite supporting evidence."),
+        ("Document Research Assistant", "Finds and cites relevant workspace documents.", "free", "Document Research Assistant Chat Template", "You are a document research assistant. Prioritize discovery, relevance ranking, and citations to workspace documents."),
     ]
-    chat_templates = db.query(PromptTemplate).filter(PromptTemplate.type == "chat", PromptTemplate.enabled.is_(True)).all()
-    template_by_name = {t.name.lower(): t for t in chat_templates}
-    default_map = {
-        "General Assistant": ["general chat template", "default chat"],
-        "Psychological Analyst": ["psychology analysis template", "psychological"],
-        "South African Legal Defense Expert": ["sa legal defense template", "legal strategy"],
-        "Document Research Assistant": ["document research template", "document research"],
-    }
-    for name, desc, plan in defaults:
-        existing = db.query(AssistantProfile).filter(AssistantProfile.name == name).first()
-        default_prompt_template_id = None
-        for hint in default_map.get(name, []):
-            matched = next((tpl for tpl_name, tpl in template_by_name.items() if hint in tpl_name), None)
-            if matched:
-                default_prompt_template_id = matched.id
-                break
-        if not existing:
-            db.add(AssistantProfile(name=name, description=desc, required_plan=plan, enabled=True, default_prompt_template_id=default_prompt_template_id))
-        elif default_prompt_template_id and existing.default_prompt_template_id != default_prompt_template_id:
-            existing.default_prompt_template_id = default_prompt_template_id
-            db.add(existing)
+    for name, desc, plan, template_name, template_content in defaults:
+        assistant = db.query(AssistantProfile).filter(AssistantProfile.name == name).first()
+        if not assistant:
+            assistant = AssistantProfile(name=name, description=desc, required_plan=plan, enabled=True)
+            db.add(assistant)
+            db.flush()
+        else:
+            assistant.description = desc
+            assistant.required_plan = plan
+        template = db.query(PromptTemplate).filter(PromptTemplate.type=="chat", PromptTemplate.name==template_name).first()
+        if not template:
+            template = PromptTemplate(type="chat", name=template_name, content=template_content, enabled=True, is_default=False, assistant_id=assistant.id, required_plan=plan, visibility="system")
+            db.add(template)
+            db.flush()
+        else:
+            template.assistant_id = assistant.id
+            template.required_plan = plan
+            template.visibility = "system"
+            template.enabled = True
+        assistant.default_prompt_template_id = template.id
+        db.add(assistant)
     db.commit()
 
 
@@ -274,28 +276,34 @@ def list_assistants(db: Session = Depends(get_db), user: User = Depends(get_curr
 
 
 @router.get("/prompt-templates", response_model=list[ChatPromptTemplateOut])
-def list_chat_prompt_templates(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    templates = db.query(PromptTemplate).filter(PromptTemplate.type == "chat", PromptTemplate.enabled.is_(True)).order_by(PromptTemplate.updated_at.desc()).all()
-    allow_custom = can_create_custom_prompt(db, user)
-    return [ChatPromptTemplateOut(id=t.id, name=t.name, type=t.type, required_plan=(None if allow_custom else "pro"), locked=not allow_custom) for t in templates]
+def list_chat_prompt_templates(assistant_id: UUID | None = None, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    templates = db.query(PromptTemplate).filter(PromptTemplate.type == "chat", PromptTemplate.enabled.is_(True))
+    if assistant_id:
+        templates = templates.filter((PromptTemplate.assistant_id.is_(None)) | (PromptTemplate.assistant_id == assistant_id))
+    rows = templates.order_by(PromptTemplate.updated_at.desc()).all()
+    return [ChatPromptTemplateOut(id=t.id, name=t.name, type=t.type, required_plan=t.required_plan, assistant_id=t.assistant_id, is_default=bool(assistant_id and t.id == (db.query(AssistantProfile).filter(AssistantProfile.id==assistant_id).first().default_prompt_template_id if db.query(AssistantProfile).filter(AssistantProfile.id==assistant_id).first() else None)), locked=_plan_rank(((get_effective_plan(db, user.id).get("plan") or None).slug if get_effective_plan(db, user.id).get("plan") else "free") ) < _plan_rank(t.required_plan)) for t in rows]
 @router.post("/sessions")
 def create_session(payload: CreateSessionRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     _seed_assistants(db)
     if not can_create_chat(db, user):
         require_upgrade("pro", "chat_sessions", "Upgrade to Pro to create more chat sessions.")
+    assistant = None
     if payload.assistant_id:
         assistant = db.query(AssistantProfile).filter(AssistantProfile.id == payload.assistant_id, AssistantProfile.enabled.is_(True)).first()
         if not assistant:
             raise HTTPException(status_code=404, detail="Assistant not found or disabled")
-        if assistant and not can_use_assistant(db, user, assistant):
+        if not can_use_assistant(db, user, assistant):
             require_upgrade("pro", "assistant_access", f"Upgrade to Pro to use {assistant.name}.")
-    if payload.prompt_template_id and not can_create_custom_prompt(db, user):
-        require_upgrade("pro", "custom_prompts", "Upgrade to Pro to use custom prompt templates.")
-    if payload.prompt_template_id:
-        prompt_template = db.query(PromptTemplate).filter(PromptTemplate.id == payload.prompt_template_id, PromptTemplate.enabled.is_(True)).first()
+    selected_template_id = payload.prompt_template_id or (assistant.default_prompt_template_id if assistant else None)
+    if selected_template_id:
+        prompt_template = db.query(PromptTemplate).filter(PromptTemplate.id == selected_template_id, PromptTemplate.enabled.is_(True)).first()
         if not prompt_template:
             raise HTTPException(status_code=404, detail="Prompt template not found or inaccessible")
-    session = ChatSession(user_id=user.id, title=payload.title, assistant_id=payload.assistant_id, prompt_template_id=payload.prompt_template_id)
+        if assistant and prompt_template.assistant_id and prompt_template.assistant_id != assistant.id:
+            raise HTTPException(status_code=400, detail="Prompt template is not compatible with selected assistant")
+        if _plan_rank(((get_effective_plan(db, user.id).get("plan") or None).slug if get_effective_plan(db, user.id).get("plan") else "free")) < _plan_rank(prompt_template.required_plan):
+            raise HTTPException(status_code=402, detail={"code":"upgrade_required","required_plan":prompt_template.required_plan,"feature":"prompt_template_access","message":"Upgrade required for selected prompt template."})
+    session = ChatSession(user_id=user.id, title=payload.title, assistant_id=payload.assistant_id, prompt_template_id=selected_template_id)
     db.add(session)
     db.flush()
     for doc_id in (payload.linked_document_ids or []):
