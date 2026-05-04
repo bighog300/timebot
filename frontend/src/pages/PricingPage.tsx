@@ -30,9 +30,11 @@ export function PricingPage() {
 
       <section className="rounded border border-slate-800 bg-slate-900 p-4 text-sm" aria-label="Billing status">
         <h2 className="font-semibold">Account billing status</h2>
-        <div className="mt-2">subscription_status: {subscription.data?.status ?? 'n/a'}</div>
-        <div>plan_started_at: {subscription.data?.current_period_start ?? 'n/a'}</div>
-        <div>plan_expires_at: {subscription.data?.current_period_end ?? 'n/a'}</div>
+        <div className="mt-2">Billing mode: {billingStatus.data?.enabled ? 'Stripe billing enabled' : 'Manual billing mode'}</div>
+        <div>Provider: {billingStatus.data?.provider ?? 'manual'}</div>
+        <div>Subscription status: {subscription.data?.status ?? 'n/a'}</div>
+        <div>Plan start date: {subscription.data?.current_period_start ?? 'n/a'}</div>
+        <div>Plan renewal/end date: {subscription.data?.current_period_end ?? 'n/a'}</div>
       </section>
 
       <section className="rounded border border-slate-800 bg-slate-900 p-4 text-sm" aria-label="Usage meters">

@@ -200,6 +200,10 @@ class BillingService:
         if not sub:
             return False
         previous_status = sub.status
+        customer_id = invoice.get("customer")
+        if customer_id:
+            sub.external_customer_id = customer_id
+            sub.billing_customer_id = customer_id
         sub.status = "active" if event_type == "invoice.paid" else "past_due"
         db.add(sub)
         db.commit()
