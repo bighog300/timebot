@@ -56,7 +56,7 @@ describe('Admin responsiveness and guard behavior', () => {
     vi.mocked(useAdminPromptTemplates).mockReturnValue({
       isLoading: false,
       isError: false,
-      data: [{ id: 'p1', prompt_type: 'chat', name: 'Default', version: 1, is_active: true, updated_at: '2026-01-01T00:00:00Z', created_at: '2026-01-01T00:00:00Z', content: 'hello' }],
+      data: [{ id: 'p1', type: 'chat', name: 'Default', version: 1, is_active: true, updated_at: '2026-01-01T00:00:00Z', created_at: '2026-01-01T00:00:00Z', content: 'hello' }],
     } as never);
     vi.mocked(useAdminLlmModels).mockReturnValue({
       isLoading: false,

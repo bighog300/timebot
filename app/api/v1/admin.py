@@ -854,6 +854,18 @@ def delete_user(user_id: str, payload: AdminDeleteUserRequest, _: str = Depends(
     return {"ok": True}
 
 
+
+
+def _invite_status(invite: UserInvite) -> str:
+    now = datetime.now(timezone.utc)
+    if invite.accepted_at:
+        return "accepted"
+    if invite.canceled_at:
+        return "canceled"
+    if invite.expires_at < now:
+        return "expired"
+    return "pending"
+
 @router.post("/users/invite")
 def create_invite(payload: AdminInviteCreateRequest, _: str = Depends(require_admin), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     email = payload.email.lower().strip()
@@ -864,7 +876,7 @@ def create_invite(payload: AdminInviteCreateRequest, _: str = Depends(require_ad
     db.add(invite)
     _audit_user_action(db, current_user, None, "invite_created", {"email": email, "role": payload.role})
     db.commit()
-    return {"id": str(invite.id), "invite_link": f"/accept-invite?token={token}"}
+    return {"id": str(invite.id), "invite_link": f"/accept-invite?token={token}", "status": _invite_status(invite), "dev_invite_link": f"/accept-invite?token={token}"}
 
 
 
@@ -883,7 +895,7 @@ def resend_invite(invite_id: str, _: str = Depends(require_admin), db: Session =
     invite.expires_at = datetime.now(timezone.utc) + timedelta(days=7)
     _audit_user_action(db, current_user, None, "invite_resent", {"email": invite.email, "invite_id": str(invite.id)})
     db.commit()
-    return {"id": str(invite.id), "invite_link": f"/accept-invite?token={token}"}
+    return {"id": str(invite.id), "invite_link": f"/accept-invite?token={token}", "status": _invite_status(invite), "dev_invite_link": f"/accept-invite?token={token}"}
 
 
 @router.post("/users/invites/{invite_id}/cancel")
@@ -903,7 +915,8 @@ def cancel_invite(invite_id: str, _: str = Depends(require_admin), db: Session =
 
 @router.get("/users/invites", response_model=list[AdminInviteResponse])
 def list_invites(_: str = Depends(require_admin), db: Session = Depends(get_db)):
-    return db.query(UserInvite).order_by(UserInvite.created_at.desc()).all()
+    invites = db.query(UserInvite).order_by(UserInvite.created_at.desc()).all()
+    return [AdminInviteResponse.model_validate(invite, from_attributes=True).model_copy(update={"status": _invite_status(invite)}) for invite in invites]
 
 
 @router.get("/audit", response_model=AdminAuditPageResponse)

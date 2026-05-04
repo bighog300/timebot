@@ -577,7 +577,7 @@ export function useConnections() {
 }
 
 
-export function useAdminUsers(page=0, limit=20, filters: { q?: string; role?: string; status?: string } = {}) { const authReady = useAuthReady(); return useQuery({queryKey: keys.adminUsers(page, limit, filters), queryFn: () => api.listAdminUsers(limit, page*limit, filters), enabled: authReady}); }
+export function useAdminUsers(page=0, limit=20, filters: { q?: string; role?: string; is_active?: boolean } = {}) { const authReady = useAuthReady(); return useQuery({queryKey: keys.adminUsers(page, limit, filters), queryFn: () => api.listAdminUsers(limit, page*limit, filters), enabled: authReady}); }
 export function useAdminMetrics() { const authReady = useAuthReady(); return useQuery({queryKey: keys.adminMetrics, queryFn: api.getAdminMetrics, enabled: authReady}); }
 export function useAdminProcessingSummary() { const authReady = useAuthReady(); return useQuery({queryKey: keys.adminProcessingSummary, queryFn: api.getAdminProcessingSummary, enabled: authReady}); }
 export function useAdminAudit(page=0, limit=20) { const authReady = useAuthReady(); return useQuery({queryKey: keys.adminAudit(page, limit), queryFn: () => api.listAdminAudit(limit, page*limit), enabled: authReady}); }

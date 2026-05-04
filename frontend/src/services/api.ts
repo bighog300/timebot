@@ -251,13 +251,13 @@ export const api = {
   getReportDownloadUrl: (reportId: string, format: 'md' | 'pdf' = 'md'): string =>
     `${http.defaults.baseURL}/reports/${reportId}/download?format=${format}`,
 
-  listAdminUsers: async (limit = 20, offset = 0, filters: { q?: string; role?: string; status?: string } = {}): Promise<AdminUsersPage> => (await http.get('/admin/users', { params: { limit, offset, ...filters } })).data,
+  listAdminUsers: async (limit = 20, offset = 0, filters: { q?: string; role?: string; is_active?: boolean } = {}): Promise<AdminUsersPage> => (await http.get('/admin/users', { params: { limit, offset, ...filters } })).data,
   updateAdminUserRole: async (userId: string, role: string) => (await http.patch(`/admin/users/${userId}/role`, { role })).data,
 
-  createAdminUser: async (payload: { email: string; display_name: string; role: string }): Promise<AdminUser> => (await http.post('/admin/users', payload)).data,
+  createAdminUser: async (payload: { email: string; display_name: string; role: string; password?: string; send_invite?: boolean }): Promise<AdminUser> => (await http.post('/admin/users', payload)).data,
   deactivateAdminUser: async (userId: string): Promise<void> => { await http.post(`/admin/users/${userId}/deactivate`); },
   reactivateAdminUser: async (userId: string): Promise<void> => { await http.post(`/admin/users/${userId}/reactivate`); },
-  deleteAdminUser: async (userId: string): Promise<void> => { await http.delete(`/admin/users/${userId}`); },
+  deleteAdminUser: async (payload: { userId: string; confirmation: string }): Promise<void> => { await http.delete(`/admin/users/${payload.userId}`, { data: { confirmation: payload.confirmation } }); },
   listAdminInvites: async (): Promise<AdminInvite[]> => (await http.get('/admin/users/invites')).data,
   inviteAdminUser: async (payload: { email: string; display_name: string; role: string }): Promise<AdminInvite> => (await http.post('/admin/users/invite', payload)).data,
   resendAdminInvite: async (inviteId: string): Promise<void> => { await http.post(`/admin/users/invites/${inviteId}/resend`); },
@@ -309,7 +309,7 @@ export const api = {
   createPromptTemplate: async (payload: PromptTemplateCreateRequest): Promise<PromptTemplate> => (await http.post('/admin/prompts', payload)).data,
   updatePromptTemplate: async (promptId: string, payload: PromptTemplateUpdateRequest): Promise<PromptTemplate> => (await http.put(`/admin/prompts/${promptId}`, payload)).data,
   activatePromptTemplate: async (promptId: string): Promise<PromptTemplate> => (await http.post(`/admin/prompts/${promptId}/activate`)).data,
-  testPromptTemplate: async (payload: PromptTemplateTestRequest): Promise<PromptTemplateTestResponse> => (await http.post(`/admin/prompts/test`, { type: payload.prompt_type, content: payload.prompt_content, sample_context: payload.sample_context, provider: payload.provider, model: payload.model, temperature: payload.temperature, max_tokens: payload.max_tokens, top_p: payload.top_p, fallback_enabled: payload.fallback_enabled, fallback_provider: payload.fallback_provider, fallback_model: payload.fallback_model })).data,
+  testPromptTemplate: async (payload: PromptTemplateTestRequest): Promise<PromptTemplateTestResponse> => (await http.post(`/admin/prompts/test`, payload)).data,
   listPromptExecutions: async (): Promise<PromptExecutionLog[]> => (await http.get('/admin/prompt-executions')).data,
   getPromptExecutionSummary: async (filters: AdminPromptExecutionSummaryFilters = {}): Promise<PromptExecutionSummary> => (await http.get('/admin/prompt-executions/summary', { params: filters })).data,
   listDocuments: async (includeArchived = false): Promise<Document[]> =>

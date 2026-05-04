@@ -9,8 +9,8 @@ const mutateTest = vi.fn(async () => ({ preview: 'Preview output', fallback_used
 
 vi.mock('@/hooks/useApi', () => ({
   useAdminPromptTemplates: () => ({ data: [
-    { id: 'p1', prompt_type: 'chat', name: 'Chat v1', content: 'Prompt A', version: 1, is_active: true, created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-02T00:00:00Z', top_p: 0.4, enabled: false, is_default: false, fallback_enabled: true, fallback_provider: 'openai', fallback_model: 'gpt-4.1-mini' },
-    { id: 'p2', prompt_type: 'report', name: 'Report v1', content: 'Prompt B', version: 1, is_active: false, created_at: '2026-01-03T00:00:00Z', updated_at: '2026-01-04T00:00:00Z', top_p: 1, enabled: true, is_default: false, fallback_enabled: false, fallback_provider: 'openai', fallback_model: 'gpt-4.1-mini' },
+    { id: 'p1', type: 'chat', name: 'Chat v1', content: 'Prompt A', version: 1, is_active: true, created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-02T00:00:00Z', top_p: 0.4, enabled: false, is_default: false, fallback_enabled: true, fallback_provider: 'openai', fallback_model: 'gpt-4.1-mini' },
+    { id: 'p2', type: 'report', name: 'Report v1', content: 'Prompt B', version: 1, is_active: false, created_at: '2026-01-03T00:00:00Z', updated_at: '2026-01-04T00:00:00Z', top_p: 1, enabled: true, is_default: false, fallback_enabled: false, fallback_provider: 'openai', fallback_model: 'gpt-4.1-mini' },
   ], isLoading: false, isError: false }),
   useAdminLlmModels: () => ({ data: { providers: [
     { id: 'openai', name: 'OpenAI', configured: true, models: [{ id: 'gpt-4.1-mini', name: 'GPT-4.1 Mini' }, { id: 'gpt-4o-mini', name: 'GPT-4o Mini' }] },

@@ -17,8 +17,8 @@ describe('AdminUsersPage', () => {
   const mutateAsync = vi.fn().mockResolvedValue({});
   beforeEach(() => {
     vi.clearAllMocks();
-    hooks.useAdminUsers.mockReturnValue({ isLoading: false, isError: false, data: { items: [{ id: 'u1', email: 'a@test.com', display_name: 'A', role: 'user', is_active: true, created_at: '2026-01-01T00:00:00Z' }] } });
-    hooks.useAdminInvites.mockReturnValue({ isLoading: false, isError: false, data: [{ id: 'i1', email: 'i@test.com', role: 'user', status: 'pending', dev_invite_link: 'http://localhost/invite' }] });
+    hooks.useAdminUsers.mockReturnValue({ isLoading: false, isError: false, data: { items: [{ id: 'u1', email: 'a@test.com', display_name: 'A', role: 'viewer', is_active: true, created_at: '2026-01-01T00:00:00Z' }] } });
+    hooks.useAdminInvites.mockReturnValue({ isLoading: false, isError: false, data: [{ id: 'i1', email: 'i@test.com', role: 'viewer', status: 'pending', dev_invite_link: 'http://localhost/invite' }] });
     hooks.useCreateAdminUser.mockReturnValue({ mutateAsync }); hooks.useInviteAdminUser.mockReturnValue({ mutateAsync }); hooks.useUpdateUserRole.mockReturnValue({ mutateAsync });
     hooks.useDeactivateAdminUser.mockReturnValue({ mutateAsync }); hooks.useReactivateAdminUser.mockReturnValue({ mutateAsync }); hooks.useDeleteAdminUser.mockReturnValue({ mutateAsync }); hooks.useResendAdminInvite.mockReturnValue({ mutateAsync }); hooks.useCancelAdminInvite.mockReturnValue({ mutateAsync });
   });

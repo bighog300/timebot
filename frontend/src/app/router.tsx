@@ -80,7 +80,7 @@ export const router = createBrowserRouter([
         path: 'admin',
         element: <RequireAdmin><AdminSettingsLayout /></RequireAdmin>,
         children: [
-          { index: true, element: <Navigate to='/admin/settings' replace /> },
+          { index: true, element: <AdminPage /> },
           { path: 'users', element: <AdminUsersPage /> },
           { path: 'users/:userId/usage', element: <AdminUserUsagePage /> },
           { path: 'subscriptions', element: <Navigate to='/admin/settings/plans' replace /> },
@@ -122,6 +122,7 @@ import { AdminPromptAuditPage } from '@/pages/AdminPromptAuditPage';
 import { AdminPromptAnalyticsPage } from '@/pages/AdminPromptAnalyticsPage';
 import { AdminChatbotSettingsPage } from '@/pages/AdminChatbotSettingsPage';
 import { AdminUsersPage } from '@/pages/AdminUsersPage';
+import { AdminPage } from '@/pages/AdminPage';
 import { AdminEmailSettingsPage } from '@/pages/AdminEmailSettingsPage';
 import { AdminEmailTemplatesPage } from '@/pages/AdminEmailTemplatesPage';
 import { AdminEmailTemplateEditorPage } from '@/pages/AdminEmailTemplateEditorPage';
