@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import CheckConstraint, Column, Float, ForeignKey, String, Text, TIMESTAMP, UniqueConstraint
+from sqlalchemy import CheckConstraint, Column, Date, Float, ForeignKey, String, Text, TIMESTAMP, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -75,6 +75,15 @@ class DocumentActionItem(Base):
         UUID(as_uuid=True), ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True
     )
     content = Column(Text, nullable=False)
+    workspace_id = Column(UUID(as_uuid=True), ForeignKey("workspaces.id", ondelete="CASCADE"), nullable=True, index=True)
+    source_document_id = Column(UUID(as_uuid=True), ForeignKey("documents.id", ondelete="SET NULL"), nullable=True, index=True)
+    due_date = Column(Date, nullable=True, index=True)
+    priority = Column(String(20), nullable=False, default="medium", index=True)
+    status = Column(String(20), nullable=False, default="open", index=True)
+    category = Column(String(40), nullable=False, default="admin", index=True)
+    evidence_refs_json = Column(JSONB, default=list)
+    source_quote = Column(Text)
+    source_snippet = Column(Text)
     state = Column(String(20), nullable=False, default="open", index=True)
     source = Column(String(20), nullable=False, default="ai")
     action_metadata = Column("metadata", JSONB, default=dict)
@@ -83,11 +92,14 @@ class DocumentActionItem(Base):
     completed_at = Column(TIMESTAMP(timezone=True))
     dismissed_at = Column(TIMESTAMP(timezone=True))
 
-    document = relationship("Document", back_populates="structured_action_items")
+    document = relationship("Document", back_populates="structured_action_items", foreign_keys=[document_id])
 
     __table_args__ = (
-        CheckConstraint("state IN ('open', 'completed', 'dismissed')", name="valid_action_item_state"),
+        CheckConstraint("state IN ('suggested', 'open', 'in_progress', 'done', 'dismissed', 'rejected', 'completed')", name="valid_action_item_state"),
         CheckConstraint("source IN ('ai', 'user')", name="valid_action_item_source"),
+        CheckConstraint("priority IN ('low', 'medium', 'high', 'urgent')", name="valid_action_item_priority"),
+        CheckConstraint("status IN ('suggested', 'open', 'in_progress', 'done', 'dismissed', 'rejected')", name="valid_action_item_status"),
+        CheckConstraint("category IN ('legal', 'financial', 'children', 'communication', 'evidence', 'admin', 'emotional_support')", name="valid_action_item_category"),
         UniqueConstraint("document_id", "content", name="unique_document_action_item_content"),
     )
 

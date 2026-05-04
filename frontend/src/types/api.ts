@@ -714,4 +714,5 @@ export interface AuthConfig {
   google_login_enabled: boolean;
 }
 
-export interface DivorceDashboard { documents_uploaded:number; emails_imported:number; open_tasks:number; upcoming_deadlines: unknown[]; key_timeline_events: unknown[]; latest_reports: unknown[]; missing_information_checklist: string[] }
+export interface DivorceTask { id:string; content:string; status:string; priority:string; category:string; due_date?:string|null; source_snippet?:string|null; source_quote?:string|null; evidence_refs_json?:unknown[]|null }
+export interface DivorceDashboard { documents_uploaded:number; emails_imported:number; open_tasks:number; suggested_task_count:number; open_task_count:number; urgent_task_count:number; upcoming_due_dates: DivorceTask[]; recently_generated_tasks: DivorceTask[]; upcoming_deadlines: unknown[]; key_timeline_events: unknown[]; latest_reports: unknown[]; missing_information_checklist: string[] }
