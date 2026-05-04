@@ -14,7 +14,7 @@ const settingsLinks = [
   ['/admin/settings/email/templates', 'Email Templates'],
   ['/admin/settings/email/campaigns', 'Email Campaigns'],
   ['/admin/settings/email/suppressions', 'Email Suppressions'],
-  ['/admin/settings/email', 'Send Logs'],
+  ['/admin/settings/email/logs', 'Send Logs'],
 ] as const;
 
 export function AdminSettingsLayout() {
