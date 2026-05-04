@@ -8,7 +8,7 @@ from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
-revision = '20260504_0034'
+revision = '20260504_0034_system_intelligence_recommendation_moderation'
 down_revision = '20260504_0033'
 branch_labels = None
 depends_on = None
