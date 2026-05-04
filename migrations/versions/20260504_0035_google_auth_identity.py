@@ -1,7 +1,7 @@
 """google auth identity fields
 
 Revision ID: 20260504_0035
-Revises: 20260504_0034, 20260504_0034_system_intelligence_recommendation_moderation
+Revises: 20260504_0034, 20260504_0034_sim_rec_mod
 Create Date: 2026-05-04 00:00:00
 """
 
@@ -9,7 +9,7 @@ from alembic import op
 import sqlalchemy as sa
 
 revision = "20260504_0035"
-down_revision = ("20260504_0034", "20260504_0034_system_intelligence_recommendation_moderation")
+down_revision = ("20260504_0034", "20260504_0034_sim_rec_mod")
 branch_labels = None
 depends_on = None
 

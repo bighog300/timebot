@@ -1,6 +1,6 @@
 """system intelligence recommendation moderation
 
-Revision ID: 20260504_0034
+Revision ID: 20260504_0034_sim_rec_mod
 Revises: 20260504_0033
 Create Date: 2026-05-04
 """
@@ -8,7 +8,7 @@ from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
-revision = '20260504_0034_system_intelligence_recommendation_moderation'
+revision = '20260504_0034_sim_rec_mod'
 down_revision = '20260504_0033'
 branch_labels = None
 depends_on = None
