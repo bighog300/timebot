@@ -91,6 +91,7 @@ from app.services.error_sanitizer import sanitize_processing_error
 from app.services.email_secrets import email_secret_crypto
 from app.workers.tasks import enqueue_campaign_recipient_send
 from app.services.email_delivery import EmailDeliveryService
+from app.services.email_render import render_campaign_content
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -250,21 +251,6 @@ def _ensure_active_template(db: Session, template_id: str):
     return t
 
 
-def _render_simple_template(content: str | None, variables: dict) -> tuple[str, list[str]]:
-    import re
-    if not content:
-        return '', []
-    missing: list[str] = []
-    def repl(match):
-        key = match.group(1).strip()
-        if key not in variables or variables.get(key) is None:
-            missing.append(key)
-            return ''
-        return str(variables.get(key))
-    rendered = re.sub(r"\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}\}", repl, content)
-    return rendered, sorted(set(missing))
-
-
 
 
 def _normalize_email(value: str) -> str:
@@ -303,17 +289,6 @@ def _resolve_campaign_recipients(db: Session, campaign: EmailCampaign) -> dict:
             sup.append(email); continue
         sendable.append((email, uid))
     return {'total': len(candidates), 'sendable': sendable, 'suppressed': sup, 'invalid': invalid, 'duplicates': dup}
-
-def _render_campaign(c: EmailCampaign, t: EmailTemplate, override_vars: dict | None = None) -> dict:
-    merged = {}
-    if isinstance(t.variables_json, dict): merged.update(t.variables_json)
-    if isinstance(c.variables_json, dict): merged.update(c.variables_json)
-    if isinstance(override_vars, dict): merged.update(override_vars)
-    subject, m1 = _render_simple_template(c.subject_override or t.subject, merged)
-    preheader, m2 = _render_simple_template(c.preheader_override or t.preheader or '', merged)
-    html_body, m3 = _render_simple_template(t.html_body, merged)
-    text_body, m4 = _render_simple_template(t.text_body or '', merged)
-    return {'subject':subject,'preheader':preheader or None,'html_body':html_body,'text_body':text_body,'missing_variables':sorted(set(m1+m2+m3+m4))}
 
 
 @router.get('/email/templates', response_model=list[EmailTemplateResponse])
@@ -407,7 +382,7 @@ def preview_email_campaign(campaign_id: str, payload: EmailCampaignPreviewReques
     c = db.query(EmailCampaign).filter(EmailCampaign.id == campaign_id).first()
     if not c: raise HTTPException(status_code=404, detail='Campaign not found')
     t = _ensure_active_template(db, str(c.template_id))
-    return _render_campaign(c, t, payload.variables_json if isinstance(payload.variables_json, dict) else None)
+    return render_campaign_content(t, c, payload.variables_json if isinstance(payload.variables_json, dict) else None)
 
 
 
@@ -519,7 +494,7 @@ def test_send_campaign(campaign_id: str, payload: EmailCampaignTestSendRequest, 
     c = db.query(EmailCampaign).filter(EmailCampaign.id == campaign_id).first()
     if not c: raise HTTPException(status_code=404, detail='Campaign not found')
     t = _ensure_active_template(db, str(c.template_id))
-    rendered = _render_campaign(c, t, payload.variables_json if isinstance(payload.variables_json, dict) else None)
+    rendered = render_campaign_content(t, c, payload.variables_json if isinstance(payload.variables_json, dict) else None)
     service = EmailDeliveryService(db)
     result = service.send_email(provider=payload.provider, to_email=payload.to_email, subject=rendered['subject'], html_body=rendered['html_body'], text_body=rendered['text_body'], template_id=str(t.id), campaign_id=str(c.id))
     _audit_admin_email_action(db, current_user, 'email_campaign', str(c.id), 'email_campaign_test_send', {'provider': result['provider'], 'status': result['status'], 'to_email': payload.to_email})
