@@ -6,7 +6,7 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from app.models.document import Document
-from app.models.divorce import DivorceReport, DivorceTimelineItem
+from app.models.divorce import DivorceCommunication, DivorceReport, DivorceTimelineItem
 from app.models.intelligence import DocumentActionItem
 from app.models.workspace import WorkspaceMember
 
@@ -83,9 +83,16 @@ def generate_divorce_report(
     lines.extend(["", "## Recommended Actions", ""])
     for t in tasks[:12]:
         lines.append(f"- [{t.id}] {t.content} (status: {t.status}{', due: ' + str(t.due_date) if t.due_date else ''}).")
+    accepted_comms = db.query(DivorceCommunication).filter(DivorceCommunication.workspace_id == workspace_id, DivorceCommunication.review_status.in_(["accepted","edited"])).order_by(DivorceCommunication.sent_at.desc().nulls_last()).limit(20).all()
+
     lines.extend(["", "## Evidence References", ""])
     for d in docs[:10]:
         lines.append(f"- [{d.id}] {d.filename}: {_doc_snippet(d)}")
+
+    if accepted_comms:
+        lines.extend(["", "## Accepted Communications", ""])
+        for c in accepted_comms[:10]:
+            lines.append(f"- {c.sent_at or 'Undated'} {c.sender} → {c.recipient or '(unknown)'}: {c.subject or '(no subject)'} [{c.tone}/{c.category}]")
 
     if report_type == "lawyer_handoff_pack":
         lines.extend([
