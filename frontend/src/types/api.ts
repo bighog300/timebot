@@ -599,6 +599,8 @@ export interface AdminPlan {
 }
 
 export interface AdminSystemStatus {
+  auth_mode: string;
+  google_auth_enabled: boolean;
   billing_configured: boolean;
   stripe_configured: boolean;
   stripe_prices_configured: boolean;
@@ -697,4 +699,12 @@ export interface CampaignSendStatus {
   send_started_at?: string | null;
   send_completed_at?: string | null;
   send_failed_at?: string | null;
+}
+
+
+export interface AuthConfig {
+  auth_mode: string;
+  google_auth_enabled: boolean;
+  local_login_enabled: boolean;
+  google_login_enabled: boolean;
 }

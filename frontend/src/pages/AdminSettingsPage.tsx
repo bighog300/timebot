@@ -78,6 +78,8 @@ export function AdminBillingPage() {
     <p>Stripe configured: <strong className={stripeOk ? 'text-emerald-400' : 'text-amber-300'}>{stripeOk ? 'Configured' : 'Missing'}</strong></p>
     <p>Stripe prices configured: <strong className={status.stripe_prices_configured ? 'text-emerald-400' : 'text-amber-300'}>{status.stripe_prices_configured ? 'Configured' : 'Missing'}</strong></p>
     <p>Environment: <strong>{status.environment}</strong></p>
+    <p>Auth mode: <strong>{status.auth_mode}</strong></p>
+    <p>Google auth enabled: <strong>{status.google_auth_enabled ? "Yes" : "No"}</strong></p>
     <p>Limits configured: <strong className={status.limits_configured ? 'text-emerald-400' : 'text-amber-300'}>{status.limits_configured ? 'Configured' : 'Missing/invalid'}</strong></p>
     {!billingOk && <div className='rounded border border-amber-700 bg-amber-950/40 p-3 text-amber-200'>Warning: Billing is misconfigured. Set Stripe secret key and required Stripe price IDs.</div>}
   </div></Card>;

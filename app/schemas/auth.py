@@ -41,3 +41,14 @@ class InviteAcceptRequest(BaseModel):
     token: str = Field(min_length=8, max_length=512)
     password: str = Field(min_length=8, max_length=128)
     display_name: str | None = Field(default=None, max_length=255)
+
+
+class GoogleLoginRequest(BaseModel):
+    id_token: str = Field(min_length=10, max_length=8192)
+
+
+class AuthConfigResponse(BaseModel):
+    auth_mode: str
+    google_auth_enabled: bool
+    local_login_enabled: bool
+    google_login_enabled: bool

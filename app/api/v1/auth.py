@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+import httpx
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
@@ -6,7 +7,8 @@ from datetime import datetime, timezone
 import hashlib
 
 from app.models.user import User, UserInvite
-from app.schemas.auth import AuthResponse, InviteAcceptRequest, LoginRequest, RegisterRequest, UserResponse
+from app.config import settings
+from app.schemas.auth import AuthConfigResponse, AuthResponse, GoogleLoginRequest, InviteAcceptRequest, LoginRequest, RegisterRequest, UserResponse
 
 
 def _ensure_role(user: User):
@@ -18,6 +20,19 @@ from app.services.subscriptions import ensure_default_free_subscription
 from app.services.workspaces import workspace_service
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+def _auth_flags() -> tuple[str, bool, bool, bool]:
+    auth_mode = (settings.AUTH_MODE or "local").strip().lower()
+    google_enabled = bool(settings.GOOGLE_AUTH_ENABLED) and auth_mode in {"google", "local_google"}
+    local_enabled = auth_mode in {"local", "local_google"}
+    return auth_mode, bool(settings.GOOGLE_AUTH_ENABLED), local_enabled, google_enabled
+
+
+@router.get("/config", response_model=AuthConfigResponse)
+def auth_config():
+    mode, google_toggle, local_enabled, google_enabled = _auth_flags()
+    return AuthConfigResponse(auth_mode=mode, google_auth_enabled=google_toggle, local_login_enabled=local_enabled, google_login_enabled=google_enabled)
+
 
 
 @router.post("/register", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
@@ -43,6 +58,9 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)):
 
 @router.post("/login", response_model=AuthResponse)
 def login(payload: LoginRequest, db: Session = Depends(get_db)):
+    _, _, local_enabled, _ = _auth_flags()
+    if not local_enabled:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Local login is disabled")
     user = auth_service.authenticate_user(db, payload.email, payload.password)
     existing = db.query(User).filter(User.email == payload.email.lower()).first()
     if existing and not existing.is_active:
@@ -84,3 +102,41 @@ def accept_invite(payload: InviteAcceptRequest, db: Session = Depends(get_db)):
     ensure_default_free_subscription(db, user.id)
     workspace_service.ensure_personal_workspace(db, user)
     return AuthResponse(access_token=auth_service.create_access_token(user), user=_ensure_role(user))
+
+
+@router.post("/google", response_model=AuthResponse)
+def google_login(payload: GoogleLoginRequest, db: Session = Depends(get_db)):
+    _, _, _, google_enabled = _auth_flags()
+    if not google_enabled:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Google login is disabled")
+    try:
+        resp = httpx.get("https://oauth2.googleapis.com/tokeninfo", params={"id_token": payload.id_token}, timeout=10.0)
+        data = resp.json()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Unable to validate Google token") from exc
+    if data.get("error_description"):
+        raise HTTPException(status_code=401, detail="Invalid Google token")
+    aud = (data.get("aud") or "").strip()
+    if aud != settings.GOOGLE_OAUTH_CLIENT_ID.strip():
+        raise HTTPException(status_code=401, detail="Google token audience mismatch")
+    if data.get("email_verified") not in {"true", True}:
+        raise HTTPException(status_code=401, detail="Google email must be verified")
+    email = (data.get("email") or "").strip().lower()
+    sub = (data.get("sub") or "").strip()
+    if not email or not sub:
+        raise HTTPException(status_code=401, detail="Invalid Google identity payload")
+    user = db.query(User).filter(User.email == email).first()
+    if user and not user.is_active:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User account is inactive")
+    if not user:
+        user = User(email=email, display_name=(data.get("name") or email.split("@")[0]).strip(), password_hash=auth_service.hash_password(sub), is_active=True, auth_provider="google", google_subject=sub)
+        db.add(user); db.commit(); db.refresh(user)
+        ensure_default_free_subscription(db, user.id)
+        workspace_service.ensure_personal_workspace(db, user)
+    elif not user.google_subject:
+        user.google_subject = sub
+        if user.auth_provider == "local":
+            user.auth_provider = "local_google"
+        db.add(user); db.commit(); db.refresh(user)
+    token = auth_service.create_access_token(user)
+    return AuthResponse(access_token=token, user=_ensure_role(user))

@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import Boolean, Column, ForeignKey, Integer, String, TIMESTAMP
+from sqlalchemy import Boolean, Column, ForeignKey, Integer, String, TIMESTAMP, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -9,6 +9,7 @@ from app.db.base import Base
 
 
 class User(Base):
+    __table_args__ = (UniqueConstraint("google_subject", name="uq_users_google_subject"),)
     __tablename__ = "users"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -17,6 +18,8 @@ class User(Base):
     display_name = Column(String(255), nullable=False)
     is_active = Column(Boolean, nullable=False, default=True)
     role = Column(String(20), nullable=False, default="viewer")
+    auth_provider = Column(String(20), nullable=False, default="local")
+    google_subject = Column(String(255), nullable=True)
     # DEPRECATED: legacy monetization field; enforcement must use Subscription/Plan.
     # TODO: remove users.plan in a future migration after all legacy billing paths are retired.
     plan = Column(String(20), nullable=False, default="free")
@@ -42,6 +45,8 @@ class UserInvite(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     email = Column(String(255), nullable=False, index=True)
     role = Column(String(20), nullable=False, default="viewer")
+    auth_provider = Column(String(20), nullable=False, default="local")
+    google_subject = Column(String(255), nullable=True)
     token_hash = Column(String(128), nullable=False, unique=True, index=True)
     invited_by_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     expires_at = Column(TIMESTAMP(timezone=True), nullable=False)
